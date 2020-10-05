@@ -38,7 +38,6 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
     event Redeemed(address indexed account, uint256 longSharesIn, uint256 shortSharesIn, uint256 amountOut);
 
     uint256 public constant SCALE = 1e18;
-    uint256 public constant TWO_LOG_TWO = 1386294361119890688; // 2 * log(2) * SCALE
 
     IERC20 public baseToken;
     IOracle public oracle;
