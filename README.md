@@ -2,6 +2,13 @@
 
 Charm Finance is a protocol for decentralized options
 
+It uses an LS-LMSR cost function for pricing. It acts like token bonding curve, letting users buy and sell options from the contract
+
+At expiration, the settlement price is fetched from a Uniswap v2 oracle. Users can them redeem their options for the settlement value
+
+This repo also includes an ERC20 governance token and a staking rewards pool
+
+
 ### Repo
 
 The main contract is `OptionsMarketMaker.sol`. This contains methods `buy` and `sell` that let users mint/burn options. Calling `settle` after expiration fetches the settlement price from the oracle and users can call `redeem` to redeem their options for the settlement value.
