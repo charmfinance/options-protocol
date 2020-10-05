@@ -56,13 +56,8 @@ contract UniswapOracle is IOracle {
 
         // set multipliers. divide by gcd to make overflows less likely
         uint256 min = Math.min(decimals0, decimals1);
-        if (_isInverted) {
-            baseMultiplier = 10**decimals1.sub(min);
-            quoteMultiplier = 10**decimals0.sub(min);
-        } else {
-            baseMultiplier = 10**decimals0.sub(min);
-            quoteMultiplier = 10**decimals1.sub(min);
-        }
+        baseMultiplier = _isInverted ? 10**decimals1.sub(min) : 10**decimals0.sub(min);
+        quoteMultiplier = _isInverted ? 10**decimals0.sub(min) : 10**decimals1.sub(min);
 
         // set initial data
         takeSnapshot();
