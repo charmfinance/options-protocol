@@ -1,0 +1,10 @@
+.DS_Store
+*.swp
+
+__pycache__
+.pytest_cache
+
+node_modules/
+scripts/
+reports/
+build/

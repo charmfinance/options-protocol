@@ -1,0 +1,13 @@
+
+dependencies:
+  - OpenZeppelin/openzeppelin-contracts@3.1.0
+
+# automatically fetch contract sources from Etherscan
+autofetch_sources: true
+
+compiler:
+  solc:
+    version: 0.6.12
+    remappings:
+      - "@openzeppelin=OpenZeppelin/openzeppelin-contracts@3.1.0"
+
