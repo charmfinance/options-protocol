@@ -122,7 +122,10 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
         require(amountIn > 0, "Amount in must be > 0");
         require(amountIn <= maxAmountIn, "Max slippage exceeded");
 
+        uint256 balance1 = baseToken.uniBalanceOf(address(this));
         baseToken.uniTransferFromSenderToThis(amountIn);
+        uint256 balance2 = baseToken.uniBalanceOf(address(this));
+        require(baseToken.isETH() || balance2.sub(balance1) == amountIn, "Deflationary tokens not supported");
 
         emit Trade(
             msg.sender,
