@@ -111,24 +111,24 @@ def putmm(OptionsMarketMaker, usd_token, oracle, deployer, user, user2, user3):
 
 
 @pytest.fixture
-def longToken(OptionsToken, mm):
+def long_token(OptionsToken, mm):
     return OptionsToken.at(mm.longToken())
 
 
 @pytest.fixture
-def shortToken(OptionsToken, mm):
+def short_token(OptionsToken, mm):
     return OptionsToken.at(mm.shortToken())
 
 
 def test_options_market_constructor(
-    mm, longToken, shortToken, base_token, oracle, deployer
+    mm, long_token, short_token, base_token, oracle, deployer
 ):
     assert mm.owner() == deployer
 
-    assert longToken.name() == "long name"
-    assert longToken.symbol() == "long symbol"
-    assert shortToken.name() == "short name"
-    assert shortToken.symbol() == "short symbol"
+    assert long_token.name() == "long name"
+    assert long_token.symbol() == "long symbol"
+    assert short_token.name() == "short name"
+    assert short_token.symbol() == "short symbol"
 
     assert mm.baseToken() == base_token
     assert mm.oracle() == oracle
@@ -144,11 +144,11 @@ def test_options_market_constructor(
 
 # for checking costs, we check they are almost equal as exp and log in the
 # contract code are only approximations
-def test_buy_and_sell(mm, base_token, user, longToken, shortToken, fast_forward):
+def test_buy_and_sell(mm, base_token, user, long_token, short_token, fast_forward):
 
     # check initial state
     assert base_token.balanceOf(user) == 100 * SCALE
-    assert longToken.totalSupply() == shortToken.totalSupply() == 0
+    assert long_token.totalSupply() == short_token.totalSupply() == 0
 
     # buy 1 long token. set maxAmountIn very high so it's ignored
     tx = mm.buy(1 * SCALE, 0, 1000 * SCALE, {"from": user})
@@ -158,8 +158,8 @@ def test_buy_and_sell(mm, base_token, user, longToken, shortToken, fast_forward)
     assert base_token.balanceOf(mm) == 1000000068793027542
     assert tx.return_value == 1000000068793027542
     assert base_token.balanceOf(user) + base_token.balanceOf(mm) == 100 * SCALE
-    assert longToken.totalSupply() == 1 * SCALE
-    assert shortToken.totalSupply() == 0
+    assert long_token.totalSupply() == 1 * SCALE
+    assert short_token.totalSupply() == 0
     assert tx.events["Trade"] == {
         "account": user,
         "isBuy": True,
@@ -178,8 +178,8 @@ def test_buy_and_sell(mm, base_token, user, longToken, shortToken, fast_forward)
     assert base_token.balanceOf(mm) == 6000563277757123355
     assert tx.return_value == 6000563277757123355 - 1000000068793027542
     assert base_token.balanceOf(user) + base_token.balanceOf(mm) == 100 * SCALE
-    assert longToken.totalSupply() == 6 * SCALE
-    assert shortToken.totalSupply() == 2 * SCALE
+    assert long_token.totalSupply() == 6 * SCALE
+    assert short_token.totalSupply() == 2 * SCALE
     assert tx.events["Trade"] == {
         "account": user,
         "isBuy": True,
@@ -198,8 +198,8 @@ def test_buy_and_sell(mm, base_token, user, longToken, shortToken, fast_forward)
     assert base_token.balanceOf(mm) == 4000000275172110168
     assert tx.return_value == 6000563277757123355 - 4000000275172110168
     assert base_token.balanceOf(user) + base_token.balanceOf(mm) == 100 * SCALE
-    assert longToken.totalSupply() == 4 * SCALE
-    assert shortToken.totalSupply() == 0 * SCALE
+    assert long_token.totalSupply() == 4 * SCALE
+    assert short_token.totalSupply() == 0 * SCALE
     assert tx.events["Trade"] == {
         "account": user,
         "isBuy": False,
@@ -215,8 +215,8 @@ def test_buy_and_sell(mm, base_token, user, longToken, shortToken, fast_forward)
     assert base_token.balanceOf(mm) == 0
     assert tx.return_value == 4000000275172110168
     assert base_token.balanceOf(user) + base_token.balanceOf(mm) == 100 * SCALE
-    assert longToken.totalSupply() == 0
-    assert shortToken.totalSupply() == 0
+    assert long_token.totalSupply() == 0
+    assert short_token.totalSupply() == 0
     assert tx.events["Trade"] == {
         "account": user,
         "isBuy": False,
@@ -236,7 +236,7 @@ def test_buy_and_sell(mm, base_token, user, longToken, shortToken, fast_forward)
 
 
 def test_cannot_buy_or_sell_if_insufficient_balance(
-    mm, longToken, shortToken, base_token, user
+    mm, long_token, short_token, base_token, user
 ):
     assert base_token.balanceOf(user) == 100 * SCALE
 
@@ -270,7 +270,7 @@ def test_cannot_buy_or_sell_if_insufficient_balance(
 
 
 # we need to use tolerance of 0.999999 and 1.000001 as costs are not exact
-def test_buy_and_sell_reverts_when_slippage_too_high(mm, longToken, shortToken, user):
+def test_buy_and_sell_reverts_when_slippage_too_high(mm, long_token, short_token, user):
 
     # >> python calc_lslmsr_cost.py 10 0 0.1
     # 10000000687930275840
@@ -300,7 +300,7 @@ def test_buy_and_sell_reverts_when_slippage_too_high(mm, longToken, shortToken, 
     mm.sell(0, 3 * SCALE, cost * 0.999999, {"from": user})
 
 
-def test_buy_and_sell_with_extreme_amounts(mm, longToken, shortToken, base_token, user):
+def test_buy_and_sell_with_extreme_amounts(mm, long_token, short_token, base_token, user):
     base_token.mint(user, 10 ** 40 * SCALE)
     base_token.approve(mm, 10 ** 40 * SCALE, {"from": user})
     total_balance = base_token.balanceOf(user) + base_token.balanceOf(mm)
@@ -351,13 +351,13 @@ def test_buy_and_sell_with_extreme_amounts(mm, longToken, shortToken, base_token
     mm.sell(10 ** 18 * SCALE, 0, 0, {"from": user})
     mm.sell(0, 10 ** 18 * SCALE, 0, {"from": user})
     assert base_token.balanceOf(user) + base_token.balanceOf(mm) == total_balance
-    assert longToken.totalSupply() == 0 * SCALE
-    assert shortToken.totalSupply() == 0 * SCALE
+    assert long_token.totalSupply() == 0 * SCALE
+    assert short_token.totalSupply() == 0 * SCALE
 
 
 def test_buy_and_sell_eth(OptionsToken, ethmm, user):
     assert user.balance() == 100 * SCALE
-    longToken = OptionsToken.at(ethmm.longToken())
+    long_token = OptionsToken.at(ethmm.longToken())
 
     # reverts if not enough eth sent with transaction
     with reverts("UniERC20: not enough value"):
@@ -447,7 +447,7 @@ def test_settle(mm, oracle, user, fast_forward):
 
 
 def test_redeem_in_the_money(
-    mm, longToken, shortToken, base_token, oracle, user, user2, fast_forward
+    mm, long_token, short_token, base_token, oracle, user, user2, fast_forward
 ):
 
     # users buy 10 long tokens and 15 short tokens for a cost of 15.109
@@ -487,10 +487,10 @@ def test_redeem_in_the_money(
 
     assert base_token.balanceOf(user) - bal1 == 5396188768415330103
     assert base_token.balanceOf(user2) - bal2 == 9713139783147594188
-    assert longToken.balanceOf(user) == 0
-    assert shortToken.balanceOf(user) == 0
-    assert longToken.balanceOf(user2) == 0
-    assert shortToken.balanceOf(user2) == 0
+    assert long_token.balanceOf(user) == 0
+    assert short_token.balanceOf(user) == 0
+    assert long_token.balanceOf(user2) == 0
+    assert short_token.balanceOf(user2) == 0
     assert tx1.events["Redeemed"] == {
         "account": user,
         "longSharesIn": 5 * SCALE,
@@ -511,8 +511,8 @@ def test_redeem_in_the_money(
 
 def test_redeem_out_of_the_money(
     mm,
-    longToken,
-    shortToken,
+    long_token,
+    short_token,
     base_token,
     oracle,
     user,
@@ -552,14 +552,14 @@ def test_redeem_out_of_the_money(
 
     assert base_token.balanceOf(user) - bal1 == 5036442850520974763
     assert base_token.balanceOf(user2) - bal2 == 10072885701041949528
-    assert longToken.balanceOf(user) == 0
-    assert shortToken.balanceOf(user) == 0
-    assert longToken.balanceOf(user2) == 0
-    assert shortToken.balanceOf(user2) == 0
+    assert long_token.balanceOf(user) == 0
+    assert short_token.balanceOf(user) == 0
+    assert long_token.balanceOf(user2) == 0
+    assert short_token.balanceOf(user2) == 0
 
 
 def test_redeem_eth(OptionsToken, ethmm, oracle, user, fast_forward):
-    longToken = OptionsToken.at(ethmm.longToken())
+    long_token = OptionsToken.at(ethmm.longToken())
 
     # user buys 10.0 eth worth of options
     # python calc_lslmsr_cost.py 10 0 0.1
@@ -597,7 +597,7 @@ def test_set_oracle(MockOracle, mm, deployer, user):
     assert mm.oracle() == oracle2
 
 
-def test_pause_unpause(mm, deployer, user, longToken):
+def test_pause_unpause(mm, deployer, user, long_token):
     with reverts("Ownable: caller is not the owner"):
         mm.pause({"from": user})
     mm.pause({"from": deployer})
@@ -612,12 +612,12 @@ def test_pause_unpause(mm, deployer, user, longToken):
 
 
 def test_with_multiplier(OptionsToken, putmm, oracle, usd_token, user, fast_forward):
-    longToken = OptionsToken.at(putmm.longToken())
-    shortToken = OptionsToken.at(putmm.shortToken())
+    long_token = OptionsToken.at(putmm.longToken())
+    short_token = OptionsToken.at(putmm.shortToken())
 
     # check initial state
     assert usd_token.balanceOf(user) == 10000 * SCALE
-    assert longToken.totalSupply() == shortToken.totalSupply() == 0
+    assert long_token.totalSupply() == short_token.totalSupply() == 0
 
     # buy 1 long token. set maxAmountIn very high so it's ignored
     tx = putmm.buy(1 * SCALE, 0, 10000 * SCALE, {"from": user})
@@ -627,8 +627,8 @@ def test_with_multiplier(OptionsToken, putmm, oracle, usd_token, user, fast_forw
     assert usd_token.balanceOf(putmm) == 100000006879302754205
     assert tx.return_value == 100000006879302754205
     assert usd_token.balanceOf(user) + usd_token.balanceOf(putmm) == 10000 * SCALE
-    assert longToken.totalSupply() == 1 * SCALE
-    assert shortToken.totalSupply() == 0
+    assert long_token.totalSupply() == 1 * SCALE
+    assert short_token.totalSupply() == 0
     assert tx.events["Trade"] == {
         "account": user,
         "isBuy": True,
@@ -647,8 +647,8 @@ def test_with_multiplier(OptionsToken, putmm, oracle, usd_token, user, fast_forw
     assert usd_token.balanceOf(putmm) == 200211968079890787869
     assert tx.return_value == 200211968079890787869 - 100000006879302754205
     assert usd_token.balanceOf(user) + usd_token.balanceOf(putmm) == 10000 * SCALE
-    assert longToken.totalSupply() == 1 * SCALE
-    assert shortToken.totalSupply() == 2 * SCALE
+    assert long_token.totalSupply() == 1 * SCALE
+    assert short_token.totalSupply() == 2 * SCALE
     assert tx.events["Trade"] == {
         "account": user,
         "isBuy": True,
@@ -664,8 +664,8 @@ def test_with_multiplier(OptionsToken, putmm, oracle, usd_token, user, fast_forw
     # 9900000907729301405696
     # >> python calc_lslmsr_cost.py 100 10000 0.1
     # 10000000914293287550976
-    assert longToken.totalSupply() == 1 * SCALE
-    assert shortToken.totalSupply() == 2 * SCALE
+    assert long_token.totalSupply() == 1 * SCALE
+    assert short_token.totalSupply() == 2 * SCALE
     with reverts("ERC20: transfer amount exceeds balance"):
         putmm.buy(0, 98 * SCALE, 10000 * SCALE, {"from": user})
     putmm.buy(0, 97 * SCALE, 10000 * SCALE, {"from": user})
@@ -678,8 +678,8 @@ def test_with_multiplier(OptionsToken, putmm, oracle, usd_token, user, fast_forw
     putmm.buy(1 * SCALE, 0, 10000 * SCALE, {"from": user})
 
     # if maxAmountIn is set to 10000, we can buy at most 10
-    assert longToken.totalSupply() == 1 * SCALE
-    assert shortToken.totalSupply() == 2 * SCALE
+    assert long_token.totalSupply() == 1 * SCALE
+    assert short_token.totalSupply() == 2 * SCALE
     with reverts("Max slippage exceeded"):
         putmm.buy(0, 11 * SCALE, 1000 * SCALE, {"from": user})
     putmm.buy(0, 10 * SCALE, 1000 * SCALE, {"from": user})
