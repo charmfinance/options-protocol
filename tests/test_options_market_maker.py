@@ -151,7 +151,7 @@ def test_buy_and_sell(mm, base_token, user, longToken, shortToken, fast_forward)
     assert longToken.totalSupply() == shortToken.totalSupply() == 0
 
     # buy 1 long token. set maxAmountIn very high so it's ignored
-    tx = mm.buy(longToken, 1 * SCALE, 1000 * SCALE, {"from": user})
+    tx = mm.buy(1 * SCALE, 0, 1000 * SCALE, {"from": user})
 
     # >> python calc_lslmsr_cost.py 1 0 0.1
     # 1000000068793027456
@@ -162,96 +162,56 @@ def test_buy_and_sell(mm, base_token, user, longToken, shortToken, fast_forward)
     assert shortToken.totalSupply() == 0
     assert tx.events["Trade"] == {
         "account": user,
-        "optionsToken": longToken,
         "isBuy": True,
-        "shares": 1 * SCALE,
+        "longShares": 1 * SCALE,
+        "shortShares": 0,
         "cost": 1000000068793027542,
         "newLongSupply": 1 * SCALE,
         "newShortSupply": 0,
     }
 
-    # buy 2 short tokens
-    tx = mm.buy(shortToken, 2 * SCALE, 1000 * SCALE, {"from": user})
-
-    # >> python calc_lslmsr_cost.py 1 2 0.1
-    # 2002119680798907904
-    assert base_token.balanceOf(mm) == 2002119680798907878
-    assert tx.return_value == 2002119680798907878 - 1000000068793027542
-    assert base_token.balanceOf(user) + base_token.balanceOf(mm) == 100 * SCALE
-    assert longToken.totalSupply() == 1 * SCALE
-    assert shortToken.totalSupply() == 2 * SCALE
-    assert tx.events["Trade"] == {
-        "account": user,
-        "optionsToken": shortToken,
-        "isBuy": True,
-        "shares": 2 * SCALE,
-        "cost": 2002119680798907878 - 1000000068793027542,
-        "newLongSupply": 1 * SCALE,
-        "newShortSupply": 2 * SCALE,
-    }
-
-    # buy 5 long tokens
-    tx = mm.buy(longToken, 5 * SCALE, 1000 * SCALE, {"from": user})
+    # buy 5 long tokens and 2 short tokens
+    tx = mm.buy(5 * SCALE, 2 * SCALE, 1000 * SCALE, {"from": user})
 
     # >> python calc_lslmsr_cost.py 6 2 0.1
     # 6000563277757123584
     assert base_token.balanceOf(mm) == 6000563277757123355
-    assert tx.return_value == 6000563277757123355 - 2002119680798907878
+    assert tx.return_value == 6000563277757123355 - 1000000068793027542
     assert base_token.balanceOf(user) + base_token.balanceOf(mm) == 100 * SCALE
     assert longToken.totalSupply() == 6 * SCALE
     assert shortToken.totalSupply() == 2 * SCALE
     assert tx.events["Trade"] == {
         "account": user,
-        "optionsToken": longToken,
         "isBuy": True,
-        "shares": 5 * SCALE,
-        "cost": 6000563277757123355 - 2002119680798907878,
+        "longShares": 5 * SCALE,
+        "shortShares": 2 * SCALE,
+        "cost": 6000563277757123355 - 1000000068793027542,
         "newLongSupply": 6 * SCALE,
         "newShortSupply": 2 * SCALE,
     }
 
-    # sell 2 long tokens. set minAmountOut to 0 so it's ignored
-    tx = mm.sell(longToken, 2 * SCALE, 0, {"from": user})
-
-    # >> python calc_lslmsr_cost.py 4 2 0.1
-    # 4004239361597815808
-    assert base_token.balanceOf(mm) == 4004239361597815757
-    assert tx.return_value == 6000563277757123355 - 4004239361597815757
-    assert base_token.balanceOf(user) + base_token.balanceOf(mm) == 100 * SCALE
-    assert longToken.totalSupply() == 4 * SCALE
-    assert shortToken.totalSupply() == 2 * SCALE
-    assert tx.events["Trade"] == {
-        "account": user,
-        "optionsToken": longToken,
-        "isBuy": False,
-        "shares": 2 * SCALE,
-        "cost": 6000563277757123355 - 4004239361597815757,
-        "newLongSupply": 4 * SCALE,
-        "newShortSupply": 2 * SCALE,
-    }
-
-    # sell 2 short tokens. set minAmountOut to 0 so it's ignored
-    tx = mm.sell(shortToken, 2 * SCALE, 0, {"from": user})
+    # sell 2 long tokens and short tokens. set minAmountOut to 0 so it's ignored
+    tx = mm.sell(2 * SCALE, 2 * SCALE, 0, {"from": user})
 
     # >> python calc_lslmsr_cost.py 4 0 0.1
     # 4000000275172109824
     assert base_token.balanceOf(mm) == 4000000275172110168
-    assert tx.return_value == 4004239361597815757 - 4000000275172110168
+    assert tx.return_value == 6000563277757123355 - 4000000275172110168
     assert base_token.balanceOf(user) + base_token.balanceOf(mm) == 100 * SCALE
     assert longToken.totalSupply() == 4 * SCALE
     assert shortToken.totalSupply() == 0 * SCALE
     assert tx.events["Trade"] == {
         "account": user,
-        "optionsToken": shortToken,
         "isBuy": False,
-        "shares": 2 * SCALE,
-        "cost": 4004239361597815757 - 4000000275172110168,
+        "longShares": 2 * SCALE,
+        "shortShares": 2 * SCALE,
+        "cost": 6000563277757123355 - 4000000275172110168,
         "newLongSupply": 4 * SCALE,
         "newShortSupply": 0 * SCALE,
     }
 
     # sell rest of long tokens
-    tx = mm.sell(longToken, 4 * SCALE, 0, {"from": user})
+    tx = mm.sell(4 * SCALE, 0, 0, {"from": user})
     assert base_token.balanceOf(mm) == 0
     assert tx.return_value == 4000000275172110168
     assert base_token.balanceOf(user) + base_token.balanceOf(mm) == 100 * SCALE
@@ -259,9 +219,9 @@ def test_buy_and_sell(mm, base_token, user, longToken, shortToken, fast_forward)
     assert shortToken.totalSupply() == 0
     assert tx.events["Trade"] == {
         "account": user,
-        "optionsToken": longToken,
         "isBuy": False,
-        "shares": 4 * SCALE,
+        "longShares": 4 * SCALE,
+        "shortShares": 0,
         "cost": 4000000275172110168,
         "newLongSupply": 0 * SCALE,
         "newShortSupply": 0 * SCALE,
@@ -270,13 +230,9 @@ def test_buy_and_sell(mm, base_token, user, longToken, shortToken, fast_forward)
     # cannot buy or sell after expiry
     fast_forward(EXPIRY_TIME)
     with reverts("Cannot be called after expiry"):
-        mm.buy(longToken, 10 * SCALE, 1000 * SCALE, {"from": user})
+        mm.buy(10 * SCALE, 0, 1000 * SCALE, {"from": user})
     with reverts("Cannot be called after expiry"):
-        mm.buy(shortToken, 10 * SCALE, 1000 * SCALE, {"from": user})
-    with reverts("Cannot be called after expiry"):
-        mm.sell(longToken, 10 * SCALE, 0, {"from": user})
-    with reverts("Cannot be called after expiry"):
-        mm.sell(shortToken, 10 * SCALE, 0, {"from": user})
+        mm.sell(0, 10 * SCALE, 0, {"from": user})
 
 
 def test_cannot_buy_or_sell_if_insufficient_balance(
@@ -290,27 +246,27 @@ def test_cannot_buy_or_sell_if_insufficient_balance(
     # >> python calc_lslmsr_cost.py 100 0 0.1
     # 100000006879302762496
     with reverts("ERC20: transfer amount exceeds balance"):
-        mm.buy(longToken, 100 * SCALE, 1000 * SCALE, {"from": user})
+        mm.buy(100 * SCALE, 0, 1000 * SCALE, {"from": user})
 
-    mm.buy(shortToken, 99 * SCALE, 1000 * SCALE, {"from": user})
+    mm.buy(0, 99 * SCALE, 1000 * SCALE, {"from": user})
 
     # can sell at most 99 shares
     with reverts("ERC20: burn amount exceeds balance"):
-        mm.sell(longToken, 100 * SCALE, 0, {"from": user})
+        mm.sell(100 * SCALE, 0, 0, {"from": user})
 
-    mm.sell(shortToken, 99 * SCALE, 0, {"from": user})
+    mm.sell(0, 99 * SCALE, 0, {"from": user})
 
     # after buying 90 long tokens, can buy at most 91 short tokens
     # >> python calc_lslmsr_cost.py 90 91 0.1
     # 99559571516926771200
     # >> python calc_lslmsr_cost.py 90 92 0.1
     # 100138048239407169536
-    mm.buy(longToken, 90 * SCALE, 1000 * SCALE, {"from": user})
+    mm.buy(90 * SCALE, 0, 1000 * SCALE, {"from": user})
 
     with reverts("ERC20: transfer amount exceeds balance"):
-        mm.buy(shortToken, 92 * SCALE, 1000 * SCALE, {"from": user})
+        mm.buy(0, 92 * SCALE, 1000 * SCALE, {"from": user})
 
-    mm.buy(shortToken, 91 * SCALE, 1000 * SCALE, {"from": user})
+    mm.buy(0, 91 * SCALE, 1000 * SCALE, {"from": user})
 
 
 # we need to use tolerance of 0.999999 and 1.000001 as costs are not exact
@@ -321,27 +277,27 @@ def test_buy_and_sell_reverts_when_slippage_too_high(mm, longToken, shortToken, 
     cost = 10000000687930275840
 
     with reverts("Max slippage exceeded"):
-        mm.buy(longToken, 10 * SCALE, cost * 0.999999, {"from": user})
-    mm.buy(longToken, 10 * SCALE, cost * 1.000001, {"from": user})
+        mm.buy(10 * SCALE, 0, cost * 0.999999, {"from": user})
+    mm.buy(10 * SCALE, 0, cost * 1.000001, {"from": user})
 
     # >> python calc_lslmsr_cost.py 10 3 0.1
     # 10000537157956245504
     cost = 10000537157956245504 - 10000000687930275840
     with reverts("Max slippage exceeded"):
-        mm.buy(shortToken, 3 * SCALE, cost * 0.999999, {"from": user})
-    mm.buy(shortToken, 3 * SCALE, cost * 1.000001, {"from": user})
+        mm.buy(0, 3 * SCALE, cost * 0.999999, {"from": user})
+    mm.buy(0, 3 * SCALE, cost * 1.000001, {"from": user})
 
     # >> python calc_lslmsr_cost.py 0 3 0.1
     # 3000000206379082752
     cost = 10000537157956245504 - 3000000206379082752
     with reverts("Max slippage exceeded"):
-        mm.sell(longToken, 10 * SCALE, cost * 1.000001, {"from": user})
-    mm.sell(longToken, 10 * SCALE, cost * 0.999999, {"from": user})
+        mm.sell(10 * SCALE, 0, cost * 1.000001, {"from": user})
+    mm.sell(10 * SCALE, 0, cost * 0.999999, {"from": user})
 
     cost = 3000000206379082752
     with reverts("Max slippage exceeded"):
-        mm.sell(shortToken, 3 * SCALE, cost * 1.000001, {"from": user})
-    mm.sell(shortToken, 3 * SCALE, cost * 0.999999, {"from": user})
+        mm.sell(0, 3 * SCALE, cost * 1.000001, {"from": user})
+    mm.sell(0, 3 * SCALE, cost * 0.999999, {"from": user})
 
 
 def test_buy_and_sell_with_extreme_amounts(mm, longToken, shortToken, base_token, user):
@@ -350,7 +306,7 @@ def test_buy_and_sell_with_extreme_amounts(mm, longToken, shortToken, base_token
     total_balance = base_token.balanceOf(user) + base_token.balanceOf(mm)
 
     # buy 10**18 long tokens
-    tx = mm.buy(longToken, 10 ** 18 * SCALE, 10 ** 40, {"from": user})
+    tx = mm.buy(10 ** 18 * SCALE, 0, 10 ** 40, {"from": user})
 
     # >> python calc_lslmsr_cost.py 1000000000000000000 0 0.1
     # 1000000068793027590977033455817195520
@@ -359,20 +315,20 @@ def test_buy_and_sell_with_extreme_amounts(mm, longToken, shortToken, base_token
 
     # small buy still works
     bal = base_token.balanceOf(mm)
-    tx = mm.buy(longToken, 1, 10 ** 40, {"from": user})
+    tx = mm.buy(1, 0, 10 ** 40, {"from": user})
     assert tx.return_value == 1
     assert base_token.balanceOf(mm) - bal == 1
 
     # small sell still works
     bal = base_token.balanceOf(mm)
-    tx = mm.sell(longToken, 1, 0, {"from": user})
+    tx = mm.sell(1, 0, 0, {"from": user})
     assert tx.return_value == 1
     assert bal - base_token.balanceOf(mm) == 1
 
     # buy 10**18 short tokens
     # >> python calc_lslmsr_cost.py 1000000000000000000 1000000000000000000 0.1
     # 1100000000000000002390515334516834304
-    tx = mm.buy(shortToken, 10 ** 18 * SCALE, 10 ** 40, {"from": user})
+    tx = mm.buy(0, 10 ** 18 * SCALE, 10 ** 40, {"from": user})
     assert base_token.balanceOf(mm) == 1100000000000000007801447287920083588
     assert (
         tx.return_value
@@ -381,19 +337,19 @@ def test_buy_and_sell_with_extreme_amounts(mm, longToken, shortToken, base_token
 
     # small buy still works
     bal = base_token.balanceOf(mm)
-    tx = mm.buy(longToken, 1, 10 ** 40, {"from": user})
+    tx = mm.buy(1, 0, 10 ** 40, {"from": user})
     assert tx.return_value == 1
     assert base_token.balanceOf(mm) - bal == 1
 
     # small sell still works
     bal = base_token.balanceOf(mm)
-    tx = mm.sell(longToken, 1, 0, {"from": user})
+    tx = mm.sell(1, 0, 0, {"from": user})
     assert tx.return_value == 1
     assert bal - base_token.balanceOf(mm) == 1
 
     # sell everything
-    mm.sell(longToken, 10 ** 18 * SCALE, 0, {"from": user})
-    mm.sell(shortToken, 10 ** 18 * SCALE, 0, {"from": user})
+    mm.sell(10 ** 18 * SCALE, 0, 0, {"from": user})
+    mm.sell(0, 10 ** 18 * SCALE, 0, {"from": user})
     assert base_token.balanceOf(user) + base_token.balanceOf(mm) == total_balance
     assert longToken.totalSupply() == 0 * SCALE
     assert shortToken.totalSupply() == 0 * SCALE
@@ -405,16 +361,12 @@ def test_buy_and_sell_eth(OptionsToken, ethmm, user):
 
     # reverts if not enough eth sent with transaction
     with reverts("UniERC20: not enough value"):
-        tx = ethmm.buy(longToken, 10 * SCALE, 1000 * SCALE, {"from": user})
+        tx = ethmm.buy(10 * SCALE, 0, 1000 * SCALE, {"from": user})
     with reverts("UniERC20: not enough value"):
-        tx = ethmm.buy(
-            longToken, 10 * SCALE, 1000 * SCALE, {"from": user, "value": 1 * SCALE}
-        )
+        tx = ethmm.buy(10 * SCALE, 0, 1000 * SCALE, {"from": user, "value": 1 * SCALE})
 
     # buy 10 long tokens
-    tx = ethmm.buy(
-        longToken, 10 * SCALE, 1000 * SCALE, {"from": user, "value": 12 * SCALE}
-    )
+    tx = ethmm.buy(10 * SCALE, 0, 1000 * SCALE, {"from": user, "value": 12 * SCALE})
 
     # >> python calc_lslmsr_cost.py 10 0 0.1
     # 10000000687930275840
@@ -423,7 +375,7 @@ def test_buy_and_sell_eth(OptionsToken, ethmm, user):
     assert user.balance() + ethmm.balance() == 100 * SCALE
 
     # sell 10 long tokens
-    tx = ethmm.sell(longToken, 10 * SCALE, 0, {"from": user})
+    tx = ethmm.sell(10 * SCALE, 0, 0, {"from": user})
     assert tx.return_value == 10000000687930275420
     assert ethmm.balance() == 0
     assert user.balance() + ethmm.balance() == 100 * SCALE
@@ -501,10 +453,8 @@ def test_redeem_in_the_money(
     # users buy 10 long tokens and 15 short tokens for a cost of 15.109
     # >> python calc_lslmsr_cost.py 10 15 0.1
     # 15109328551562924032
-    mm.buy(longToken, 5 * SCALE, 1000 * SCALE, {"from": user})
-    mm.buy(shortToken, 5 * SCALE, 1000 * SCALE, {"from": user})
-    mm.buy(longToken, 5 * SCALE, 1000 * SCALE, {"from": user2})
-    mm.buy(shortToken, 10 * SCALE, 1000 * SCALE, {"from": user2})
+    mm.buy(5 * SCALE, 5 * SCALE, 1000 * SCALE, {"from": user})
+    mm.buy(5 * SCALE, 10 * SCALE, 1000 * SCALE, {"from": user2})
 
     bal1 = base_token.balanceOf(user)
     bal2 = base_token.balanceOf(user2)
@@ -573,10 +523,8 @@ def test_redeem_out_of_the_money(
     # users buy 15.109 tokens worth of options
     # >> python calc_lslmsr_cost.py 10 15 0.1
     # 15109328551562924032
-    mm.buy(longToken, 5 * SCALE, 1000 * SCALE, {"from": user})
-    mm.buy(shortToken, 5 * SCALE, 1000 * SCALE, {"from": user})
-    mm.buy(longToken, 5 * SCALE, 1000 * SCALE, {"from": user2})
-    mm.buy(shortToken, 10 * SCALE, 1000 * SCALE, {"from": user2})
+    mm.buy(5 * SCALE, 5 * SCALE, 1000 * SCALE, {"from": user})
+    mm.buy(5 * SCALE, 10 * SCALE, 1000 * SCALE, {"from": user2})
 
     bal1 = base_token.balanceOf(user)
     bal2 = base_token.balanceOf(user2)
@@ -616,7 +564,7 @@ def test_redeem_eth(OptionsToken, ethmm, oracle, user, fast_forward):
     # user buys 10.0 eth worth of options
     # python calc_lslmsr_cost.py 10 0 0.1
     # 10000000687930275840
-    ethmm.buy(longToken, 10 * SCALE, 1000 * SCALE, {"from": user, "value": 12 * SCALE})
+    ethmm.buy(10 * SCALE, 0, 1000 * SCALE, {"from": user, "value": 12 * SCALE})
     oracle.setPrice(125 * SCALE)
     fast_forward(EXPIRY_TIME)
     ethmm.settle()
@@ -655,12 +603,12 @@ def test_pause_unpause(mm, deployer, user, longToken):
     mm.pause({"from": deployer})
 
     with reverts("This method has been paused"):
-        mm.buy(longToken, 1 * SCALE, 1000 * SCALE, {"from": user})
+        mm.buy(1 * SCALE, 0, 1000 * SCALE, {"from": user})
 
     with reverts("Ownable: caller is not the owner"):
         mm.unpause({"from": user})
     mm.unpause({"from": deployer})
-    mm.buy(longToken, 1 * SCALE, 1000 * SCALE, {"from": user})
+    mm.buy(1 * SCALE, 0, 1000 * SCALE, {"from": user})
 
 
 def test_with_multiplier(OptionsToken, putmm, oracle, usd_token, user, fast_forward):
@@ -672,7 +620,7 @@ def test_with_multiplier(OptionsToken, putmm, oracle, usd_token, user, fast_forw
     assert longToken.totalSupply() == shortToken.totalSupply() == 0
 
     # buy 1 long token. set maxAmountIn very high so it's ignored
-    tx = putmm.buy(longToken, 1 * SCALE, 10000 * SCALE, {"from": user})
+    tx = putmm.buy(1 * SCALE, 0, 10000 * SCALE, {"from": user})
 
     # >> python calc_lslmsr_cost.py 100 0 0.1
     # 100000006879302762496
@@ -683,16 +631,16 @@ def test_with_multiplier(OptionsToken, putmm, oracle, usd_token, user, fast_forw
     assert shortToken.totalSupply() == 0
     assert tx.events["Trade"] == {
         "account": user,
-        "optionsToken": longToken,
         "isBuy": True,
-        "shares": 1 * SCALE,
+        "longShares": 1 * SCALE,
+        "shortShares": 0,
         "cost": 100000006879302754205,
         "newLongSupply": 1 * SCALE,
         "newShortSupply": 0,
     }
 
     # buy 2 short tokens
-    tx = putmm.buy(shortToken, 2 * SCALE, 10000 * SCALE, {"from": user})
+    tx = putmm.buy(0, 2 * SCALE, 10000 * SCALE, {"from": user})
 
     # >> python calc_lslmsr_cost.py 100 200 0.1
     # 200211968079890808832
@@ -703,9 +651,9 @@ def test_with_multiplier(OptionsToken, putmm, oracle, usd_token, user, fast_forw
     assert shortToken.totalSupply() == 2 * SCALE
     assert tx.events["Trade"] == {
         "account": user,
-        "optionsToken": shortToken,
         "isBuy": True,
-        "shares": 2 * SCALE,
+        "longShares": 0,
+        "shortShares": 2 * SCALE,
         "cost": 200211968079890787869 - 100000006879302754205,
         "newLongSupply": 1 * SCALE,
         "newShortSupply": 2 * SCALE,
@@ -719,30 +667,30 @@ def test_with_multiplier(OptionsToken, putmm, oracle, usd_token, user, fast_forw
     assert longToken.totalSupply() == 1 * SCALE
     assert shortToken.totalSupply() == 2 * SCALE
     with reverts("ERC20: transfer amount exceeds balance"):
-        putmm.buy(shortToken, 98 * SCALE, 10000 * SCALE, {"from": user})
-    putmm.buy(shortToken, 97 * SCALE, 10000 * SCALE, {"from": user})
-    putmm.sell(shortToken, 97 * SCALE, 0, {"from": user})
+        putmm.buy(0, 98 * SCALE, 10000 * SCALE, {"from": user})
+    putmm.buy(0, 97 * SCALE, 10000 * SCALE, {"from": user})
+    putmm.sell(0, 97 * SCALE, 0, {"from": user})
 
     # we can sell 1 long token but not 2
     with reverts("ERC20: burn amount exceeds balance"):
-        putmm.sell(longToken, 2 * SCALE, 0, {"from": user})
-    putmm.sell(longToken, 1 * SCALE, 0, {"from": user})
-    putmm.buy(longToken, 1 * SCALE, 10000 * SCALE, {"from": user})
+        putmm.sell(2 * SCALE, 0, 0, {"from": user})
+    putmm.sell(1 * SCALE, 0, 0, {"from": user})
+    putmm.buy(1 * SCALE, 0, 10000 * SCALE, {"from": user})
 
     # if maxAmountIn is set to 10000, we can buy at most 10
     assert longToken.totalSupply() == 1 * SCALE
     assert shortToken.totalSupply() == 2 * SCALE
     with reverts("Max slippage exceeded"):
-        putmm.buy(shortToken, 11 * SCALE, 1000 * SCALE, {"from": user})
-    putmm.buy(shortToken, 10 * SCALE, 1000 * SCALE, {"from": user})
+        putmm.buy(0, 11 * SCALE, 1000 * SCALE, {"from": user})
+    putmm.buy(0, 10 * SCALE, 1000 * SCALE, {"from": user})
 
     # cannot buy or sell after expiry
     fast_forward(EXPIRY_TIME)
     with reverts("Cannot be called after expiry"):
-        putmm.buy(longToken, 10 * SCALE, 10000 * SCALE, {"from": user})
+        putmm.buy(10 * SCALE, 0, 10000 * SCALE, {"from": user})
     with reverts("Cannot be called after expiry"):
-        putmm.buy(shortToken, 10 * SCALE, 10000 * SCALE, {"from": user})
+        putmm.buy(0, 10 * SCALE, 10000 * SCALE, {"from": user})
     with reverts("Cannot be called after expiry"):
-        putmm.sell(longToken, 10 * SCALE, 0, {"from": user})
+        putmm.sell(10 * SCALE, 0, 0, {"from": user})
     with reverts("Cannot be called after expiry"):
-        putmm.sell(shortToken, 10 * SCALE, 0, {"from": user})
+        putmm.sell(0, 10 * SCALE, 0, {"from": user})

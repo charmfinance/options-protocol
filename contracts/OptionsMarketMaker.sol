@@ -25,9 +25,9 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
 
     event Trade(
         address indexed account,
-        OptionsToken optionsToken,
         bool isBuy,
-        uint256 shares,
+        uint256 longShares,
+        uint256 shortShares,
         uint256 cost,
         uint256 newLongSupply,
         uint256 newShortSupply
@@ -98,7 +98,8 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
     }
 
     /**
-     * Buy `sharesOut` quantity of options of type `optionsToken`
+     * Buy `longSharesOut` quantity of {longToken} and `shortSharesOut` quantity
+     * of {shortToken}
      *
      * Revert if the resulting cost would be greater than `maxAmountIn`
      *
@@ -106,16 +107,16 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
      * method can only be called before expiration
      */
     function buy(
-        OptionsToken optionsToken,
-        uint256 sharesOut,
+        uint256 longSharesOut,
+        uint256 shortSharesOut,
         uint256 maxAmountIn
     ) external payable nonReentrant notPaused returns (uint256 amountIn) {
-        require(optionsToken == longToken || optionsToken == shortToken, "Invalid option");
         require(!isExpired(), "Cannot be called after expiry");
-        require(sharesOut > 0, "Shares out must be > 0");
+        require(longSharesOut > 0 || shortSharesOut > 0, "Shares out must be > 0");
 
         uint256 cost1 = cost();
-        optionsToken.mint(msg.sender, sharesOut);
+        longToken.mint(msg.sender, longSharesOut);
+        shortToken.mint(msg.sender, shortSharesOut);
         uint256 cost2 = cost();
         amountIn = cost2.sub(cost1);
         require(amountIn > 0, "Amount in must be > 0");
@@ -125,9 +126,9 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
 
         emit Trade(
             msg.sender,
-            optionsToken,
             true,
-            sharesOut,
+            longSharesOut,
+            shortSharesOut,
             amountIn,
             longToken.totalSupply(),
             shortToken.totalSupply()
@@ -135,7 +136,8 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
     }
 
     /**
-     * Sell `sharesIn` quantity of options of type `optionsToken`
+     * Sell `longSharesIn` quantity of {longToken} and `shortSharesIn` quantity
+     * of {shortToken}
      *
      * Revert if the tokens received would be less than `minAmountOut`
      *
@@ -143,16 +145,16 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
      * method can only be called before expiration
      */
     function sell(
-        OptionsToken optionsToken,
-        uint256 sharesIn,
+        uint256 longSharesIn,
+        uint256 shortSharesIn,
         uint256 minAmountOut
     ) external nonReentrant returns (uint256 amountOut) {
-        require(optionsToken == longToken || optionsToken == shortToken, "Invalid option");
         require(!isExpired(), "Cannot be called after expiry");
-        require(sharesIn > 0, "Shares must be > 0");
+        require(longSharesIn > 0 || shortSharesIn > 0, "Shares must be > 0");
 
         uint256 cost1 = cost();
-        optionsToken.burn(msg.sender, sharesIn);
+        longToken.burn(msg.sender, longSharesIn);
+        shortToken.burn(msg.sender, shortSharesIn);
         uint256 cost2 = cost();
         amountOut = cost1.sub(cost2);
         require(amountOut > 0, "Amount must be > 0");
@@ -162,9 +164,9 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
 
         emit Trade(
             msg.sender,
-            optionsToken,
             false,
-            sharesIn,
+            longSharesIn,
+            shortSharesIn,
             amountOut,
             longToken.totalSupply(),
             shortToken.totalSupply()
