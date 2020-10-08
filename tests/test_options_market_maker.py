@@ -300,7 +300,9 @@ def test_buy_and_sell_reverts_when_slippage_too_high(mm, long_token, short_token
     mm.sell(0, 3 * SCALE, cost * 0.999999, {"from": user})
 
 
-def test_buy_and_sell_with_extreme_amounts(mm, long_token, short_token, base_token, user):
+def test_buy_and_sell_with_extreme_amounts(
+    mm, long_token, short_token, base_token, user
+):
     base_token.mint(user, 10 ** 40 * SCALE)
     base_token.approve(mm, 10 ** 40 * SCALE, {"from": user})
     total_balance = base_token.balanceOf(user) + base_token.balanceOf(mm)

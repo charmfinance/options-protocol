@@ -37,4 +37,3 @@ def test_charm_token(CharmToken, accounts):
     # set user as governance
     charm.setGovernance(user, {"from": deployer})
     assert charm.governance() == user
-
