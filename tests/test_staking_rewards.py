@@ -25,13 +25,12 @@ def test_staking_rewards(StakingRewards, MockToken, fast_forward, accounts):
         staking_token.mint(u, 100 * SCALE, {"from": deployer})
         staking_token.approve(sr, 100 * SCALE, {"from": u})
 
-    assert sr.name() == "Staked Mock Token"
-    assert sr.symbol() == "Staked MOCK"
+    assert sr.owner() == deployer
     assert sr.rewardsDuration() == 10 * DAYS
 
     # can't withdraw before staking
     assert staking_token.balanceOf(user) == 100 * SCALE
-    with reverts("ERC20: burn amount exceeds balance"):
+    with reverts("SafeMath: subtraction overflow"):
         sr.withdraw(1)
     assert staking_token.balanceOf(user) == 100 * SCALE
 

@@ -7,7 +7,6 @@
 // - Ran through a formatter
 // - Bumped solidity version
 // - Renamed getReward to claimReward
-// - Inherited Ownable and ERC20
 
 // MIT License
 //
@@ -36,7 +35,6 @@ pragma solidity ^0.6.12;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/math/Math.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
@@ -44,7 +42,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 import "./Pausable.sol";
 
-contract StakingRewards is ERC20, Ownable, ReentrancyGuard, Pausable {
+contract StakingRewards is Ownable, ReentrancyGuard, Pausable {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
     using Address for address;
@@ -60,20 +58,27 @@ contract StakingRewards is ERC20, Ownable, ReentrancyGuard, Pausable {
     mapping(address => uint256) public userRewardPerTokenPaid;
     mapping(address => uint256) public rewards;
 
+    uint256 private _totalSupply;
+    mapping(address => uint256) private _balances;
+
     constructor(
         address _rewardsToken,
         address _stakingToken,
         uint256 _rewardsDuration
     )
         public
-        ERC20(
-            string(abi.encodePacked("Staked ", ERC20(_stakingToken).name())),
-            string(abi.encodePacked("Staked ", ERC20(_stakingToken).symbol()))
-        )
     {
         stakingToken = IERC20(_stakingToken);
         rewardsToken = IERC20(_rewardsToken);
         rewardsDuration = _rewardsDuration;
+    }
+
+    function totalSupply() external view returns (uint256) {
+        return _totalSupply;
+    }
+
+    function balanceOf(address account) external view returns (uint256) {
+        return _balances[account];
     }
 
     function lastTimeRewardApplicable() public view returns (uint256) {
@@ -81,18 +86,18 @@ contract StakingRewards is ERC20, Ownable, ReentrancyGuard, Pausable {
     }
 
     function rewardPerToken() public view returns (uint256) {
-        if (totalSupply() == 0) {
+        if (_totalSupply == 0) {
             return rewardPerTokenStored;
         }
         return
             rewardPerTokenStored.add(
-                lastTimeRewardApplicable().sub(lastUpdateTime).mul(rewardRate).mul(1e18).div(totalSupply())
+                lastTimeRewardApplicable().sub(lastUpdateTime).mul(rewardRate).mul(1e18).div(_totalSupply)
             );
     }
 
     function earned(address account) public view returns (uint256) {
         return
-            balanceOf(account).mul(rewardPerToken().sub(userRewardPerTokenPaid[account])).div(1e18).add(
+            _balances[account].mul(rewardPerToken().sub(userRewardPerTokenPaid[account])).div(1e18).add(
                 rewards[account]
             );
     }
@@ -103,14 +108,16 @@ contract StakingRewards is ERC20, Ownable, ReentrancyGuard, Pausable {
 
     function stake(uint256 amount) external nonReentrant notPaused updateReward(msg.sender) {
         require(amount > 0, "Cannot stake 0");
+        _totalSupply = _totalSupply.add(amount);
+        _balances[msg.sender] = _balances[msg.sender].add(amount);
         stakingToken.safeTransferFrom(msg.sender, address(this), amount);
-        _mint(msg.sender, amount);
         emit Staked(msg.sender, amount);
     }
 
     function withdraw(uint256 amount) public nonReentrant updateReward(msg.sender) {
         require(amount > 0, "Cannot withdraw 0");
-        _burn(msg.sender, amount);
+        _totalSupply = _totalSupply.sub(amount);
+        _balances[msg.sender] = _balances[msg.sender].sub(amount);
         stakingToken.safeTransfer(msg.sender, amount);
         emit Withdrawn(msg.sender, amount);
     }
@@ -125,7 +132,7 @@ contract StakingRewards is ERC20, Ownable, ReentrancyGuard, Pausable {
     }
 
     function exit() external {
-        withdraw(balanceOf(msg.sender));
+        withdraw(_balances[msg.sender]);
         claimReward();
     }
 
