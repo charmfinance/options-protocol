@@ -55,7 +55,10 @@ def test_staking_rewards(StakingRewards, MockToken, fast_forward, accounts):
     # sent rewards and notify
     rewards_token.transfer(sr, 1000 * SCALE, {"from": deployer})
     fast_forward(TIME1 + 0 * DAYS)
-    sr.notifyRewardAmount(1000 * SCALE)
+
+    with reverts("Ownable: caller is not the owner"):
+        sr.notifyRewardAmount(1000 * SCALE, {"from": user})
+    sr.notifyRewardAmount(1000 * SCALE, {"from": deployer})
 
     # 1 day has passed. So user is eligible to 10% of reward
     fast_forward(TIME1 + 1 * DAYS)
