@@ -4,9 +4,8 @@
 
 // Changes made:
 // - Let initial value of rewardsDuration be set
-// - Ran through a formatter
 // - Bumped solidity version
-// - Renamed getReward to claimReward
+// - Used Ownable
 
 // MIT License
 //
@@ -45,7 +44,8 @@ import "./Pausable.sol";
 contract StakingRewards is Ownable, ReentrancyGuard, Pausable {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
-    using Address for address;
+
+    /* ========== STATE VARIABLES ========== */
 
     IERC20 public rewardsToken;
     IERC20 public stakingToken;
@@ -61,17 +61,21 @@ contract StakingRewards is Ownable, ReentrancyGuard, Pausable {
     uint256 private _totalSupply;
     mapping(address => uint256) private _balances;
 
+    /* ========== CONSTRUCTOR ========== */
+
     constructor(
         address _rewardsToken,
         address _stakingToken,
         uint256 _rewardsDuration
-    )
-        public
-    {
-        stakingToken = IERC20(_stakingToken);
+    ) public {
         rewardsToken = IERC20(_rewardsToken);
+        stakingToken = IERC20(_stakingToken);
+
+        require(_rewardsDuration >= 1 days, "Rewards duration must be >= 1 days");
         rewardsDuration = _rewardsDuration;
     }
+
+    /* ========== VIEWS ========== */
 
     function totalSupply() external view returns (uint256) {
         return _totalSupply;
@@ -96,15 +100,14 @@ contract StakingRewards is Ownable, ReentrancyGuard, Pausable {
     }
 
     function earned(address account) public view returns (uint256) {
-        return
-            _balances[account].mul(rewardPerToken().sub(userRewardPerTokenPaid[account])).div(1e18).add(
-                rewards[account]
-            );
+        return _balances[account].mul(rewardPerToken().sub(userRewardPerTokenPaid[account])).div(1e18).add(rewards[account]);
     }
 
     function getRewardForDuration() external view returns (uint256) {
         return rewardRate.mul(rewardsDuration);
     }
+
+    /* ========== MUTATIVE FUNCTIONS ========== */
 
     function stake(uint256 amount) external nonReentrant notPaused updateReward(msg.sender) {
         require(amount > 0, "Cannot stake 0");
@@ -122,7 +125,7 @@ contract StakingRewards is Ownable, ReentrancyGuard, Pausable {
         emit Withdrawn(msg.sender, amount);
     }
 
-    function claimReward() public nonReentrant updateReward(msg.sender) {
+    function getReward() public nonReentrant updateReward(msg.sender) {
         uint256 reward = rewards[msg.sender];
         if (reward > 0) {
             rewards[msg.sender] = 0;
@@ -133,8 +136,10 @@ contract StakingRewards is Ownable, ReentrancyGuard, Pausable {
 
     function exit() external {
         withdraw(_balances[msg.sender]);
-        claimReward();
+        getReward();
     }
+
+    /* ========== RESTRICTED FUNCTIONS ========== */
 
     function notifyRewardAmount(uint256 reward) external onlyOwner updateReward(address(0)) {
         if (block.timestamp >= periodFinish) {
@@ -149,7 +154,7 @@ contract StakingRewards is Ownable, ReentrancyGuard, Pausable {
         // This keeps the reward rate in the right range, preventing overflows due to
         // very high values of rewardRate in the earned and rewardsPerToken functions;
         // Reward + leftover must be less than 2^256 / 10^18 to avoid overflow.
-        uint256 balance = rewardsToken.balanceOf(address(this));
+        uint balance = rewardsToken.balanceOf(address(this));
         require(rewardRate <= balance.div(rewardsDuration), "Provided reward too high");
 
         lastUpdateTime = block.timestamp;
@@ -158,13 +163,14 @@ contract StakingRewards is Ownable, ReentrancyGuard, Pausable {
     }
 
     function setRewardsDuration(uint256 _rewardsDuration) external onlyOwner {
-        require(
-            block.timestamp > periodFinish,
+        require(block.timestamp > periodFinish,
             "Previous rewards period must be complete before changing the duration for the new period"
         );
         rewardsDuration = _rewardsDuration;
         emit RewardsDurationUpdated(rewardsDuration);
     }
+
+    /* ========== MODIFIERS ========== */
 
     modifier updateReward(address account) {
         rewardPerTokenStored = rewardPerToken();
@@ -175,6 +181,8 @@ contract StakingRewards is Ownable, ReentrancyGuard, Pausable {
         }
         _;
     }
+
+    /* ========== EVENTS ========== */
 
     event RewardAdded(uint256 reward);
     event Staked(address indexed user, uint256 amount);

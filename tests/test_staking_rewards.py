@@ -36,7 +36,7 @@ def test_staking_rewards(StakingRewards, MockToken, fast_forward, accounts):
 
     # can't claim rewards before staking
     assert rewards_token.balanceOf(user) == 0
-    sr.claimReward({"from": user})
+    sr.getReward({"from": user})
     assert rewards_token.balanceOf(user) == 0
 
     # can't stake 100
@@ -65,7 +65,7 @@ def test_staking_rewards(StakingRewards, MockToken, fast_forward, accounts):
 
     # 5 days have passed. So user gets 10+10%, user2 gets 30%
     fast_forward(TIME1 + 5 * DAYS)
-    sr.claimReward({"from": user})
+    sr.getReward({"from": user})
     assert pytest.approx(rewards_token.balanceOf(user)) == 200 * SCALE
 
     # 6 days have passed. User2 stakes another 10
@@ -79,6 +79,6 @@ def test_staking_rewards(StakingRewards, MockToken, fast_forward, accounts):
 
     # reward period has ended. So user gets 10+10+2%, user2 gets 30+7.5+8+30%
     fast_forward(TIME1 + 100 * DAYS)
-    sr.claimReward({"from": user2})
+    sr.getReward({"from": user2})
     assert pytest.approx(rewards_token.balanceOf(user2)) == 755 * SCALE
     assert pytest.approx(rewards_token.balanceOf(sr), abs=1e6) == 0
