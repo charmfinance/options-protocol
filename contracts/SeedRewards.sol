@@ -9,6 +9,7 @@
 
 // Differences with StakingRewards.sol
 // - stake and withdraw methods directly buy options from the market maker
+// - Added receive function to receive eth refund when buying options with eth
 
 // MIT License
 //
@@ -91,7 +92,9 @@ contract SeedRewards is Ownable, ReentrancyGuard, Pausable {
         shortToken = optionsMarketMaker.shortToken();
 
         // Approve all future buys
-        baseToken.approve(address(optionsMarketMaker), MARKET_MAKER_ALLOWANCE);
+        if (!baseToken.isETH()) {
+            baseToken.approve(address(optionsMarketMaker), MARKET_MAKER_ALLOWANCE);
+        }
     }
 
     /* ========== VIEWS ========== */
@@ -128,10 +131,10 @@ contract SeedRewards is Ownable, ReentrancyGuard, Pausable {
 
     /* ========== MUTATIVE FUNCTIONS ========== */
 
-    function stake(uint256 shares, uint256 maxAmountIn) external nonReentrant notPaused updateReward(msg.sender) {
+    function stake(uint256 shares, uint256 maxAmountIn) external payable nonReentrant notPaused updateReward(msg.sender) {
         require(shares > 0, "Cannot stake 0");
         baseToken.uniTransferFromSenderToThis(maxAmountIn);
-        uint256 amountIn = optionsMarketMaker.buy(shares, shares, maxAmountIn);
+        uint256 amountIn = optionsMarketMaker.buy{value: msg.value}(shares, shares, maxAmountIn);
 
         // Refund difference. Cheaper in gas than calculating exact cost
         if (amountIn < maxAmountIn) {
@@ -226,4 +229,9 @@ contract SeedRewards is Ownable, ReentrancyGuard, Pausable {
     event RewardPaid(address indexed user, uint256 reward);
     event RewardsDurationUpdated(uint256 newDuration);
     event Recovered(address token, uint256 amount);
+
+    /* ========== RECEIVE FUNCTION ========== */
+
+    // Needed to receive eth refund when calling {optionsMarketMaker.buy}
+    receive() external payable {}
 }
