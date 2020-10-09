@@ -17,7 +17,7 @@ TOKEN_SYMBOLS = {
 
 
 def main():
-    options = {}
+    options = []
     for market in OptionsMarketMaker:
         baseAddress = str(market.baseToken())
         baseSymbol = TOKEN_SYMBOLS.get(baseAddress, "?")
@@ -27,20 +27,21 @@ def main():
             address = addresses[i]
             option = OptionsToken.at(address)
             symbol = option.symbol()
-            assert symbol.lower() not in options
-            options[symbol.lower()] = {
-                "address": address,
-                "symbol": symbol,
-                "oppositeAddress": addresses[1 - i],
-                "marketAddress": market.address,
-                "oracle": market.oracle(),
-                "alpha": market.alpha(),
-                "expiryTime": market.expiryTime(),
-                "strikePrice": market.strikePrice(),
-                "multiplier": market.multiplier(),
-                "baseAddress": baseAddress,
-                "baseSymbol": baseSymbol,
-                "isLong": i == 0,
-            }
+            options.append(
+                {
+                    "address": address,
+                    "symbol": symbol,
+                    "oppositeAddress": addresses[1 - i],
+                    "marketAddress": market.address,
+                    "oracle": market.oracle(),
+                    "isPut": market.isPutMarket(),
+                    "alpha": market.alpha(),
+                    "expiryTime": market.expiryTime(),
+                    "strikePrice": market.strikePrice(),
+                    "baseAddress": baseAddress,
+                    "baseSymbol": baseSymbol,
+                    "isLong": i == 0,
+                }
+            )
 
     print(json.dumps(options, indent=4, sort_keys=True))
