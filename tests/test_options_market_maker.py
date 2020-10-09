@@ -8,6 +8,9 @@ SCALE = 10 ** 18
 EXPIRY_TIME = 2000000000  # 18 May 2033
 ALPHA = int(SCALE // 10 // 2 / log(2))
 
+CALL = 0
+PUT = 1
+
 
 @pytest.fixture
 def deployer(accounts):
@@ -50,10 +53,10 @@ def mm(OptionsMarketMaker, base_token, oracle, deployer, user, user2, user3):
         OptionsMarketMaker,
         base_token,
         oracle,
+        CALL,
         100 * SCALE,  # strikePrice = 100 usd
         ALPHA,  # alpha = 0.1 / 2 / log 2
         EXPIRY_TIME,
-        SCALE,  # multiplier = 1
         "long name",
         "long symbol",
         "short name",
@@ -75,10 +78,10 @@ def ethmm(OptionsMarketMaker, oracle, deployer):
         OptionsMarketMaker,
         zero_address,  # eth
         oracle,
+        CALL,
         100 * SCALE,  # strikePrice = 100 usd
         ALPHA,  # alpha = 0.1 / 2 / log 2
         EXPIRY_TIME,
-        SCALE,  # multiplier = 1
         "long name",
         "long symbol",
         "short name",
@@ -92,10 +95,10 @@ def putmm(OptionsMarketMaker, usd_token, oracle, deployer, user, user2, user3):
         OptionsMarketMaker,
         usd_token,
         oracle,
+        PUT,
         100 * SCALE,  # strikePrice = 100 usd
         ALPHA,  # alpha = 0.1 / 2 / log 2
         EXPIRY_TIME,
-        100 * SCALE,  # multiplier = 100
         "long name",
         "long symbol",
         "short name",
@@ -120,9 +123,7 @@ def short_token(OptionsToken, mm):
     return OptionsToken.at(mm.shortToken())
 
 
-def test_options_market_constructor(
-    mm, long_token, short_token, base_token, oracle, deployer
-):
+def test_constructor(mm, long_token, short_token, base_token, oracle, deployer):
     assert mm.owner() == deployer
 
     assert long_token.name() == "long name"
@@ -133,13 +134,23 @@ def test_options_market_constructor(
     assert mm.baseToken() == base_token
     assert mm.oracle() == oracle
     assert mm.strikePrice() == 100 * SCALE
+    assert mm.normalizedStrikePrice() == 100 * SCALE
     assert mm.expiryTime() == EXPIRY_TIME
+    assert not mm.isPutMarket()
 
     # check alpha is correctly calculated from liquidity parameter in
     # constructor
     liquidity_param = SCALE // 10
     alpha = int(liquidity_param // 2 // log(2))
     assert pytest.approx(mm.alpha()) == liquidity_param // 2 // log(2)
+
+
+def test_put_constructor(putmm, oracle):
+    assert putmm.oracle() == oracle
+    assert putmm.strikePrice() == 100 * SCALE
+    assert putmm.normalizedStrikePrice() == SCALE // 100
+    assert putmm.expiryTime() == EXPIRY_TIME
+    assert putmm.isPutMarket()
 
 
 # for checking costs, we check they are almost equal as exp and log in the
@@ -440,6 +451,7 @@ def test_settle(mm, oracle, user, fast_forward):
     assert mm.settlementPrice() == 0
     tx = mm.settle({"from": user})
     assert mm.settlementPrice() == 123 * SCALE
+    assert mm.normalizedSettlementPrice() == 123 * SCALE
     assert tx.events["Settled"] == {
         "settlementPrice": 123 * SCALE,
     }
@@ -613,7 +625,7 @@ def test_pause_unpause(mm, deployer, user, long_token):
     mm.buy(1 * SCALE, 0, 1000 * SCALE, {"from": user})
 
 
-def test_with_multiplier(OptionsToken, putmm, oracle, usd_token, user, fast_forward):
+def test_put(OptionsToken, putmm, oracle, usd_token, user, fast_forward):
     long_token = OptionsToken.at(putmm.longToken())
     short_token = OptionsToken.at(putmm.shortToken())
 
@@ -696,3 +708,63 @@ def test_with_multiplier(OptionsToken, putmm, oracle, usd_token, user, fast_forw
         putmm.sell(10 * SCALE, 0, 0, {"from": user})
     with reverts("Cannot be called after expiry"):
         putmm.sell(0, 10 * SCALE, 0, {"from": user})
+
+
+def test_redeem_in_the_money_put(putmm, usd_token, oracle, user, user2, fast_forward):
+
+    # users buy 10 long tokens and 15 short tokens for a cost of 15.109
+    # >> python calc_lslmsr_cost.py 10 15 0.1
+    # 15109328551562924032
+    putmm.buy(5 * SCALE, 5 * SCALE, 1000 * SCALE, {"from": user})
+    putmm.buy(5 * SCALE, 10 * SCALE, 1000 * SCALE, {"from": user2})
+
+    bal1 = usd_token.balanceOf(user)
+    bal2 = usd_token.balanceOf(user2)
+
+    oracle.setPrice(80 * SCALE)
+    with reverts("Cannot be called before expiry"):
+        putmm.redeem({"from": user})
+
+    fast_forward(EXPIRY_TIME)
+    with reverts("Cannot be called before settlement"):
+        putmm.redeem({"from": user})
+
+    putmm.settle()
+    assert putmm.settlementPrice() == 80 * SCALE
+    assert putmm.normalizedSettlementPrice() == SCALE // 80
+
+    tx1 = putmm.redeem({"from": user})
+    tx2 = putmm.redeem({"from": user2})
+
+    # exercise price is 80 usd and strike price is 100 usd
+    # long token settle price is (1 - 80 / 100) = 0.2
+    # short token settle price is 80 / 100 = 0.8
+    # so each long token pays out 0.2 / (10 * 0.2 + 15 * 0.8) * 15.109 = 0.216
+    # and each short token pays out 0.8 / (10 * 0.2 + 15 * 0.8) * 15.109 = 0.863
+
+    # >>> 0.21584755073661324 * 5 + 0.863390202946453 * 5
+    # 5.396188768415331
+    assert tx1.return_value == 539618876841533010416
+
+    # >>> 0.21584755073661324 * 5 + 0.863390202946453 * 10
+    # 9.713139783147597
+    assert tx2.return_value == 971313978314759418749
+
+    assert usd_token.balanceOf(user) - bal1 == 539618876841533010416
+    assert usd_token.balanceOf(user2) - bal2 == 971313978314759418749
+    assert tx1.events["Redeemed"] == {
+        "account": user,
+        "longSharesIn": 5 * SCALE,
+        "shortSharesIn": 5 * SCALE,
+        "amountOut": 539618876841533010416,
+    }
+    assert tx2.events["Redeemed"] == {
+        "account": user2,
+        "longSharesIn": 5 * SCALE,
+        "shortSharesIn": 10 * SCALE,
+        "amountOut": 971313978314759418749,
+    }
+
+    # can't call again
+    with reverts("Balance must be > 0"):
+        tx = putmm.redeem({"from": user})

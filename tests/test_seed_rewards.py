@@ -10,6 +10,9 @@ ALPHA = int(SCALE // 10 // 2 / log(2))
 DAYS = 24 * 60 * 60
 TIME1 = 1900000000
 
+CALL = 0
+PUT = 1
+
 
 def test_seed_rewards(
     SeedRewards,
@@ -29,10 +32,10 @@ def test_seed_rewards(
         OptionsMarketMaker,
         base_token,
         oracle,
+        CALL,
         100 * SCALE,  # strikePrice = 100 usd
         ALPHA,  # alpha = 0.1 / 2 / log 2
         EXPIRY_TIME,
-        SCALE,  # multiplier = 1
         "long name",
         "long symbol",
         "short name",
@@ -120,7 +123,7 @@ def test_seed_rewards(
     assert pytest.approx(base_token.balanceOf(user)) == 96.7 * SCALE
 
 
-def test_seed_rewards_with_multiplier(
+def test_seed_rewards_for_put_mm(
     SeedRewards,
     OptionsMarketMaker,
     OptionsToken,
@@ -138,10 +141,10 @@ def test_seed_rewards_with_multiplier(
         OptionsMarketMaker,
         base_token,
         oracle,
+        PUT,
         100 * SCALE,  # strikePrice = 100 usd
         ALPHA,  # alpha = 0.1 / 2 / log 2
         EXPIRY_TIME,
-        100 * SCALE,  # multiplier = 100
         "long name",
         "long symbol",
         "short name",
@@ -248,10 +251,10 @@ def test_seed_rewards_with_eth(
         OptionsMarketMaker,
         zero_address,
         oracle,
+        CALL,
         100 * SCALE,  # strikePrice = 100 usd
         ALPHA,  # alpha = 0.1 / 2 / log 2
         EXPIRY_TIME,
-        SCALE,  # multiplier = 1
         "long name",
         "long symbol",
         "short name",

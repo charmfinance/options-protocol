@@ -43,13 +43,15 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
     IOracle public oracle;
     OptionsToken public longToken;
     OptionsToken public shortToken;
+    bool public isPutMarket;
     uint256 public strikePrice;
+    uint256 public normalizedStrikePrice;
     uint256 public alpha;
     uint256 public expiryTime;
-    uint256 public multiplier;
 
     bool public isSettled;
     uint256 public settlementPrice;
+    uint256 public normalizedSettlementPrice;
 
     /**
      * Automated market maker that lets users buy and sell options from it
@@ -59,10 +61,10 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
      *
      * @param _baseToken        Underlying ERC20 asset. Represents ETH if equal to 0x0
      * @param _oracle           {IOracle} with getPrice() method
+     * @param _isPutMarket      Whether market put
      * @param _strikePrice      Strike price in wei
      * @param _alpha            Parameter for the LS-LMSR cost function in wei
      * @param _expiryTime       Expiration time as a unix timestamp
-     * @param _multiplier       Index multiplier in wei
      * @param longName          Long token name
      * @param longSymbol        Long token symbol
      * @param shortName         Short token name
@@ -71,10 +73,10 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
     constructor(
         address _baseToken,
         address _oracle,
+        bool _isPutMarket,
         uint256 _strikePrice,
         uint256 _alpha,
         uint256 _expiryTime,
-        uint256 _multiplier,
         string memory longName,
         string memory longSymbol,
         string memory shortName,
@@ -82,17 +84,18 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
     ) public {
         require(_strikePrice > 0, "Strike price must be > 0");
         require(_alpha > 0, "Alpha must be > 0");
-        require(_multiplier > 0, "Multiplier must be > 0");
 
         longToken = new OptionsToken(longName, longSymbol);
         shortToken = new OptionsToken(shortName, shortSymbol);
 
         baseToken = IERC20(_baseToken);
         oracle = IOracle(_oracle);
+        isPutMarket = _isPutMarket;
         strikePrice = _strikePrice;
         alpha = _alpha;
         expiryTime = _expiryTime;
-        multiplier = _multiplier;
+
+        normalizedStrikePrice = invertIfPut(_strikePrice);
 
         require(!isExpired(), "Already expired");
     }
@@ -193,6 +196,7 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
         settlementPrice = oracle.getPrice();
         require(settlementPrice > 0, "Price from oracle must be > 0");
 
+        normalizedSettlementPrice = invertIfPut(settlementPrice);
         emit Settled(settlementPrice);
     }
 
@@ -240,12 +244,13 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
 
     // calculate LS-LMSR cost taking into account the index multiplier
     function cost() public view returns (uint256) {
-        return
-            calcLsLmsrCost(
-                longToken.totalSupply().mul(multiplier).div(SCALE),
-                shortToken.totalSupply().mul(multiplier).div(SCALE),
-                alpha
-            );
+        uint256 longSupply = longToken.totalSupply();
+        uint256 shortSupply = shortToken.totalSupply();
+        if (isPutMarket) {
+            longSupply = longSupply.mul(strikePrice).div(SCALE);
+            shortSupply = shortSupply.mul(strikePrice).div(SCALE);
+        }
+        return calcLsLmsrCost(longSupply, shortSupply, alpha);
     }
 
     /**
@@ -268,10 +273,12 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
         require(isSettled, "Cannot be called before settlement");
 
         // p1 = max(S - K, 0)
-        uint256 payoffPerLong = settlementPrice > strikePrice ? settlementPrice.sub(strikePrice) : 0;
+        uint256 payoffPerLong = normalizedSettlementPrice > normalizedStrikePrice
+            ? normalizedSettlementPrice.sub(normalizedStrikePrice)
+            : 0;
 
         // p2 = min(S, K)
-        uint256 payoffPerShort = Math.min(settlementPrice, strikePrice);
+        uint256 payoffPerShort = Math.min(normalizedSettlementPrice, normalizedStrikePrice);
 
         // `longShares` * p1
         uint256 longPayoff = longShares.mul(payoffPerLong);
@@ -342,5 +349,9 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
 
         // b * log(1 + exp(abs(q1 - q2) / b)) + max(q1, q2)
         return ABDKMath64x64.mulu(log, b).div(SCALE).add(max);
+    }
+
+    function invertIfPut(uint256 x) public view returns (uint256) {
+        return isPutMarket ? SCALE.mul(SCALE).div(x) : x;
     }
 }
