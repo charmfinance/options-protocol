@@ -34,7 +34,7 @@ def main():
                     "oppositeAddress": addresses[1 - i],
                     "marketAddress": market.address,
                     "oracle": market.oracle(),
-                    "isPut": market.isPutMarket(),
+                    "isPutMarket": market.isPutMarket(),
                     "alpha": market.alpha(),
                     "expiryTime": market.expiryTime(),
                     "strikePrice": market.strikePrice(),
