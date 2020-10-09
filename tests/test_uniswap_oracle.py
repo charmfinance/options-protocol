@@ -77,6 +77,7 @@ def test_oracle_base_token(
     # take snapshot
     oracle.takeSnapshot()
     assert oracle.snapshotTimestamp() in [TIME2, TIME2 + 1]
+    assert oracle.getPrice() == 400 * SCALE
 
     # it should now incorporate the new spot price of 400
     last = 100000 * Q112 * 300 // multiplier
@@ -148,6 +149,7 @@ def test_oracle_quote_token(
     # take snapshot
     oracle.takeSnapshot()
     assert oracle.snapshotTimestamp() in [TIME2, TIME2 + 1]
+    assert oracle.getPrice() == SCALE // 400
 
     # it should now incorporate the new spot price of 400
     last = 100000 * Q112 * multiplier // 300
