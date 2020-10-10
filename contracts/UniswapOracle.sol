@@ -58,8 +58,8 @@ contract UniswapOracle is IOracle {
         uint256 min = Math.min(decimals0, decimals1);
         decimals0 = decimals0.sub(min);
         decimals1 = decimals1.sub(min);
-        baseMultiplier = 10 ** (_isInverted ? decimals1 : decimals0);
-        quoteMultiplier = 10 ** (_isInverted ? decimals0 : decimals1);
+        baseMultiplier = 10**(_isInverted ? decimals1 : decimals0);
+        quoteMultiplier = 10**(_isInverted ? decimals0 : decimals1);
 
         // set initial data
         takeSnapshot();
