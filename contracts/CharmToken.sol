@@ -16,7 +16,7 @@ contract CharmToken is ERC20 {
     address public governance;
     mapping(address => bool) public minters;
 
-    constructor() public ERC20("Charm", "Charm") {
+    constructor() public ERC20("Charm", "CHARM") {
         governance = msg.sender;
     }
 
