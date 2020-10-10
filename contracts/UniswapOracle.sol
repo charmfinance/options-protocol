@@ -4,11 +4,16 @@ pragma solidity ^0.6.12;
 
 import "@openzeppelin/contracts/math/Math.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/Address.sol";
 
 import "../interfaces/IUniswapV2Pair.sol";
 import "../interfaces/IOracle.sol";
 
 contract UniswapOracle is IOracle {
+    using Address for address;
+    using SafeERC20 for IERC20;
     using SafeMath for uint256;
 
     uint256 public constant SCALE = 1e18;
@@ -24,6 +29,7 @@ contract UniswapOracle is IOracle {
     uint256 public snapshotSpotPrice;
     uint256 public snapshotCumulativePrice;
     uint256 public snapshotTimestamp;
+    address public snapshotCaller;
 
     /**
      * Fetches TWAP (time-weighted average price) from Uniswap V2 Oracle
@@ -69,8 +75,7 @@ contract UniswapOracle is IOracle {
      * Fetches data from uniswap and updates `snapshotSpotPrice`, `snapshotCumulativePrice`
      * and `snapshotTimestamp`.
      *
-     * When `getPrice` is called in the future, it will return the TWAP during the
-     * window starting from now
+     * When `getPrice` is called in the future, it will return the TWAP during the * window starting from now
      *
      * This method should be called just before the start of the TWAP window
      */
@@ -78,6 +83,7 @@ contract UniswapOracle is IOracle {
         require(block.timestamp <= startTime, "TWAP window already started");
         (snapshotSpotPrice, snapshotCumulativePrice) = fetchSpotAndCumulativePrice();
         snapshotTimestamp = block.timestamp;
+        snapshotCaller = msg.sender;
     }
 
     /**
@@ -123,5 +129,11 @@ contract UniswapOracle is IOracle {
         // multiplication doesn't overflow as max value is 2^112 * 2^32 * 2^112
         uint256 sinceLast = elapsed.mul(Q112).mul(base).div(quote);
         cumulativePrice = last.add(sinceLast);
+    }
+
+    function claimReward(IERC20 rewardToken) external {
+        require(block.timestamp > startTime, "TWAP window has not started yet");
+        uint256 balance = rewardToken.balanceOf(address(this));
+        rewardToken.safeTransfer(snapshotCaller, balance);
     }
 }

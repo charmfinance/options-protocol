@@ -13,18 +13,19 @@ TIME4 = 2610000000
 
 
 def test_oracle_base_token(
-    UniswapOracle, MockUniswapV2Pair, OptionsToken, accounts, fast_forward
+    UniswapOracle, MockUniswapV2Pair, OptionsToken, CharmToken, accounts, fast_forward
 ):
-    address = accounts[0]
-    eth = address.deploy(OptionsToken, "Ether", "ETH")
-    usd = address.deploy(OptionsToken, "USD Coin", "USD")
-    pair = address.deploy(MockUniswapV2Pair, eth, usd)
+    deployer, user, user2 = accounts[:3]
+    eth = deployer.deploy(OptionsToken, "Ether", "ETH")
+    usd = deployer.deploy(OptionsToken, "USD Coin", "USD")
+    charm = deployer.deploy(CharmToken)
+    pair = deployer.deploy(MockUniswapV2Pair, eth, usd)
 
     multiplier = 10 ** 12
 
     # can't deploy if pair's reserves are 0
     with reverts("No reserves"):
-        oracle = address.deploy(
+        oracle = deployer.deploy(
             UniswapOracle,
             pair,
             TIME3,  # twap start time
@@ -44,7 +45,7 @@ def test_oracle_base_token(
 
     # we can now deploy an eth/usd and an usd/eth oracle
     fast_forward(TIME1)
-    oracle = address.deploy(
+    oracle = deployer.deploy(
         UniswapOracle,
         pair,
         TIME3,  # update time
@@ -62,6 +63,12 @@ def test_oracle_base_token(
     assert oracle.snapshotSpotPrice() == 400 * SCALE
     assert oracle.getPrice() == 400 * SCALE
 
+    # send reward to oracle
+    charm.addMinter(deployer, {"from": deployer})
+    charm.mint(oracle, 100 * SCALE, {"from": deployer})
+    assert charm.balanceOf(oracle) == 100 * SCALE
+    oracle.takeSnapshot({"from": user})
+
     # the test below is commented out because it's flaky
     # takeSnapshot might be in the same block as deploy or the block after
 
@@ -75,7 +82,7 @@ def test_oracle_base_token(
     assert oracle.getPrice() == 400 * SCALE
 
     # take snapshot
-    oracle.takeSnapshot()
+    oracle.takeSnapshot({"from": user2})
     assert oracle.snapshotTimestamp() in [TIME2, TIME2 + 1]
     assert oracle.getPrice() == 400 * SCALE
 
@@ -101,14 +108,21 @@ def test_oracle_base_token(
     pair.setBlockTimestampLast(TIME4)
     oracle.getPrice() == 500 * SCALE
 
+    # check last snapshot caller can get reward
+    oracle.claimReward(charm, {"from": deployer})
+    assert charm.balanceOf(oracle) == 0
+    assert charm.balanceOf(deployer) == 0
+    assert charm.balanceOf(user) == 0
+    assert charm.balanceOf(user2) == 100 * SCALE
+
 
 def test_oracle_quote_token(
     UniswapOracle, MockUniswapV2Pair, OptionsToken, accounts, fast_forward
 ):
-    address = accounts[0]
-    eth = address.deploy(OptionsToken, "Ether", "ETH")
-    usd = address.deploy(OptionsToken, "USD Coin", "USD")
-    pair = address.deploy(MockUniswapV2Pair, eth, usd)
+    deployer = accounts[0]
+    eth = deployer.deploy(OptionsToken, "Ether", "ETH")
+    usd = deployer.deploy(OptionsToken, "USD Coin", "USD")
+    pair = deployer.deploy(MockUniswapV2Pair, eth, usd)
 
     multiplier = 10 ** 12
 
@@ -123,7 +137,7 @@ def test_oracle_quote_token(
 
     # we can now deploy an eth/usd and an usd/eth oracle
     fast_forward(TIME1)
-    oracle = address.deploy(
+    oracle = deployer.deploy(
         UniswapOracle,
         pair,
         TIME3,  # update time
