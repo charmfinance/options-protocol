@@ -8,10 +8,10 @@ import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 
 /**
- * ERC20 Token that allows the owner to mint to and burn from any address.
+ * ERC20 token representing ownership of an options contract
  *
- * The intended owner is the OptionsMarketMaker and it mints/burns these tokens
- * when users buy/sell options.
+ * Should be instantiated by the `OptionsMarketMaker` contract which is then allowed
+ * to mint/burn these tokens when users buy/sell options
  */
 contract OptionsToken is ERC20 {
     using Address for address;

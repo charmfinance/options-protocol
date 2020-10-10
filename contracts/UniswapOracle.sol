@@ -15,7 +15,7 @@ contract UniswapOracle is IOracle {
     uint256 public constant Q112 = 1 << 112;
 
     IUniswapV2Pair public pair;
-    uint256 public twapWindowStartTime;
+    uint256 public startTime;
     uint256 public baseMultiplier;
     uint256 public quoteMultiplier;
     bool public isInverted;
@@ -26,14 +26,14 @@ contract UniswapOracle is IOracle {
     uint256 public snapshotTimestamp;
 
     /**
-     * Uniswap V2 TWAP Oracle
+     * Fetches TWAP (time-weighted average price) from Uniswap V2 Oracle
      *
-     * To calculate the TWAP between time A and time B, call {takeSnapshot} just
-     * before time A. Then at time B, call {getPrice} and it will return the
-     * TWAP of this window
+     * To calculate the TWAP between time A and time B, call `takeSnapshot` just
+     * before time A. Then at time B, `getPrice` will return the TWAP during
+     * this window
      *
-     * @param _pair                     UniswapV2Pair address
-     * @param _twapWindowStartTime      Start time of the TWAP window
+     * @param _pair                     `UniswapV2Pair` address
+     * @param _startTime                Start time of the TWAP window
      * @param decimals0                 Decimal places used by token0 in pair
      * @param decimals1                 Decimal places used by token1 in pair
      * @param _isInverted               If false, this oracle calculates token0/token1 price
@@ -41,13 +41,13 @@ contract UniswapOracle is IOracle {
      */
     constructor(
         address _pair,
-        uint256 _twapWindowStartTime,
+        uint256 _startTime,
         uint256 decimals0,
         uint256 decimals1,
         bool _isInverted
     ) public {
         pair = IUniswapV2Pair(_pair);
-        twapWindowStartTime = _twapWindowStartTime;
+        startTime = _startTime;
 
         require(decimals0 <= 18);
         require(decimals1 <= 18);
@@ -56,30 +56,32 @@ contract UniswapOracle is IOracle {
 
         // set multipliers. divide by gcd to make overflows less likely
         uint256 min = Math.min(decimals0, decimals1);
-        baseMultiplier = _isInverted ? 10**decimals1.sub(min) : 10**decimals0.sub(min);
-        quoteMultiplier = _isInverted ? 10**decimals0.sub(min) : 10**decimals1.sub(min);
+        decimals0 = decimals0.sub(min);
+        decimals1 = decimals1.sub(min);
+        baseMultiplier = 10 ** (_isInverted ? decimals1 : decimals0);
+        quoteMultiplier = 10 ** (_isInverted ? decimals0 : decimals1);
 
         // set initial data
         takeSnapshot();
     }
 
     /**
-     * Fetches data from uniswap and updates {snapshotSpotPrice}, {snapshotCumulativePrice}
-     * and {snapshotTimestamp}.
+     * Fetches data from uniswap and updates `snapshotSpotPrice`, `snapshotCumulativePrice`
+     * and `snapshotTimestamp`.
      *
-     * When {getPrice} is called after this, it will return the TWAP during the
-     * window starting from this takeSnapshot
+     * When `getPrice` is called in the future, it will return the TWAP during the
+     * window starting from now
      *
      * This method should be called just before the start of the TWAP window
      */
     function takeSnapshot() public {
-        require(block.timestamp <= twapWindowStartTime, "TWAP window already started");
+        require(block.timestamp <= startTime, "TWAP window already started");
         (snapshotSpotPrice, snapshotCumulativePrice) = fetchSpotAndCumulativePrice();
         snapshotTimestamp = block.timestamp;
     }
 
     /**
-     * Return TWAP since {takeSnapshot} was last called
+     * Return TWAP since `takeSnapshot` was last called
      */
     function getPrice() external override view returns (uint256) {
         (uint256 newSpotPrice, uint256 newCumulativePrice) = fetchSpotAndCumulativePrice();
@@ -98,7 +100,7 @@ contract UniswapOracle is IOracle {
     }
 
     /**
-     * Helper method called by {takeSnapshot} and {getPrice}. Returns spot price
+     * Helper method called by `takeSnapshot` and `getPrice`. Returns spot price
      * and cumulative price from Uniswap
      */
     function fetchSpotAndCumulativePrice() public view returns (uint256 spotPrice, uint256 cumulativePrice) {

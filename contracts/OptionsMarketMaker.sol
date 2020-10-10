@@ -56,14 +56,21 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
     /**
      * Automated market maker that lets users buy and sell options from it
      *
-     * Creates {longToken} representing a call/put and {shortToken} representing
-     * a covered call.
+     * Creates a long token representing a call/put option and a short token
+     * representing a covered call option.
+     *
+     * This contract is used for for both call and put options since they are inverses
+     * of each other. For example a ETH/USD call option with a strike of 100 is
+     * equivalent to a USD/ETH put option with a strike of 0.01. So for put options
+     * we use the reciprocals of the strike price and settlement price and also
+     * multiply the cost by the strike price so that underlying is in terms of
+     * ETH, not USD.
      *
      * @param _baseToken        Underlying ERC20 asset. Represents ETH if equal to 0x0
-     * @param _oracle           {IOracle} with getPrice() method
-     * @param _isPutMarket      Whether market put
-     * @param _strikePrice      Strike price in wei
-     * @param _alpha            Parameter for the LS-LMSR cost function in wei
+     * @param _oracle           Oracle from which the settlement price is obtained
+     * @param _isPutMarket      Whether long token represents a call or a put
+     * @param _strikePrice      Strike price expressed in wei
+     * @param _alpha            Liquidity parameter for cost function expressed in wei
      * @param _expiryTime       Expiration time as a unix timestamp
      * @param longName          Long token name
      * @param longSymbol        Long token symbol
@@ -101,13 +108,12 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
     }
 
     /**
-     * Buy `longSharesOut` quantity of {longToken} and `shortSharesOut` quantity
-     * of {shortToken}
+     * Buy `longSharesOut` quantity of calls/puts and `shortSharesOut` quantity
+     * of covered calls
      *
      * Revert if the resulting cost would be greater than `maxAmountIn`
      *
-     * `optionsToken` must be equal to {longToken} or {shortToken} and this
-     * method can only be called before expiration
+     * This method cannot be called after expiration
      */
     function buy(
         uint256 longSharesOut,
@@ -142,13 +148,12 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
     }
 
     /**
-     * Sell `longSharesIn` quantity of {longToken} and `shortSharesIn` quantity
-     * of {shortToken}
+     * Sell `longSharesIn` quantity of calls/puts and `shortSharesIn` quantity
+     * of covered calls
      *
      * Revert if the tokens received would be less than `minAmountOut`
      *
-     * `optionsToken` must be equal to {longToken} or {shortToken} and this
-     * method can only be called before expiration
+     * This method cannot be called after expiration
      */
     function sell(
         uint256 longSharesIn,
@@ -185,8 +190,8 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
      * This method can be called by anyone after expiration and cannot be called
      * more than once.
      *
-     * After this method has been called, {redeem} can be called by users to
-     * trade in their options and receive their payouts in {baseToken}
+     * After this method has been called, `redeem` can be called by users to
+     * trade in their options and receive their payouts
      */
     function settle() external nonReentrant {
         require(isExpired(), "Cannot be called before expiry");
@@ -201,10 +206,9 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
     }
 
     /**
-     * Users can call this method to redeem all their long and short tokens and
-     * receive their payout in {baseToken}
+     * Redeem all options and receive payout
      *
-     * This method can only be called after {settle} has been called and the
+     * This method can only be called after `settle` has been called and the
      * settlement price has been set
      */
     function redeem() external nonReentrant returns (uint256 amountOut) {
@@ -233,7 +237,7 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
         emit Redeemed(msg.sender, longBalance, shortBalance, amountOut);
     }
 
-    // emergency use only
+    // emergency use only. to be removed in future versions
     function setOracle(IOracle _oracle) external onlyOwner {
         oracle = _oracle;
     }
@@ -242,10 +246,18 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
         return block.timestamp >= expiryTime;
     }
 
-    // calculate LS-LMSR cost taking into account the index multiplier
+    /**
+     * Calculate cost function taking into account index multipliers
+     *
+     * This represents the amount of base tokens that should be held by this
+     * contract after the total supplies of long token and short token have been
+     * updated. This value can then be used to calculated the cost of a trade
+     */
     function cost() public view returns (uint256) {
         uint256 longSupply = longToken.totalSupply();
         uint256 shortSupply = shortToken.totalSupply();
+
+        // multiply by the strike price for puts
         if (isPutMarket) {
             longSupply = longSupply.mul(strikePrice).div(SCALE);
             shortSupply = shortSupply.mul(strikePrice).div(SCALE);
@@ -254,8 +266,8 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
     }
 
     /**
-     * Calculates amount of {baseToken} paid out to a user who redeems
-     * `longShares` amount of long tokens and `shortShares` amount of short tokens.
+     * Calculates amount of base tokens paid out to a user who redeems
+     * `longShares` amount of calls/puts and `shortShares` amount of covered calls.
      *
      *   payoff = B * (`longShares` * p1 + `shortShares` * p2) / (q1 * p1 + q2 * p2)
      *
@@ -351,6 +363,7 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
         return ABDKMath64x64.mulu(log, b).div(SCALE).add(max);
     }
 
+    // invert the strike price and settlement price for put options
     function invertIfPut(uint256 x) public view returns (uint256) {
         return isPutMarket ? SCALE.mul(SCALE).div(x) : x;
     }

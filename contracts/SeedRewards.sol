@@ -8,7 +8,7 @@
 // - Used Ownable
 
 // Differences with StakingRewards.sol
-// - stake and withdraw methods directly buy options from the market maker
+// - Stake and withdraw methods directly buy options from the market-maker
 // - Added receive function to receive eth refund when buying options with eth
 
 // MIT License
@@ -56,7 +56,7 @@ contract SeedRewards is Ownable, ReentrancyGuard, Pausable {
 
     /* ========== STATE VARIABLES ========== */
 
-    OptionsMarketMaker public optionsMarketMaker;
+    OptionsMarketMaker public marketMaker;
     IERC20 public baseToken;
     IERC20 public longToken;
     IERC20 public shortToken;
@@ -77,23 +77,23 @@ contract SeedRewards is Ownable, ReentrancyGuard, Pausable {
     /* ========== CONSTRUCTOR ========== */
 
     constructor(
-        address _optionsMarketMaker,
+        address _marketMaker,
         address _rewardsToken,
         uint256 _rewardsDuration
     ) public {
-        optionsMarketMaker = OptionsMarketMaker(_optionsMarketMaker);
+        marketMaker = OptionsMarketMaker(_marketMaker);
         rewardsToken = IERC20(_rewardsToken);
 
         require(_rewardsDuration >= 1 days, "Rewards duration must be >= 1 days");
         rewardsDuration = _rewardsDuration;
 
-        baseToken = optionsMarketMaker.baseToken();
-        longToken = optionsMarketMaker.longToken();
-        shortToken = optionsMarketMaker.shortToken();
+        baseToken = marketMaker.baseToken();
+        longToken = marketMaker.longToken();
+        shortToken = marketMaker.shortToken();
 
-        // Approve all future buys
+        // Approve all future buys from the market-maker contract
         if (!baseToken.isETH()) {
-            baseToken.approve(address(optionsMarketMaker), MARKET_MAKER_ALLOWANCE);
+            baseToken.approve(address(marketMaker), MARKET_MAKER_ALLOWANCE);
         }
     }
 
@@ -133,8 +133,10 @@ contract SeedRewards is Ownable, ReentrancyGuard, Pausable {
 
     function stake(uint256 shares, uint256 maxAmountIn) external payable nonReentrant notPaused updateReward(msg.sender) {
         require(shares > 0, "Cannot stake 0");
+
+        // Receive amount from caller and use this to buy options
         baseToken.uniTransferFromSenderToThis(maxAmountIn);
-        uint256 amountIn = optionsMarketMaker.buy{value: msg.value}(shares, shares, maxAmountIn);
+        uint256 amountIn = marketMaker.buy{value: msg.value}(shares, shares, maxAmountIn);
 
         // Refund difference. Cheaper in gas than calculating exact cost
         if (amountIn < maxAmountIn) {
@@ -143,6 +145,7 @@ contract SeedRewards is Ownable, ReentrancyGuard, Pausable {
 
         _totalSupply = _totalSupply.add(shares);
         _balances[msg.sender] = _balances[msg.sender].add(shares);
+
         emit Staked(msg.sender, shares);
     }
 
@@ -151,16 +154,18 @@ contract SeedRewards is Ownable, ReentrancyGuard, Pausable {
         _totalSupply = _totalSupply.sub(shares);
         _balances[msg.sender] = _balances[msg.sender].sub(shares);
 
-        if (!optionsMarketMaker.isExpired()) {
-            uint256 amountOut = optionsMarketMaker.sell(shares, shares, minAmountOut);
+        if (!marketMaker.isExpired()) {
+            // Sell options and return amount to caller
+            uint256 amountOut = marketMaker.sell(shares, shares, minAmountOut);
             baseToken.uniTransfer(msg.sender, amountOut);
         } else {
-            // If expired, send the options tokens instead of {baseToken}. These
-            // can then be redeemed by the user in the {optionsMarketMaker} for
-            // the same value
+            // If options have expired, they can no longer be sold, so instead
+            // the options themselves are sent to the called. These can then
+            // be redeemed for the same amount in the market-maker contract
             longToken.safeTransfer(msg.sender, shares);
             shortToken.safeTransfer(msg.sender, shares);
         }
+
         emit Withdrawn(msg.sender, shares);
     }
 
@@ -232,6 +237,6 @@ contract SeedRewards is Ownable, ReentrancyGuard, Pausable {
 
     /* ========== RECEIVE FUNCTION ========== */
 
-    // Needed to receive eth refund when calling {optionsMarketMaker.buy}
+    // Needed to receive eth refund buying options from the market-maker
     receive() external payable {}
 }
