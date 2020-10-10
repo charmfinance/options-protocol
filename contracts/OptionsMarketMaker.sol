@@ -246,23 +246,22 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
         return block.timestamp >= expiryTime;
     }
 
+    // invert the strike price and settlement price for put options
+    function invertIfPut(uint256 x) public view returns (uint256) {
+        return isPutMarket ? SCALE.mul(SCALE).div(x) : x;
+    }
+
     /**
-     * Calculate cost function taking into account index multipliers
+     * Calculate cost function
      *
      * This represents the amount of base tokens that should be held by this
-     * contract after the total supplies of long token and short token have been
-     * updated. This value can then be used to calculated the cost of a trade
+     * contract based on the total supply of long and short tokens.
      */
     function cost() public view returns (uint256) {
-        uint256 longSupply = longToken.totalSupply();
-        uint256 shortSupply = shortToken.totalSupply();
+        uint256 cost = calcLsLmsrCost(longToken.totalSupply(), shortToken.totalSupply(), alpha);
 
         // multiply by the strike price for puts
-        if (isPutMarket) {
-            longSupply = longSupply.mul(strikePrice).div(SCALE);
-            shortSupply = shortSupply.mul(strikePrice).div(SCALE);
-        }
-        return calcLsLmsrCost(longSupply, shortSupply, alpha);
+        return isPutMarket ? cost.mul(strikePrice).div(SCALE) : cost;
     }
 
     /**
@@ -361,10 +360,5 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
 
         // b * log(1 + exp(abs(q1 - q2) / b)) + max(q1, q2)
         return ABDKMath64x64.mulu(log, b).div(SCALE).add(max);
-    }
-
-    // invert the strike price and settlement price for put options
-    function invertIfPut(uint256 x) public view returns (uint256) {
-        return isPutMarket ? SCALE.mul(SCALE).div(x) : x;
     }
 }

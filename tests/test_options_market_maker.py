@@ -638,8 +638,8 @@ def test_put(OptionsToken, putmm, oracle, usd_token, user, fast_forward):
 
     # >> python calc_lslmsr_cost.py 100 0 0.1
     # 100000006879302762496
-    assert usd_token.balanceOf(putmm) == 100000006879302754205
-    assert tx.return_value == 100000006879302754205
+    assert usd_token.balanceOf(putmm) == 100000006879302754200
+    assert tx.return_value == 100000006879302754200
     assert usd_token.balanceOf(user) + usd_token.balanceOf(putmm) == 10000 * SCALE
     assert long_token.totalSupply() == 1 * SCALE
     assert short_token.totalSupply() == 0
@@ -648,7 +648,7 @@ def test_put(OptionsToken, putmm, oracle, usd_token, user, fast_forward):
         "isBuy": True,
         "longShares": 1 * SCALE,
         "shortShares": 0,
-        "cost": 100000006879302754205,
+        "cost": 100000006879302754200,
         "newLongSupply": 1 * SCALE,
         "newShortSupply": 0,
     }
@@ -658,8 +658,8 @@ def test_put(OptionsToken, putmm, oracle, usd_token, user, fast_forward):
 
     # >> python calc_lslmsr_cost.py 100 200 0.1
     # 200211968079890808832
-    assert usd_token.balanceOf(putmm) == 200211968079890787869
-    assert tx.return_value == 200211968079890787869 - 100000006879302754205
+    assert usd_token.balanceOf(putmm) == 200211968079890787800
+    assert tx.return_value == 200211968079890787800 - 100000006879302754200
     assert usd_token.balanceOf(user) + usd_token.balanceOf(putmm) == 10000 * SCALE
     assert long_token.totalSupply() == 1 * SCALE
     assert short_token.totalSupply() == 2 * SCALE
@@ -668,7 +668,7 @@ def test_put(OptionsToken, putmm, oracle, usd_token, user, fast_forward):
         "isBuy": True,
         "longShares": 0,
         "shortShares": 2 * SCALE,
-        "cost": 200211968079890787869 - 100000006879302754205,
+        "cost": 200211968079890787800 - 100000006879302754200,
         "newLongSupply": 1 * SCALE,
         "newShortSupply": 2 * SCALE,
     }
@@ -744,25 +744,25 @@ def test_redeem_in_the_money_put(putmm, usd_token, oracle, user, user2, fast_for
 
     # >>> 0.21584755073661324 * 5 + 0.863390202946453 * 5
     # 5.396188768415331
-    assert tx1.return_value == 539618876841533010416
+    assert tx1.return_value == 539618876841533010392
 
     # >>> 0.21584755073661324 * 5 + 0.863390202946453 * 10
     # 9.713139783147597
-    assert tx2.return_value == 971313978314759418749
+    assert tx2.return_value == 971313978314759418708
 
-    assert usd_token.balanceOf(user) - bal1 == 539618876841533010416
-    assert usd_token.balanceOf(user2) - bal2 == 971313978314759418749
+    assert usd_token.balanceOf(user) - bal1 == 539618876841533010392
+    assert usd_token.balanceOf(user2) - bal2 == 971313978314759418708
     assert tx1.events["Redeemed"] == {
         "account": user,
         "longSharesIn": 5 * SCALE,
         "shortSharesIn": 5 * SCALE,
-        "amountOut": 539618876841533010416,
+        "amountOut": 539618876841533010392,
     }
     assert tx2.events["Redeemed"] == {
         "account": user2,
         "longSharesIn": 5 * SCALE,
         "shortSharesIn": 10 * SCALE,
-        "amountOut": 971313978314759418749,
+        "amountOut": 971313978314759418708,
     }
 
     # can't call again
