@@ -1,16 +1,5 @@
-// SPDX-License-Identifier: MIT
-
-// Originally: https://github.com/Synthetixio/synthetix/blob/develop/contracts/StakingRewards.sol
-
-// Changes made:
-// - Let initial value of rewardsDuration be set
-// - Bumped solidity version
-// - Used Ownable
-
-// Differences with StakingRewards.sol
-// - Stake and withdraw methods directly buy options from the market-maker
-// - Added receive function to receive eth refund when buying options with eth
-
+// https://github.com/Synthetixio/synthetix
+//
 // MIT License
 //
 // Copyright (c) 2019 Synthetix
@@ -33,21 +22,33 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+
+// Changes made from original:
+// * Set pragma version to 0.6.12
+// * Let initial value of rewardsDuration be set
+// * Added abstract, override and virtual
+// * Removed stake and withdraw from interface as SeedRewards uses a different signature
+// * `stake` and `withdraw` methods directly buy options from the market-maker
+// * Added `receive` method to receive eth refund when buying options with eth
+
+
 pragma solidity ^0.6.12;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/math/Math.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
-import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-import "./libraries/UniERC20.sol";
-import "./OptionsMarketMaker.sol";
-import "./Pausable.sol";
 
-contract SeedRewards is Ownable, ReentrancyGuard, Pausable {
+import "./StakingRewards.sol";
+import "../libraries/UniERC20.sol";
+import "../OptionsMarketMaker.sol";
+
+
+// https://github.com/Synthetixio/synthetix/blob/develop/contracts/StakingRewards.sol
+contract SeedRewards is IStakingRewards, RewardsDistributionRecipient, ReentrancyGuard, Pausable {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
     using UniERC20 for IERC20;
@@ -78,11 +79,14 @@ contract SeedRewards is Ownable, ReentrancyGuard, Pausable {
 
     constructor(
         address _marketMaker,
+        address _owner,
+        address _rewardsDistribution,
         address _rewardsToken,
         uint256 _rewardsDuration
-    ) public {
+    ) public Owned(_owner) {
         marketMaker = OptionsMarketMaker(_marketMaker);
         rewardsToken = IERC20(_rewardsToken);
+        rewardsDistribution = _rewardsDistribution;
 
         require(_rewardsDuration >= 1 days, "Rewards duration must be >= 1 days");
         rewardsDuration = _rewardsDuration;
@@ -99,19 +103,19 @@ contract SeedRewards is Ownable, ReentrancyGuard, Pausable {
 
     /* ========== VIEWS ========== */
 
-    function totalSupply() external view returns (uint256) {
+    function totalSupply() external override view returns (uint256) {
         return _totalSupply;
     }
 
-    function balanceOf(address account) external view returns (uint256) {
+    function balanceOf(address account) external override view returns (uint256) {
         return _balances[account];
     }
 
-    function lastTimeRewardApplicable() public view returns (uint256) {
+    function lastTimeRewardApplicable() public override view returns (uint256) {
         return Math.min(block.timestamp, periodFinish);
     }
 
-    function rewardPerToken() public view returns (uint256) {
+    function rewardPerToken() public override view returns (uint256) {
         if (_totalSupply == 0) {
             return rewardPerTokenStored;
         }
@@ -121,11 +125,11 @@ contract SeedRewards is Ownable, ReentrancyGuard, Pausable {
             );
     }
 
-    function earned(address account) public view returns (uint256) {
+    function earned(address account) public override view returns (uint256) {
         return _balances[account].mul(rewardPerToken().sub(userRewardPerTokenPaid[account])).div(1e18).add(rewards[account]);
     }
 
-    function getRewardForDuration() external view returns (uint256) {
+    function getRewardForDuration() external override view returns (uint256) {
         return rewardRate.mul(rewardsDuration);
     }
 
@@ -169,7 +173,7 @@ contract SeedRewards is Ownable, ReentrancyGuard, Pausable {
         emit Withdrawn(msg.sender, shares);
     }
 
-    function getReward() public nonReentrant updateReward(msg.sender) {
+    function getReward() public override nonReentrant updateReward(msg.sender) {
         uint256 reward = rewards[msg.sender];
         if (reward > 0) {
             rewards[msg.sender] = 0;
@@ -178,14 +182,14 @@ contract SeedRewards is Ownable, ReentrancyGuard, Pausable {
         }
     }
 
-    function exit() external {
+    function exit() external override {
         withdraw(_balances[msg.sender], 0);
         getReward();
     }
 
     /* ========== RESTRICTED FUNCTIONS ========== */
 
-    function notifyRewardAmount(uint256 reward) external onlyOwner updateReward(address(0)) {
+    function notifyRewardAmount(uint256 reward) external override onlyRewardsDistribution updateReward(address(0)) {
         if (block.timestamp >= periodFinish) {
             rewardRate = reward.div(rewardsDuration);
         } else {
@@ -204,6 +208,19 @@ contract SeedRewards is Ownable, ReentrancyGuard, Pausable {
         lastUpdateTime = block.timestamp;
         periodFinish = block.timestamp.add(rewardsDuration);
         emit RewardAdded(reward);
+    }
+
+    // Added to support recovering LP Rewards from other systems to be distributed to holders
+    function recoverERC20(address tokenAddress, uint256 tokenAmount) external onlyOwner {
+        // If it's SNX we have to query the token symbol to ensure its not a proxy or underlying
+        bool isSNX = (keccak256(bytes("SNX")) == keccak256(bytes(ERC20(tokenAddress).symbol())));
+        // Cannot recover the staking token or the rewards token
+        require(
+            tokenAddress != address(baseToken) && tokenAddress != address(rewardsToken) && !isSNX,
+            "Cannot withdraw the staking or rewards tokens"
+        );
+        IERC20(tokenAddress).safeTransfer(owner, tokenAmount);
+        emit Recovered(tokenAddress, tokenAmount);
     }
 
     function setRewardsDuration(uint256 _rewardsDuration) external onlyOwner {

@@ -21,9 +21,9 @@ The main contract is `OptionsMarketMaker.sol`. This contains methods `buy` and `
 
 `CharmToken.sol` is an ERC20 token that will be distributed as incentives/rewards and used for governance
 
-`StakingRewards.sol` let users stake an ERC20 token to receive Charm tokens. It's based on `https://github.com/Synthetixio/synthetix/blob/develop/contracts/StakingRewards.sol`.
+`rewards/StakingRewards.sol` let users stake an ERC20 token to receive Charm tokens. It's based on `https://github.com/Synthetixio/synthetix/blob/develop/contracts/StakingRewards.sol`.
 
-`SeedRewards.sol` is similar to `StakingRewards.sol` but instead of receiving/sending a staking token, it directly buys/sells options in the market-maker. This allows users to deposit/withdraw liquidity with a single transaction.
+`rewards/SeedRewards.sol` is similar to `StakingRewards.sol` but instead of receiving/sending a staking token, it directly buys/sells options in the market-maker. This allows users to deposit/withdraw liquidity with a single transaction.
 
 `Pausable.sol` is extended by `OptionsMarketMaker.sol` and `StakingRewards.sol` and allows the owner to pause deposits in those contracts.
 

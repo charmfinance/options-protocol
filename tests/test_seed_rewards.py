@@ -49,6 +49,8 @@ def test_seed_rewards(
     pool = deployer.deploy(
         SeedRewards,
         mm,
+        deployer,
+        deployer,
         rewards_token,
         10 * DAYS,
     )
@@ -158,6 +160,8 @@ def test_seed_rewards_for_put_mm(
     pool = deployer.deploy(
         SeedRewards,
         mm,
+        deployer,
+        deployer,
         rewards_token,
         10 * DAYS,
     )
@@ -215,7 +219,7 @@ def test_seed_rewards_for_put_mm(
     assert rewards_token.balanceOf(user) == 0
     fast_forward(TIME1 + 3 * DAYS)
     pool.getReward({"from": user})
-    assert pytest.approx(rewards_token.balanceOf(user)) == 200 * SCALE
+    assert pytest.approx(rewards_token.balanceOf(user), rel=1e-4) == 200 * SCALE
 
     # if withdraw after expiration, receive options tokens that can be redeemed
     fast_forward(EXPIRY_TIME)
@@ -267,6 +271,8 @@ def test_seed_rewards_with_eth(
     pool = deployer.deploy(
         SeedRewards,
         mm,
+        deployer,
+        deployer,
         rewards_token,
         10 * DAYS,
     )

@@ -15,9 +15,8 @@ import "../interfaces/IOracle.sol";
 import "./libraries/ABDKMath64x64.sol";
 import "./libraries/UniERC20.sol";
 import "./OptionsToken.sol";
-import "./Pausable.sol";
 
-contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
+contract OptionsMarketMaker is ReentrancyGuard, Ownable {
     using Address for address;
     using SafeERC20 for IERC20;
     using UniERC20 for IERC20;
@@ -49,6 +48,7 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
     uint256 public alpha;
     uint256 public expiryTime;
 
+    bool public isPaused;
     bool public isSettled;
     uint256 public settlementPrice;
     uint256 public normalizedSettlementPrice;
@@ -123,8 +123,9 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
         uint256 longSharesOut,
         uint256 shortSharesOut,
         uint256 maxAmountIn
-    ) external payable nonReentrant notPaused returns (uint256 amountIn) {
+    ) external payable nonReentrant returns (uint256 amountIn) {
         require(!isExpired(), "Cannot be called after expiry");
+        require(!isPaused, "This method has been paused");
         require(longSharesOut > 0 || shortSharesOut > 0, "Shares out must be > 0");
 
         uint256 cost1 = cost();
@@ -163,8 +164,9 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
         uint256 longSharesIn,
         uint256 shortSharesIn,
         uint256 minAmountOut
-    ) external nonReentrant notPaused returns (uint256 amountOut) {
+    ) external nonReentrant returns (uint256 amountOut) {
         require(!isExpired(), "Cannot be called after expiry");
+        require(!isPaused, "This method has been paused");
         require(longSharesIn > 0 || shortSharesIn > 0, "Shares must be > 0");
 
         uint256 cost1 = cost();
@@ -215,9 +217,10 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
      * This method can only be called after `settle` has been called and the
      * settlement price has been set
      */
-    function redeem() external nonReentrant notPaused returns (uint256 amountOut) {
+    function redeem() external nonReentrant returns (uint256 amountOut) {
         require(isExpired(), "Cannot be called before expiry");
         require(isSettled, "Cannot be called before settlement");
+        require(!isPaused, "This method has been paused");
 
         uint256 longBalance = longToken.balanceOf(msg.sender);
         uint256 shortBalance = shortToken.balanceOf(msg.sender);
@@ -359,6 +362,16 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
 
         // b * log(1 + exp(abs(q1 - q2) / b)) + max(q1, q2)
         return ABDKMath64x64.mulu(log, b).div(SCALE).add(max);
+    }
+
+    // emergency use only. to be removed in future versions
+    function pause() external onlyOwner {
+        isPaused = true;
+    }
+
+    // emergency use only. to be removed in future versions
+    function unpause() external onlyOwner {
+        isPaused = false;
     }
 
     // emergency use only. to be removed in future versions

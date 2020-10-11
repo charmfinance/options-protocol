@@ -15,6 +15,8 @@ def test_staking_rewards(StakingRewards, MockToken, fast_forward, accounts):
     staking_token = deployer.deploy(MockToken)
     sr = deployer.deploy(
         StakingRewards,
+        deployer,
+        deployer,
         rewards_token,
         staking_token,
         10 * DAYS,
@@ -56,7 +58,7 @@ def test_staking_rewards(StakingRewards, MockToken, fast_forward, accounts):
     rewards_token.transfer(sr, 1000 * SCALE, {"from": deployer})
     fast_forward(TIME1 + 0 * DAYS)
 
-    with reverts("Ownable: caller is not the owner"):
+    with reverts("Caller is not RewardsDistribution contract"):
         sr.notifyRewardAmount(1000 * SCALE, {"from": user})
     sr.notifyRewardAmount(1000 * SCALE, {"from": deployer})
 
@@ -69,7 +71,7 @@ def test_staking_rewards(StakingRewards, MockToken, fast_forward, accounts):
     # 5 days have passed. So user gets 10+10%, user2 gets 30%
     fast_forward(TIME1 + 5 * DAYS)
     sr.getReward({"from": user})
-    assert pytest.approx(rewards_token.balanceOf(user)) == 200 * SCALE
+    assert pytest.approx(rewards_token.balanceOf(user), rel=1e-4) == 200 * SCALE
 
     # 6 days have passed. User2 stakes another 10
     fast_forward(TIME1 + 6 * DAYS)
