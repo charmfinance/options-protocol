@@ -66,6 +66,10 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
      * multiply the cost by the strike price so that underlying is in terms of
      * ETH, not USD.
      *
+     * In this first version, the owner is highly privileged and is able to pause
+     * the contract and override some of the initial parameters. These permissions
+     * will be removed in the future.
+     *
      * @param _baseToken        Underlying ERC20 asset. Represents ETH if equal to 0x0
      * @param _oracle           Oracle from which the settlement price is obtained
      * @param _isPutMarket      Whether long token represents a call or a put
@@ -159,7 +163,7 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
         uint256 longSharesIn,
         uint256 shortSharesIn,
         uint256 minAmountOut
-    ) external nonReentrant returns (uint256 amountOut) {
+    ) external nonReentrant notPaused returns (uint256 amountOut) {
         require(!isExpired(), "Cannot be called after expiry");
         require(longSharesIn > 0 || shortSharesIn > 0, "Shares must be > 0");
 
@@ -193,7 +197,7 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
      * After this method has been called, `redeem` can be called by users to
      * trade in their options and receive their payouts
      */
-    function settle() external nonReentrant {
+    function settle() public nonReentrant {
         require(isExpired(), "Cannot be called before expiry");
         require(!isSettled, "Already settled");
 
@@ -211,7 +215,7 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
      * This method can only be called after `settle` has been called and the
      * settlement price has been set
      */
-    function redeem() external nonReentrant returns (uint256 amountOut) {
+    function redeem() external nonReentrant notPaused returns (uint256 amountOut) {
         require(isExpired(), "Cannot be called before expiry");
         require(isSettled, "Cannot be called before settlement");
 
@@ -237,11 +241,6 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
         emit Redeemed(msg.sender, longBalance, shortBalance, amountOut);
     }
 
-    // emergency use only. to be removed in future versions
-    function setOracle(IOracle _oracle) external onlyOwner {
-        oracle = _oracle;
-    }
-
     function isExpired() public view returns (bool) {
         return block.timestamp >= expiryTime;
     }
@@ -258,10 +257,10 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
      * contract based on the total supply of long and short tokens.
      */
     function cost() public view returns (uint256) {
-        uint256 cost = calcLsLmsrCost(longToken.totalSupply(), shortToken.totalSupply(), alpha);
+        uint256 lsLmsrCost = calcLsLmsrCost(longToken.totalSupply(), shortToken.totalSupply(), alpha);
 
         // multiply by the strike price for puts
-        return isPutMarket ? cost.mul(strikePrice).div(SCALE) : cost;
+        return isPutMarket ? lsLmsrCost.mul(strikePrice).div(SCALE) : lsLmsrCost;
     }
 
     /**
@@ -360,5 +359,21 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable, Pausable {
 
         // b * log(1 + exp(abs(q1 - q2) / b)) + max(q1, q2)
         return ABDKMath64x64.mulu(log, b).div(SCALE).add(max);
+    }
+
+    // emergency use only. to be removed in future versions
+    function setOracle(IOracle _oracle) external onlyOwner {
+        oracle = _oracle;
+    }
+
+    // emergency use only. to be removed in future versions
+    function setExpiryTime(uint256 _expiryTime) external onlyOwner {
+        expiryTime = _expiryTime;
+    }
+
+    // emergency use only. to be removed in future versions
+    function forceSettle() external onlyOwner {
+        isSettled = false;
+        settle();
     }
 }

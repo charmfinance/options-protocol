@@ -449,8 +449,10 @@ def test_settle(mm, oracle, user, fast_forward):
     # can only call settle() after expiry time and can only call once
     fast_forward(EXPIRY_TIME)
     assert mm.settlementPrice() == 0
+    assert mm.normalizedSettlementPrice() == 0
     tx = mm.settle({"from": user})
     assert mm.settlementPrice() == 123 * SCALE
+    assert mm.normalizedSettlementPrice() == 123 * SCALE
     assert mm.normalizedSettlementPrice() == 123 * SCALE
     assert tx.events["Settled"] == {
         "settlementPrice": 123 * SCALE,
@@ -588,41 +590,6 @@ def test_redeem_eth(OptionsToken, ethmm, oracle, user, fast_forward):
 
     assert tx.return_value == 10000000687930275420
     assert user.balance() - bal == 10000000687930275420
-
-
-def test_transfer_ownership(mm, deployer, user):
-
-    # only owner
-    with reverts("Ownable: caller is not the owner"):
-        mm.transferOwnership(user, {"from": user})
-
-    mm.transferOwnership(user, {"from": deployer})
-    assert mm.owner() == user
-
-
-def test_set_oracle(MockOracle, mm, deployer, user):
-    oracle2 = deployer.deploy(MockOracle)
-
-    # only owner
-    with reverts("Ownable: caller is not the owner"):
-        mm.setOracle(oracle2, {"from": user})
-
-    mm.setOracle(oracle2, {"from": deployer})
-    assert mm.oracle() == oracle2
-
-
-def test_pause_unpause(mm, deployer, user, long_token):
-    with reverts("Ownable: caller is not the owner"):
-        mm.pause({"from": user})
-    mm.pause({"from": deployer})
-
-    with reverts("This method has been paused"):
-        mm.buy(1 * SCALE, 0, 1000 * SCALE, {"from": user})
-
-    with reverts("Ownable: caller is not the owner"):
-        mm.unpause({"from": user})
-    mm.unpause({"from": deployer})
-    mm.buy(1 * SCALE, 0, 1000 * SCALE, {"from": user})
 
 
 def test_put(OptionsToken, putmm, oracle, usd_token, user, fast_forward):
@@ -768,3 +735,56 @@ def test_redeem_in_the_money_put(putmm, usd_token, oracle, user, user2, fast_for
     # can't call again
     with reverts("Balance must be > 0"):
         tx = putmm.redeem({"from": user})
+
+
+def test_transfer_ownership(mm, deployer, user):
+
+    # only owner
+    with reverts("Ownable: caller is not the owner"):
+        mm.transferOwnership(user, {"from": user})
+
+    mm.transferOwnership(user, {"from": deployer})
+    assert mm.owner() == user
+
+
+def test_emergency_methods(MockOracle, mm, deployer, user, fast_forward):
+    oracle2 = deployer.deploy(MockOracle)
+    oracle2.setPrice(123 * SCALE)
+
+    # only owner
+    with reverts("Ownable: caller is not the owner"):
+        mm.setOracle(oracle2, {"from": user})
+    with reverts("Ownable: caller is not the owner"):
+        mm.setExpiryTime(EXPIRY_TIME - 1, {"from": user})
+
+    mm.setOracle(oracle2, {"from": deployer})
+    assert mm.oracle() == oracle2
+
+    mm.setExpiryTime(EXPIRY_TIME - 1, {"from": deployer})
+    assert mm.expiryTime() == EXPIRY_TIME - 1
+
+    fast_forward(EXPIRY_TIME)
+    mm.settle()
+
+    with reverts("Already settled"):
+        mm.settle()
+    with reverts("Ownable: caller is not the owner"):
+        mm.forceSettle({"from": user})
+
+    oracle2.setPrice(234 * SCALE)
+    mm.forceSettle({"from": deployer})
+    assert mm.settlementPrice() == 234 * SCALE
+
+
+def test_pause_unpause(mm, deployer, user, long_token):
+    with reverts("Ownable: caller is not the owner"):
+        mm.pause({"from": user})
+    mm.pause({"from": deployer})
+
+    with reverts("This method has been paused"):
+        mm.buy(1 * SCALE, 0, 1000 * SCALE, {"from": user})
+
+    with reverts("Ownable: caller is not the owner"):
+        mm.unpause({"from": user})
+    mm.unpause({"from": deployer})
+    mm.buy(1 * SCALE, 0, 1000 * SCALE, {"from": user})
