@@ -24,10 +24,10 @@
 
 
 // Changes made from original:
-// * Set pragma version to 0.6.12
-// * Let initial value of rewardsDuration be set
-// * Added abstract, override and virtual
-// * Removed stake and withdraw from interface as SeedRewards uses a different signature
+// - Set pragma version to 0.6.12
+// - Let initial value of rewardsDuration be set
+// - Added abstract, override and virtual keywords where needed
+// - Removed `stake` and `withdraw` from interface as SeedRewards uses a different signature
 
 
 pragma solidity ^0.6.12;

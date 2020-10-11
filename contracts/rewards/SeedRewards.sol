@@ -24,12 +24,19 @@
 
 
 // Changes made from original:
-// * Set pragma version to 0.6.12
-// * Let initial value of rewardsDuration be set
-// * Added abstract, override and virtual
-// * Removed stake and withdraw from interface as SeedRewards uses a different signature
-// * `stake` and `withdraw` methods directly buy options from the market-maker
-// * Added `receive` method to receive eth refund when buying options with eth
+// - Set pragma version to 0.6.12
+// - Let initial value of rewardsDuration be set
+// - Added abstract, override and virtual keywords where needed
+// - Removed `stake` and `withdraw` from interface as SeedRewards uses a different signature
+// - `stake` and `withdraw` methods directly buy options from the market-maker
+// - Added `receive` method to receive eth refund when buying options with eth
+
+// This contract is very similar to StakingRewards. The difference is when a
+// user stakes, it directly buys call/put options and covered call options from
+// the market-maker in equal quantities. This improves the liquidity of the
+// market-maker with a position that's hedged. This is implemented directly
+// in this rewards contract so that users can stake/withdraw with a single
+// transaction instead of three (buy, approve, stake)
 
 
 pragma solidity ^0.6.12;
@@ -138,18 +145,23 @@ contract SeedRewards is IStakingRewards, RewardsDistributionRecipient, Reentranc
     function stake(uint256 shares, uint256 maxAmountIn) external payable nonReentrant notPaused updateReward(msg.sender) {
         require(shares > 0, "Cannot stake 0");
 
-        // Receive amount from caller and use this to buy options
+        // send `maxAmountIn` quantity of base tokens
+        uint256 balance1 = baseToken.uniBalanceOf(address(this));
         baseToken.uniTransferFromSenderToThis(maxAmountIn);
+        uint256 balance2 = baseToken.uniBalanceOf(address(this));
+        require(baseToken.isETH() || balance2.sub(balance1) == maxAmountIn, "Deflationary tokens not supported");
+
+        // Buy call/put and covered call options in equal amounts
         uint256 amountIn = marketMaker.buy{value: msg.value}(shares, shares, maxAmountIn);
 
-        // Refund difference. Cheaper in gas than calculating exact cost
+        // Refund difference between `maxAmountIn` and actual cost
+        // Cheaper in gas than calculating exact cost
         if (amountIn < maxAmountIn) {
             baseToken.uniTransfer(msg.sender, maxAmountIn.sub(amountIn));
         }
 
         _totalSupply = _totalSupply.add(shares);
         _balances[msg.sender] = _balances[msg.sender].add(shares);
-
         emit Staked(msg.sender, shares);
     }
 
@@ -159,13 +171,13 @@ contract SeedRewards is IStakingRewards, RewardsDistributionRecipient, Reentranc
         _balances[msg.sender] = _balances[msg.sender].sub(shares);
 
         if (!marketMaker.isExpired()) {
-            // Sell options and return amount to caller
+            // Sell options and return cost to user
             uint256 amountOut = marketMaker.sell(shares, shares, minAmountOut);
             baseToken.uniTransfer(msg.sender, amountOut);
         } else {
             // If options have expired, they can no longer be sold, so instead
-            // the options themselves are sent to the called. These can then
-            // be redeemed for the same amount in the market-maker contract
+            // the options themselves are returned to the user. These can then
+            // be redeemed for the same value in the market-maker contract
             longToken.safeTransfer(msg.sender, shares);
             shortToken.safeTransfer(msg.sender, shares);
         }

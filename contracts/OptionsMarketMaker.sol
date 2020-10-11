@@ -326,7 +326,7 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable {
      *
      *   q1 = long token supply
      *   q2 = short token supply
-     *   _alpha = LS-LMSR parameter that determines liquidity-sensitivity
+     *   _alpha = LS-LMSR constant that determines liquidity sensitivity
      *   b = _alpha * (q1 + q2)
      *
      * An equivalent expression for C(q1, q2) is used to avoid overflow when
@@ -341,6 +341,8 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable {
     ) public pure returns (uint256) {
         // b = _alpha * (q1 + q2)
         uint256 b = q1.add(q2).mul(_alpha);
+
+        // if b is 0 then q1 and q2 must be 0 so the AMM is in its initial state
         if (b == 0) {
             return 0;
         }
