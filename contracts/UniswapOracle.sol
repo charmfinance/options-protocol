@@ -53,11 +53,10 @@ contract UniswapOracle is IOracle {
     ) public {
         pair = IUniswapV2Pair(_pair);
         startTime = _startTime;
-
-        require(decimals0 <= 18);
-        require(decimals1 <= 18);
-
         isInverted = _isInverted;
+
+        require(decimals0 <= 36, "Decimals should be <= 36");
+        require(decimals1 <= 36, "Decimals should be <= 36");
 
         // set multipliers. divide by gcd to make overflows less likely
         uint256 min = Math.min(decimals0, decimals1);
