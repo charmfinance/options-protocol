@@ -26,7 +26,6 @@ contract UniswapOracle is IOracle {
     bool public isInverted;
 
     // data at the start of the TWAP window
-    uint256 public snapshotSpotPrice;
     uint256 public snapshotCumulativePrice;
     uint256 public snapshotTimestamp;
     address public snapshotCaller;
@@ -72,8 +71,7 @@ contract UniswapOracle is IOracle {
     }
 
     /**
-     * Fetches data from uniswap and updates `snapshotSpotPrice`, `snapshotCumulativePrice`
-     * and `snapshotTimestamp`.
+     * Fetches data from uniswap and updates `snapshotCumulativePrice` and `snapshotTimestamp`.
      *
      * When `getPrice` is called in the future, it will return the TWAP during the * window starting from now
      *
@@ -81,7 +79,7 @@ contract UniswapOracle is IOracle {
      */
     function takeSnapshot() public {
         require(block.timestamp <= startTime, "TWAP window already started");
-        (snapshotSpotPrice, snapshotCumulativePrice) = fetchSpotAndCumulativePrice();
+        (, snapshotCumulativePrice) = fetchSpotAndCumulativePrice();
         snapshotTimestamp = block.timestamp;
         snapshotCaller = msg.sender;
     }

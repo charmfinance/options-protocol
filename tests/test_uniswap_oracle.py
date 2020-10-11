@@ -60,7 +60,6 @@ def test_oracle_base_token(
     assert oracle.snapshotTimestamp() in [TIME1, TIME1 + 1]
 
     # uses spot price if no time elapsed
-    assert oracle.snapshotSpotPrice() == 400 * SCALE
     assert oracle.getPrice() == 400 * SCALE
 
     # send reward to oracle
@@ -68,6 +67,10 @@ def test_oracle_base_token(
     charm.mint(oracle, 100 * SCALE, {"from": deployer})
     assert charm.balanceOf(oracle) == 100 * SCALE
     oracle.takeSnapshot({"from": user})
+
+    # can't claim reward before twap window starts
+    with reverts("TWAP window has not started yet"):
+        oracle.claimReward(charm, {"from": deployer})
 
     # the test below is commented out because it's flaky
     # takeSnapshot might be in the same block as deploy or the block after
@@ -108,7 +111,7 @@ def test_oracle_base_token(
     pair.setBlockTimestampLast(TIME4)
     oracle.getPrice() == 500 * SCALE
 
-    # check last snapshot caller can get reward
+    # check reward can be given to last snapshot caller
     oracle.claimReward(charm, {"from": deployer})
     assert charm.balanceOf(oracle) == 0
     assert charm.balanceOf(deployer) == 0
@@ -152,7 +155,6 @@ def test_oracle_quote_token(
     assert oracle.snapshotTimestamp() in [TIME1, TIME1 + 1]
 
     # uses spot price if no time elapsed
-    assert oracle.snapshotSpotPrice() == SCALE // 400
     assert oracle.getPrice() == SCALE // 400
 
     # move time forward and check price. It hasn't moved in the oracle so should
