@@ -105,8 +105,8 @@ def test_seed_rewards(
     # 3300000000000000000
     assert pytest.approx(base_token.balanceOf(user)) == 96.7 * SCALE
 
-    fast_forward(TIME1 + 3 * DAYS)
     assert rewards_token.balanceOf(user) == 0
+    fast_forward(TIME1 + 3 * DAYS)
 
     pool.getReward({"from": user})
     assert pytest.approx(rewards_token.balanceOf(user)) == 200 * SCALE
