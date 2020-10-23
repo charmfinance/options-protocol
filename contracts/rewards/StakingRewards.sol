@@ -63,7 +63,7 @@ interface IStakingRewards {
 
     function getReward() external;
 
-    function exit() external;
+    // function exit() external;
 }
 
 
@@ -260,7 +260,7 @@ contract StakingRewards is IStakingRewards, RewardsDistributionRecipient, Reentr
         }
     }
 
-    function exit() external override {
+    function exit() external {
         withdraw(_balances[msg.sender]);
         getReward();
     }

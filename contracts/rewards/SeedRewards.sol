@@ -194,8 +194,8 @@ contract SeedRewards is IStakingRewards, RewardsDistributionRecipient, Reentranc
         }
     }
 
-    function exit() external override {
-        withdraw(_balances[msg.sender], 0);
+    function exit(uint256 minAmountOut) external {
+        withdraw(_balances[msg.sender], minAmountOut);
         getReward();
     }
 

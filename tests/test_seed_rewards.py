@@ -111,9 +111,13 @@ def test_seed_rewards(
     pool.getReward({"from": user})
     assert pytest.approx(rewards_token.balanceOf(user)) == 200 * SCALE
 
+    # exit reverts if minAmountOut is too high
+    with reverts("Max slippage exceeded"):
+        pool.exit(97 * SCALE, {"from": user})
+
     # if withdraw after expiration, receive options tokens that can be redeemed
     fast_forward(EXPIRY_TIME)
-    pool.exit({"from": user})
+    pool.exit(96 * SCALE, {"from": user})
     assert long_token.totalSupply() == 3 * SCALE
     assert short_token.totalSupply() == 3 * SCALE
     assert long_token.balanceOf(pool) == 0
@@ -223,7 +227,7 @@ def test_seed_rewards_for_put_mm(
 
     # if withdraw after expiration, receive options tokens that can be redeemed
     fast_forward(EXPIRY_TIME)
-    pool.exit({"from": user})
+    pool.exit(0, {"from": user})
     assert long_token.totalSupply() == 3 * SCALE
     assert short_token.totalSupply() == 3 * SCALE
     assert long_token.balanceOf(pool) == 0
@@ -333,7 +337,7 @@ def test_seed_rewards_with_eth(
 
     # if withdraw after expiration, receive options tokens that can be redeemed
     fast_forward(EXPIRY_TIME)
-    pool.exit({"from": user})
+    pool.exit(0, {"from": user})
     assert long_token.totalSupply() == 3 * SCALE
     assert short_token.totalSupply() == 3 * SCALE
     assert long_token.balanceOf(pool) == 0
