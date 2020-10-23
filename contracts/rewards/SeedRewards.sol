@@ -30,6 +30,7 @@
 // - Removed `stake` and `withdraw` from interface as SeedRewards uses a different signature
 // - `stake` and `withdraw` methods directly buy options from the market-maker
 // - Added `receive` method to receive eth refund when buying options with eth
+// - Replaced SNX with CHARM
 
 // This contract is very similar to StakingRewards. The difference is when a
 // user stakes, it directly buys call/put options and covered call options from
@@ -224,11 +225,11 @@ contract SeedRewards is IStakingRewards, RewardsDistributionRecipient, Reentranc
 
     // Added to support recovering LP Rewards from other systems to be distributed to holders
     function recoverERC20(address tokenAddress, uint256 tokenAmount) external onlyOwner {
-        // If it's SNX we have to query the token symbol to ensure its not a proxy or underlying
-        bool isSNX = (keccak256(bytes("SNX")) == keccak256(bytes(ERC20(tokenAddress).symbol())));
+        // If it's CHARM we have to query the token symbol to ensure its not a proxy or underlying
+        bool isCHARM = (keccak256(bytes("CHARM")) == keccak256(bytes(ERC20(tokenAddress).symbol())));
         // Cannot recover the staking token or the rewards token
         require(
-            tokenAddress != address(baseToken) && tokenAddress != address(rewardsToken) && !isSNX,
+            tokenAddress != address(baseToken) && tokenAddress != address(rewardsToken) && !isCHARM,
             "Cannot withdraw the staking or rewards tokens"
         );
         IERC20(tokenAddress).safeTransfer(owner, tokenAmount);

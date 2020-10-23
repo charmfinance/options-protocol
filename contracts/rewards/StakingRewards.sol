@@ -28,6 +28,7 @@
 // - Let initial value of rewardsDuration be set
 // - Added abstract, override and virtual keywords where needed
 // - Removed `stake` and `withdraw` from interface as SeedRewards uses a different signature
+// - Replaced SNX with CHARM
 
 
 pragma solidity ^0.6.12;
@@ -290,11 +291,11 @@ contract StakingRewards is IStakingRewards, RewardsDistributionRecipient, Reentr
 
     // Added to support recovering LP Rewards from other systems to be distributed to holders
     function recoverERC20(address tokenAddress, uint256 tokenAmount) external onlyOwner {
-        // If it's SNX we have to query the token symbol to ensure its not a proxy or underlying
-        bool isSNX = (keccak256(bytes("SNX")) == keccak256(bytes(ERC20(tokenAddress).symbol())));
+        // If it's CHARM we have to query the token symbol to ensure its not a proxy or underlying
+        bool isCHARM = (keccak256(bytes("CHARM")) == keccak256(bytes(ERC20(tokenAddress).symbol())));
         // Cannot recover the staking token or the rewards token
         require(
-            tokenAddress != address(stakingToken) && tokenAddress != address(rewardsToken) && !isSNX,
+            tokenAddress != address(stakingToken) && tokenAddress != address(rewardsToken) && !isCHARM,
             "Cannot withdraw the staking or rewards tokens"
         );
         IERC20(tokenAddress).safeTransfer(owner, tokenAmount);
