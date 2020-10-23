@@ -129,8 +129,12 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable {
         require(longSharesOut > 0 || shortSharesOut > 0, "Shares out must be > 0");
 
         uint256 cost1 = cost();
-        longToken.mint(msg.sender, longSharesOut);
-        shortToken.mint(msg.sender, shortSharesOut);
+        if (longSharesOut > 0) {
+            longToken.mint(msg.sender, longSharesOut);
+        }
+        if (shortSharesOut > 0) {
+            shortToken.mint(msg.sender, shortSharesOut);
+        }
         uint256 cost2 = cost();
         amountIn = cost2.sub(cost1);
         require(amountIn > 0, "Amount in must be > 0");
@@ -170,8 +174,12 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable {
         require(longSharesIn > 0 || shortSharesIn > 0, "Shares must be > 0");
 
         uint256 cost1 = cost();
-        longToken.burn(msg.sender, longSharesIn);
-        shortToken.burn(msg.sender, shortSharesIn);
+        if (longSharesIn > 0) {
+            longToken.burn(msg.sender, longSharesIn);
+        }
+        if (shortSharesIn > 0) {
+            shortToken.burn(msg.sender, shortSharesIn);
+        }
         uint256 cost2 = cost();
         amountOut = cost1.sub(cost2);
         require(amountOut > 0, "Amount must be > 0");
