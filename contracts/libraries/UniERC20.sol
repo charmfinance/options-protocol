@@ -55,7 +55,7 @@ library UniERC20 {
     function uniTransfer(IERC20 token, address payable to, uint256 amount) internal {
         if (amount > 0) {
             if (isETH(token)) {
-                (bool success, ) = to.call.value(amount)("");
+                (bool success, ) = to.call{value: amount}("");
                 require(success, "Transfer failed");
             } else {
                 token.safeTransfer(to, amount);
@@ -70,7 +70,7 @@ library UniERC20 {
                 if (msg.value > amount) {
                     // Return remainder if exist
                     uint256 refundAmount = msg.value.sub(amount);
-                    (bool success, ) = msg.sender.call.value(refundAmount)("");
+                    (bool success, ) = msg.sender.call{value: refundAmount}("");
                     require(success, "Transfer failed");
                 }
             } else {
