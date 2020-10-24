@@ -4,6 +4,7 @@ pragma solidity ^0.6.12;
 
 import "@openzeppelin/contracts/math/Math.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
@@ -37,26 +38,25 @@ contract UniswapOracle is IOracle {
      * before time A. Then at time B, `getPrice` will return the TWAP during
      * this window
      *
+     * Tokens can optionally be sent to this contract to be claimed by the user
+     * who last calls `takeSnapshot` before the window starts
+     *
      * @param _pair                     `UniswapV2Pair` address
      * @param _startTime                Start time of the TWAP window
-     * @param decimals0                 Decimal places used by token0 in pair
-     * @param decimals1                 Decimal places used by token1 in pair
      * @param _isInverted               If false, this oracle calculates token0/token1 price
      *                                  If true, token1/token0 price
      */
     constructor(
         address _pair,
         uint256 _startTime,
-        uint256 decimals0,
-        uint256 decimals1,
         bool _isInverted
     ) public {
         pair = IUniswapV2Pair(_pair);
         startTime = _startTime;
         isInverted = _isInverted;
 
-        require(decimals0 <= 36, "Decimals should be <= 36");
-        require(decimals1 <= 36, "Decimals should be <= 36");
+        uint256 decimals0 = ERC20(pair.token0()).decimals();
+        uint256 decimals1 = ERC20(pair.token1()).decimals();
 
         // set multipliers. divide by gcd to make overflows less likely
         uint256 min = Math.min(decimals0, decimals1);
@@ -128,6 +128,9 @@ contract UniswapOracle is IOracle {
         cumulativePrice = last.add(sinceLast);
     }
 
+    /**
+     * Send reward tokens to the user who last called `takeSnapshot`
+     */
     function claimReward(IERC20 rewardToken) external {
         require(block.timestamp > startTime, "TWAP window has not started yet");
         uint256 balance = rewardToken.balanceOf(address(this));

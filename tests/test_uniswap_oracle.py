@@ -13,11 +13,14 @@ TIME4 = 2610000000
 
 
 def test_oracle_base_token(
-    UniswapOracle, MockUniswapV2Pair, OptionsToken, CharmToken, accounts, fast_forward
+    UniswapOracle, MockUniswapV2Pair, MockToken, CharmToken, accounts, fast_forward
 ):
     deployer, user, user2 = accounts[:3]
-    eth = deployer.deploy(OptionsToken, "Ether", "ETH")
-    usd = deployer.deploy(OptionsToken, "USD Coin", "USD")
+    eth = deployer.deploy(MockToken)
+    usd = deployer.deploy(MockToken)
+    eth.setDecimals(18)
+    usd.setDecimals(6)
+
     charm = deployer.deploy(CharmToken)
     pair = deployer.deploy(MockUniswapV2Pair, eth, usd)
 
@@ -29,8 +32,6 @@ def test_oracle_base_token(
             UniswapOracle,
             pair,
             TIME3,  # twap start time
-            18,  # eth decimals
-            6,  # usdc decimals
             False,
         )
 
@@ -49,8 +50,6 @@ def test_oracle_base_token(
         UniswapOracle,
         pair,
         TIME3,  # update time
-        18,  # eth decimals
-        6,  # usdc decimals
         False,
     )
     assert not oracle.isInverted()
@@ -120,11 +119,13 @@ def test_oracle_base_token(
 
 
 def test_oracle_quote_token(
-    UniswapOracle, MockUniswapV2Pair, OptionsToken, accounts, fast_forward
+    UniswapOracle, MockUniswapV2Pair, MockToken, accounts, fast_forward
 ):
     deployer = accounts[0]
-    eth = deployer.deploy(OptionsToken, "Ether", "ETH")
-    usd = deployer.deploy(OptionsToken, "USD Coin", "USD")
+    eth = deployer.deploy(MockToken)
+    usd = deployer.deploy(MockToken)
+    eth.setDecimals(18)
+    usd.setDecimals(6)
     pair = deployer.deploy(MockUniswapV2Pair, eth, usd)
 
     multiplier = 10 ** 12
@@ -144,8 +145,6 @@ def test_oracle_quote_token(
         UniswapOracle,
         pair,
         TIME3,  # update time
-        18,  # eth decimals
-        6,  # usdc decimals
         True,
     )
     assert oracle.isInverted()
