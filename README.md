@@ -8,7 +8,18 @@ At expiration, the settlement price is fetched from a Uniswap V2 oracle. Users c
 
 This repo also includes an ERC20 governance token and staking reward pools
 
-Please note the owner is highly privileged and is able to pause the market-maker or to override some of its parameters. These are only intended to be used in an emergency situation. These permissions will be removed in future versions.
+
+## Owner privileges
+
+Please note the owner of the options market is highly privileged and has the permissions below. These are only intended to be used in an emergency situation. These permissions will be removed in future versions.
+
+- Pause the contract indefinitely. This includes preventing users from buying, selling, and redeeming their options.
+
+- Change the contract’s oracle. If an invalid or malicious oracle is provided, users can potentially lose funds.
+
+- Change the contract’s expiry date.
+
+- Prematurely settle the contract before its expiry date.
 
 
 ## Repo
