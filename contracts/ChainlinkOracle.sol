@@ -17,25 +17,34 @@ contract ChainlinkOracle is IOracle {
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
 
-    uint256 public constant DECIMALS = 18;
+    uint256 public constant SCALE = 1e18;
 
-    AggregatorV3Interface public priceFeed;
+    address public priceFeed1;
+    address public priceFeed2;
 
-    constructor(address _priceFeed) public {
-        priceFeed = AggregatorV3Interface(_priceFeed);
+    constructor(address _priceFeed1, address _priceFeed2) public {
+        priceFeed1 = _priceFeed1;
+        priceFeed2 = _priceFeed2;
     }
 
     function getPrice() external override view returns (uint256 price) {
-        uint256 decimals = uint256(priceFeed.decimals());
-        (, int256 px, , uint256 timestamp, ) = priceFeed.latestRoundData();
-        require(timestamp > 0, "Round not complete");
-        require(px > 0, "Price is not > 0");
-
-        price = uint256(px);
-        if (decimals > DECIMALS) {
-            price = price.div(10**decimals.sub(DECIMALS));
-        } else if (decimals < DECIMALS) {
-            price = price.mul(10**DECIMALS.sub(decimals));
+        price = SCALE;
+        if (priceFeed1 != address(0)) {
+            price = price.mul(getPriceFromFeed(priceFeed1)).div(SCALE);
         }
+        if (priceFeed2 != address(0)) {
+            price = price.mul(getPriceFromFeed(priceFeed2)).div(SCALE);
+        }
+        return price;
+    }
+
+    function getPriceFromFeed(address priceFeed) public view returns (uint256) {
+        AggregatorV3Interface aggregator = AggregatorV3Interface(priceFeed);
+        (, int256 price, , uint256 timestamp, ) = aggregator.latestRoundData();
+        require(timestamp > 0, "Round not complete");
+        require(price > 0, "Price is not > 0");
+
+        uint256 decimals = uint256(aggregator.decimals());
+        return uint256(price).mul(SCALE).div(10**decimals);
     }
 }
