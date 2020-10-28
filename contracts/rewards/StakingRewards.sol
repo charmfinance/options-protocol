@@ -25,7 +25,6 @@
 
 // Changes made from original:
 // - Set pragma version to 0.6.12
-// - Let initial value of rewardsDuration be set
 // - Added abstract, override and virtual keywords where needed
 // - Removed `stake` and `withdraw` from interface as SeedRewards uses a different signature
 // - Replaced SNX with CHARM
@@ -175,7 +174,7 @@ contract StakingRewards is IStakingRewards, RewardsDistributionRecipient, Reentr
     IERC20 public stakingToken;
     uint256 public periodFinish = 0;
     uint256 public rewardRate = 0;
-    uint256 public rewardsDuration;
+    uint256 public rewardsDuration = 7 days;
     uint256 public lastUpdateTime;
     uint256 public rewardPerTokenStored;
 
@@ -191,15 +190,11 @@ contract StakingRewards is IStakingRewards, RewardsDistributionRecipient, Reentr
         address _owner,
         address _rewardsDistribution,
         address _rewardsToken,
-        address _stakingToken,
-        uint256 _rewardsDuration
+        address _stakingToken
     ) public Owned(_owner) {
         rewardsToken = IERC20(_rewardsToken);
         stakingToken = IERC20(_stakingToken);
         rewardsDistribution = _rewardsDistribution;
-
-        require(_rewardsDuration >= 1 days, "Rewards duration must be >= 1 days");
-        rewardsDuration = _rewardsDuration;
     }
 
     /* ========== VIEWS ========== */

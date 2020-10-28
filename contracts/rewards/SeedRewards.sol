@@ -25,7 +25,6 @@
 
 // Changes made from original:
 // - Set pragma version to 0.6.12
-// - Let initial value of rewardsDuration be set
 // - Added abstract, override and virtual keywords where needed
 // - Removed `stake` and `withdraw` from interface as SeedRewards uses a different signature
 // - `stake` and `withdraw` methods directly buy options from the market-maker
@@ -73,7 +72,7 @@ contract SeedRewards is IStakingRewards, RewardsDistributionRecipient, Reentranc
     IERC20 public rewardsToken;
     uint256 public periodFinish = 0;
     uint256 public rewardRate = 0;
-    uint256 public rewardsDuration;
+    uint256 public rewardsDuration = 7 days;
     uint256 public lastUpdateTime;
     uint256 public rewardPerTokenStored;
 
@@ -89,15 +88,11 @@ contract SeedRewards is IStakingRewards, RewardsDistributionRecipient, Reentranc
         address _marketMaker,
         address _owner,
         address _rewardsDistribution,
-        address _rewardsToken,
-        uint256 _rewardsDuration
+        address _rewardsToken
     ) public Owned(_owner) {
         marketMaker = OptionsMarketMaker(_marketMaker);
         rewardsToken = IERC20(_rewardsToken);
         rewardsDistribution = _rewardsDistribution;
-
-        require(_rewardsDuration >= 1 days, "Rewards duration must be >= 1 days");
-        rewardsDuration = _rewardsDuration;
 
         baseToken = marketMaker.baseToken();
         longToken = marketMaker.longToken();
