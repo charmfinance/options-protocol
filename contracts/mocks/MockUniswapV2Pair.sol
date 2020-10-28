@@ -2,9 +2,7 @@
 
 pragma solidity ^0.6.12;
 
-
 import "../../interfaces/IUniswapV2Pair.sol";
-
 
 contract MockUniswapV2Pair is IUniswapV2Pair {
     address public override token0;
@@ -19,8 +17,17 @@ contract MockUniswapV2Pair is IUniswapV2Pair {
         token0 = _token0;
         token1 = _token1;
     }
-    
-    function getReserves() external view override returns (uint112, uint112, uint32) {
+
+    function getReserves()
+        external
+        override
+        view
+        returns (
+            uint112,
+            uint112,
+            uint32
+        )
+    {
         return (reserve0, reserve1, blockTimestampLast);
     }
 
@@ -44,4 +51,3 @@ contract MockUniswapV2Pair is IUniswapV2Pair {
         blockTimestampLast = _blockTimestampLast;
     }
 }
-
