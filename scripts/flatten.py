@@ -3,17 +3,29 @@ import os
 
 PATHS = [
     "~/.brownie/packages/OpenZeppelin/openzeppelin-contracts@3.2.0/contracts/GSN/Context.sol",
+    "~/.brownie/packages/OpenZeppelin/openzeppelin-contracts@3.2.0/contracts/access/Ownable.sol",
     "~/.brownie/packages/OpenZeppelin/openzeppelin-contracts@3.2.0/contracts/math/SafeMath.sol",
     "~/.brownie/packages/OpenZeppelin/openzeppelin-contracts@3.2.0/contracts/math/Math.sol",
     "~/.brownie/packages/OpenZeppelin/openzeppelin-contracts@3.2.0/contracts/token/ERC20/IERC20.sol",
     "~/.brownie/packages/OpenZeppelin/openzeppelin-contracts@3.2.0/contracts/token/ERC20/ERC20.sol",
     "~/.brownie/packages/OpenZeppelin/openzeppelin-contracts@3.2.0/contracts/token/ERC20/SafeERC20.sol",
     "~/.brownie/packages/OpenZeppelin/openzeppelin-contracts@3.2.0/contracts/utils/Address.sol",
-    "contracts/mocks/MockToken.sol",
-    "contracts/CharmToken.sol",
+    "~/.brownie/packages/OpenZeppelin/openzeppelin-contracts@3.2.0/contracts/utils/ReentrancyGuard.sol",
+
+    "interfaces/AggregatorV3Interface.sol",
     "interfaces/IOracle.sol",
-    "interfaces/IUniswapV2Pair.sol",
-    "contracts/UniswapOracle.sol",
+
+    "contracts/libraries/ABDKMath64x64.sol",
+    "contracts/libraries/UniERC20.sol",
+
+    "contracts/ChainlinkOracle.sol",
+    "contracts/OptionsToken.sol",
+    "contracts/OptionsMarketMaker.sol",
+
+    # "contracts/mocks/MockToken.sol",
+    # "contracts/CharmToken.sol",
+    # "interfaces/IUniswapV2Pair.sol",
+    # "contracts/UniswapOracle.sol",
 ]
 
 PREFIX = """
