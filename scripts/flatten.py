@@ -11,17 +11,13 @@ PATHS = [
     "~/.brownie/packages/OpenZeppelin/openzeppelin-contracts@3.2.0/contracts/token/ERC20/SafeERC20.sol",
     "~/.brownie/packages/OpenZeppelin/openzeppelin-contracts@3.2.0/contracts/utils/Address.sol",
     "~/.brownie/packages/OpenZeppelin/openzeppelin-contracts@3.2.0/contracts/utils/ReentrancyGuard.sol",
-
     "interfaces/AggregatorV3Interface.sol",
     "interfaces/IOracle.sol",
-
     "contracts/libraries/ABDKMath64x64.sol",
     "contracts/libraries/UniERC20.sol",
-
     "contracts/ChainlinkOracle.sol",
     "contracts/OptionsToken.sol",
     "contracts/OptionsMarketMaker.sol",
-
     # "contracts/mocks/MockToken.sol",
     # "contracts/CharmToken.sol",
     # "interfaces/IUniswapV2Pair.sol",
