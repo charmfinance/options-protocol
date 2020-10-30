@@ -12,7 +12,7 @@ from brownie import (
 # deployment parameters
 ACCOUNT = "charm"
 BASE_TOKEN = "ETH"
-EXPIRY_DATE = "30 Oct 2020"
+EXPIRY_DATE = "13 Nov 2020"
 STRIKE_PRICES = [400]
 LIQUIDITY_PARAM = 0.05
 
@@ -92,8 +92,7 @@ def main():
 
     mms = []
     for strike_price in STRIKE_PRICES:
-        # for is_put in [False, True]:
-        for is_put in [False]:
+        for is_put in [False, True]:
             mm = deploy_mm(deployer, strike_price, is_put)
             mms.append(mm)
             # deploy_seed_rewards(deployer, mm)
