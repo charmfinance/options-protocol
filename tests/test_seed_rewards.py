@@ -36,6 +36,7 @@ def test_seed_rewards(
         100 * SCALE,  # strikePrice = 100 usd
         ALPHA,  # alpha = 0.1 / 2 / log 2
         EXPIRY_TIME,
+        18,
         "long name",
         "long symbol",
         "short name",
@@ -52,8 +53,8 @@ def test_seed_rewards(
         deployer,
         deployer,
         rewards_token,
-        10 * DAYS,
     )
+    pool.setRewardsDuration(10 * DAYS)
 
     rewards_token.mint(deployer, 1000 * SCALE, {"from": deployer})
     rewards_token.transfer(pool, 1000 * SCALE, {"from": deployer})
@@ -151,6 +152,7 @@ def test_seed_rewards_for_put_mm(
         100 * SCALE,  # strikePrice = 100 usd
         ALPHA,  # alpha = 0.1 / 2 / log 2
         EXPIRY_TIME,
+        18,
         "long name",
         "long symbol",
         "short name",
@@ -167,8 +169,8 @@ def test_seed_rewards_for_put_mm(
         deployer,
         deployer,
         rewards_token,
-        10 * DAYS,
     )
+    pool.setRewardsDuration(10 * DAYS)
 
     rewards_token.mint(deployer, 1000 * SCALE, {"from": deployer})
     rewards_token.transfer(pool, 1000 * SCALE, {"from": deployer})
@@ -262,6 +264,7 @@ def test_seed_rewards_with_eth(
         100 * SCALE,  # strikePrice = 100 usd
         ALPHA,  # alpha = 0.1 / 2 / log 2
         EXPIRY_TIME,
+        18,
         "long name",
         "long symbol",
         "short name",
@@ -278,8 +281,8 @@ def test_seed_rewards_with_eth(
         deployer,
         deployer,
         rewards_token,
-        10 * DAYS,
     )
+    pool.setRewardsDuration(10 * DAYS)
 
     rewards_token.mint(deployer, 1000 * SCALE, {"from": deployer})
     rewards_token.transfer(pool, 1000 * SCALE, {"from": deployer})

@@ -19,8 +19,8 @@ def test_staking_rewards(StakingRewards, MockToken, fast_forward, accounts):
         deployer,
         rewards_token,
         staking_token,
-        10 * DAYS,
     )
+    sr.setRewardsDuration(10 * DAYS)
 
     rewards_token.mint(deployer, 1000 * SCALE, {"from": deployer})
     for u in [user, user2]:
