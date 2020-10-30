@@ -20,8 +20,13 @@ contract OptionsToken is ERC20 {
 
     address public marketMaker;
 
-    constructor(string memory name, string memory symbol) public ERC20(name, symbol) {
+    constructor(
+        string memory name,
+        string memory symbol,
+        uint8 decimals
+    ) public ERC20(name, symbol) {
         marketMaker = msg.sender;
+        _setupDecimals(decimals);
     }
 
     function mint(address account, uint256 amount) public {

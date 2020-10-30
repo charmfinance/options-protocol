@@ -5,9 +5,10 @@ def test_option_token(OptionsToken, accounts):
     owner = accounts[0]
     user = accounts[1]
 
-    token = OptionsToken.deploy("NAME", "SYMBOL", {"from": owner})
+    token = OptionsToken.deploy("NAME", "SYMBOL", 12, {"from": owner})
     assert token.name() == "NAME"
     assert token.symbol() == "SYMBOL"
+    assert token.decimals() == 12
     assert token.totalSupply() == 0
     assert token.marketMaker() == owner
 

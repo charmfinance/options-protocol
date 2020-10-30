@@ -57,6 +57,7 @@ def mm(OptionsMarketMaker, base_token, oracle, deployer, user, user2, user3):
         100 * SCALE,  # strikePrice = 100 usd
         ALPHA,  # alpha = 0.1 / 2 / log 2
         EXPIRY_TIME,
+        18,
         "long name",
         "long symbol",
         "short name",
@@ -82,6 +83,7 @@ def ethmm(OptionsMarketMaker, oracle, deployer):
         100 * SCALE,  # strikePrice = 100 usd
         ALPHA,  # alpha = 0.1 / 2 / log 2
         EXPIRY_TIME,
+        18,
         "long name",
         "long symbol",
         "short name",
@@ -99,6 +101,7 @@ def putmm(OptionsMarketMaker, usd_token, oracle, deployer, user, user2, user3):
         100 * SCALE,  # strikePrice = 100 usd
         ALPHA,  # alpha = 0.1 / 2 / log 2
         EXPIRY_TIME,
+        18,
         "long name",
         "long symbol",
         "short name",
@@ -128,8 +131,10 @@ def test_constructor(mm, long_token, short_token, base_token, oracle, deployer):
 
     assert long_token.name() == "long name"
     assert long_token.symbol() == "long symbol"
+    assert long_token.decimals() == 18
     assert short_token.name() == "short name"
     assert short_token.symbol() == "short symbol"
+    assert short_token.decimals() == 18
 
     assert mm.baseToken() == base_token
     assert mm.oracle() == oracle
@@ -788,3 +793,24 @@ def test_pause_unpause(mm, deployer, user, long_token):
         mm.unpause({"from": user})
     mm.unpause({"from": deployer})
     mm.buy(1 * SCALE, 0, 1000 * SCALE, {"from": user})
+
+
+def test_decimals(OptionsMarketMaker, OptionsToken, base_token, oracle, deployer):
+    mm = deployer.deploy(
+        OptionsMarketMaker,
+        base_token,
+        oracle,
+        CALL,
+        100 * SCALE,  # strikePrice = 100 usd
+        ALPHA,  # alpha = 0.1 / 2 / log 2
+        EXPIRY_TIME,
+        12,
+        "long name",
+        "long symbol",
+        "short name",
+        "short symbol",
+    )
+    long_token = OptionsToken.at(mm.longToken())
+    short_token = OptionsToken.at(mm.shortToken())
+    assert long_token.decimals() == 12
+    assert short_token.decimals() == 12
