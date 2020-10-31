@@ -13,7 +13,8 @@ from brownie import (
 ACCOUNT = "charm"
 BASE_TOKEN = "ETH"
 EXPIRY_DATE = "13 Nov 2020"
-STRIKE_PRICES = [400]
+EXPIRY_DATE = "31 Oct 2020"
+STRIKE_PRICES = [350]
 LIQUIDITY_PARAM = 0.05
 
 
@@ -21,9 +22,9 @@ LIQUIDITY_PARAM = 0.05
 SCALE = 10 ** 18
 EXPIRY_TIME = "16:00"
 QUOTE_TOKEN = "USDC"
+
 # REWARDS_DURATION = 7 * 24 * 60 * 60  # 7 days
 # CHARM_TOKEN_ADDRESS = "0x390b4643276bd0a908ea70e3b7a385f7ab0ce06c"
-
 
 DEPLOYED_ORACLES = {
     "BTC/USDC": "0xe3F5abfC874b6B5A3416b0A01c3913eE11B8A02C",
@@ -58,9 +59,12 @@ def deploy_mm(deployer, strike_price, is_put):
         long_symbol = f"{BASE_TOKEN} {expiry_code} {strike_price} C"
         short_symbol = f"{BASE_TOKEN} {expiry_code} {strike_price} CV"
 
+    base_token = TOKEN_ADDRESSES[QUOTE_TOKEN if is_put else BASE_TOKEN]
+    oracle = DEPLOYED_ORACLES[BASE_TOKEN + "/" + QUOTE_TOKEN]
+
     return OptionsMarketMaker.deploy(
-        TOKEN_ADDRESSES[QUOTE_TOKEN if is_put else BASE_TOKEN],
-        DEPLOYED_ORACLES[BASE_TOKEN + "/" + QUOTE_TOKEN],
+        base_token,
+        oracle,
         is_put,
         strike_wei,
         alpha_wei,
