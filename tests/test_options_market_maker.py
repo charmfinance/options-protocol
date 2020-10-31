@@ -57,7 +57,6 @@ def mm(OptionsMarketMaker, base_token, oracle, deployer, user, user2, user3):
         100 * SCALE,  # strikePrice = 100 usd
         ALPHA,  # alpha = 0.1 / 2 / log 2
         EXPIRY_TIME,
-        18,
         "long name",
         "long symbol",
         "short name",
@@ -83,7 +82,6 @@ def ethmm(OptionsMarketMaker, oracle, deployer):
         100 * SCALE,  # strikePrice = 100 usd
         ALPHA,  # alpha = 0.1 / 2 / log 2
         EXPIRY_TIME,
-        18,
         "long name",
         "long symbol",
         "short name",
@@ -101,7 +99,6 @@ def putmm(OptionsMarketMaker, usd_token, oracle, deployer, user, user2, user3):
         100 * SCALE,  # strikePrice = 100 usd
         ALPHA,  # alpha = 0.1 / 2 / log 2
         EXPIRY_TIME,
-        18,
         "long name",
         "long symbol",
         "short name",
@@ -795,16 +792,17 @@ def test_pause_unpause(mm, deployer, user, long_token):
     mm.buy(1 * SCALE, 0, 1000 * SCALE, {"from": user})
 
 
-def test_decimals(OptionsMarketMaker, OptionsToken, base_token, oracle, deployer):
+def test_decimals(OptionsMarketMaker, OptionsToken, MockToken, oracle, deployer):
+    base_token12 = deployer.deploy(MockToken)
+    base_token12.setDecimals(12)
     mm = deployer.deploy(
         OptionsMarketMaker,
-        base_token,
+        base_token12,
         oracle,
         CALL,
         100 * SCALE,  # strikePrice = 100 usd
         ALPHA,  # alpha = 0.1 / 2 / log 2
         EXPIRY_TIME,
-        12,
         "long name",
         "long symbol",
         "short name",

@@ -47,6 +47,7 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable {
     uint256 public normalizedStrikePrice;
     uint256 public alpha;
     uint256 public expiryTime;
+    uint8 public decimals;
 
     bool public isPaused;
     bool public isSettled;
@@ -76,7 +77,6 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable {
      * @param _strikePrice      Strike price expressed in wei
      * @param _alpha            Liquidity parameter for cost function expressed in wei
      * @param _expiryTime       Expiration time as a unix timestamp
-     * @param decimals          Decimals for options tokens
      * @param longName          Long token name
      * @param longSymbol        Long token symbol
      * @param shortName         Short token name
@@ -89,7 +89,6 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable {
         uint256 _strikePrice,
         uint256 _alpha,
         uint256 _expiryTime,
-        uint8 decimals,
         string memory longName,
         string memory longSymbol,
         string memory shortName,
@@ -98,17 +97,17 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable {
         require(_strikePrice > 0, "Strike price must be > 0");
         require(_alpha > 0, "Alpha must be > 0");
 
-        longToken = new OptionsToken(longName, longSymbol, decimals);
-        shortToken = new OptionsToken(shortName, shortSymbol, decimals);
-
         baseToken = IERC20(_baseToken);
         oracle = IOracle(_oracle);
         isPutMarket = _isPutMarket;
         strikePrice = _strikePrice;
+        normalizedStrikePrice = invertIfPut(_strikePrice);
         alpha = _alpha;
         expiryTime = _expiryTime;
 
-        normalizedStrikePrice = invertIfPut(_strikePrice);
+        decimals = baseToken.isETH() ? 18 : ERC20(_baseToken).decimals();
+        longToken = new OptionsToken(longName, longSymbol, decimals);
+        shortToken = new OptionsToken(shortName, shortSymbol, decimals);
 
         require(!isExpired(), "Already expired");
     }

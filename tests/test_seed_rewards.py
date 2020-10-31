@@ -36,7 +36,6 @@ def test_seed_rewards(
         100 * SCALE,  # strikePrice = 100 usd
         ALPHA,  # alpha = 0.1 / 2 / log 2
         EXPIRY_TIME,
-        18,
         "long name",
         "long symbol",
         "short name",
@@ -152,7 +151,6 @@ def test_seed_rewards_for_put_mm(
         100 * SCALE,  # strikePrice = 100 usd
         ALPHA,  # alpha = 0.1 / 2 / log 2
         EXPIRY_TIME,
-        18,
         "long name",
         "long symbol",
         "short name",
@@ -264,7 +262,6 @@ def test_seed_rewards_with_eth(
         100 * SCALE,  # strikePrice = 100 usd
         ALPHA,  # alpha = 0.1 / 2 / log 2
         EXPIRY_TIME,
-        18,
         "long name",
         "long symbol",
         "short name",
