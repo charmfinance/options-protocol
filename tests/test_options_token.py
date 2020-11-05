@@ -1,11 +1,13 @@
 from brownie import reverts
 
 
-def test_option_token(OptionsToken, accounts):
-    owner = accounts[0]
+def test_option_token(OptionsMarketMaker, OptionsToken, accounts):
+    deployer = accounts[0]
     user = accounts[1]
+    owner = accounts[2]
 
-    token = OptionsToken.deploy("NAME", "SYMBOL", 12, {"from": owner})
+    token = OptionsToken.deploy({"from": deployer})
+    token.initialize(owner, "NAME", "SYMBOL", 12, {"from": deployer})
     assert token.name() == "NAME"
     assert token.symbol() == "SYMBOL"
     assert token.decimals() == 12
@@ -14,6 +16,8 @@ def test_option_token(OptionsToken, accounts):
 
     with reverts("!marketMaker"):
         token.mint(user, 123, {"from": user})
+    with reverts("!marketMaker"):
+        token.mint(user, 123, {"from": deployer})
 
     token.mint(user, 123, {"from": owner})
     assert token.totalSupply() == 123

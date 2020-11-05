@@ -28,18 +28,21 @@ def test_seed_rewards(
     oracle = deployer.deploy(MockOracle)
     base_token = deployer.deploy(MockToken)
 
-    mm = deployer.deploy(
-        OptionsMarketMaker,
+    mm = deployer.deploy(OptionsMarketMaker)
+    longToken = deployer.deploy(OptionsToken)
+    shortToken = deployer.deploy(OptionsToken)
+
+    longToken.initialize(mm, "long name", "long symbol", 18)
+    shortToken.initialize(mm, "short name", "short symbol", 18)
+    mm.initialize(
         base_token,
         oracle,
         CALL,
         100 * SCALE,  # strikePrice = 100 usd
         ALPHA,  # alpha = 0.1 / 2 / log 2
         EXPIRY_TIME,
-        "long name",
-        "long symbol",
-        "short name",
-        "short symbol",
+        longToken,
+        shortToken,
     )
     long_token = OptionsToken.at(mm.longToken())
     short_token = OptionsToken.at(mm.shortToken())
@@ -143,18 +146,21 @@ def test_seed_rewards_for_put_mm(
     oracle = deployer.deploy(MockOracle)
     base_token = deployer.deploy(MockToken)
 
-    mm = deployer.deploy(
-        OptionsMarketMaker,
+    mm = deployer.deploy(OptionsMarketMaker)
+    longToken = deployer.deploy(OptionsToken)
+    shortToken = deployer.deploy(OptionsToken)
+
+    longToken.initialize(mm, "long name", "long symbol", 18)
+    shortToken.initialize(mm, "short name", "short symbol", 18)
+    mm.initialize(
         base_token,
         oracle,
         PUT,
         100 * SCALE,  # strikePrice = 100 usd
         ALPHA,  # alpha = 0.1 / 2 / log 2
         EXPIRY_TIME,
-        "long name",
-        "long symbol",
-        "short name",
-        "short symbol",
+        longToken,
+        shortToken,
     )
     long_token = OptionsToken.at(mm.longToken())
     short_token = OptionsToken.at(mm.shortToken())
@@ -254,18 +260,21 @@ def test_seed_rewards_with_eth(
     base_token = deployer.deploy(MockToken)
 
     zero_address = "0x0000000000000000000000000000000000000000"
-    mm = deployer.deploy(
-        OptionsMarketMaker,
+    mm = deployer.deploy(OptionsMarketMaker)
+    longToken = deployer.deploy(OptionsToken)
+    shortToken = deployer.deploy(OptionsToken)
+
+    longToken.initialize(mm, "long name", "long symbol", 18)
+    shortToken.initialize(mm, "short name", "short symbol", 18)
+    mm.initialize(
         zero_address,
         oracle,
         CALL,
         100 * SCALE,  # strikePrice = 100 usd
         ALPHA,  # alpha = 0.1 / 2 / log 2
         EXPIRY_TIME,
-        "long name",
-        "long symbol",
-        "short name",
-        "short symbol",
+        longToken,
+        shortToken,
     )
     long_token = OptionsToken.at(mm.longToken())
     short_token = OptionsToken.at(mm.shortToken())

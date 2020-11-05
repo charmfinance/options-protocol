@@ -2,21 +2,20 @@
 
 pragma solidity ^0.6.12;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/math/Math.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
-import "@openzeppelin/contracts/utils/Address.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-import "../interfaces/IOracle.sol";
 import "./libraries/ABDKMath64x64.sol";
 import "./libraries/UniERC20.sol";
+import "./libraries/openzeppelin/ERC20UpgradeSafe.sol";
+import "./libraries/openzeppelin/OwnableUpgradeSafe.sol";
+import "./libraries/openzeppelin/ReentrancyGuardUpgradeSafe.sol";
+import "../interfaces/IOracle.sol";
 import "./OptionsToken.sol";
 
-contract OptionsMarketMaker is ReentrancyGuard, Ownable {
+contract OptionsMarketMaker is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     using Address for address;
     using SafeERC20 for IERC20;
     using UniERC20 for IERC20;
@@ -38,16 +37,15 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable {
 
     uint256 public constant SCALE = 1e18;
 
-    IERC20 public baseToken;
-    IOracle public oracle;
     OptionsToken public longToken;
     OptionsToken public shortToken;
+    IERC20 public baseToken;
+    IOracle public oracle;
     bool public isPutMarket;
     uint256 public strikePrice;
     uint256 public normalizedStrikePrice;
     uint256 public alpha;
     uint256 public expiryTime;
-    uint8 public decimals;
 
     bool public isPaused;
     bool public isSettled;
@@ -77,26 +75,25 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable {
      * @param _strikePrice      Strike price expressed in wei
      * @param _alpha            Liquidity parameter for cost function expressed in wei
      * @param _expiryTime       Expiration time as a unix timestamp
-     * @param longName          Long token name
-     * @param longSymbol        Long token symbol
-     * @param shortName         Short token name
-     * @param shortSymbol       Short token symbol
      */
-    constructor(
+    function initialize(
         address _baseToken,
         address _oracle,
         bool _isPutMarket,
         uint256 _strikePrice,
         uint256 _alpha,
         uint256 _expiryTime,
-        string memory longName,
-        string memory longSymbol,
-        string memory shortName,
-        string memory shortSymbol
-    ) public {
+        address _longToken,
+        address _shortToken
+    ) public initializer {
+        __ReentrancyGuard_init();
+        __Ownable_init();
+
         require(_strikePrice > 0, "Strike price must be > 0");
         require(_alpha > 0, "Alpha must be > 0");
 
+        longToken = OptionsToken(_longToken);
+        shortToken = OptionsToken(_shortToken);
         baseToken = IERC20(_baseToken);
         oracle = IOracle(_oracle);
         isPutMarket = _isPutMarket;
@@ -104,10 +101,6 @@ contract OptionsMarketMaker is ReentrancyGuard, Ownable {
         normalizedStrikePrice = invertIfPut(_strikePrice);
         alpha = _alpha;
         expiryTime = _expiryTime;
-
-        decimals = baseToken.isETH() ? 18 : ERC20(_baseToken).decimals();
-        longToken = new OptionsToken(longName, longSymbol, decimals);
-        shortToken = new OptionsToken(shortName, shortSymbol, decimals);
 
         require(!isExpired(), "Already expired");
     }

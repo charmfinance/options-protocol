@@ -48,19 +48,24 @@ def oracle(deployer, MockOracle):
 
 
 @pytest.fixture
-def mm(OptionsMarketMaker, base_token, oracle, deployer, user, user2, user3):
-    mm = deployer.deploy(
-        OptionsMarketMaker,
+def mm(
+    OptionsMarketMaker, OptionsToken, base_token, oracle, deployer, user, user2, user3
+):
+    mm = deployer.deploy(OptionsMarketMaker)
+    longToken = deployer.deploy(OptionsToken)
+    shortToken = deployer.deploy(OptionsToken)
+
+    longToken.initialize(mm, "long name", "long symbol", 18)
+    shortToken.initialize(mm, "short name", "short symbol", 18)
+    mm.initialize(
         base_token,
         oracle,
         CALL,
         100 * SCALE,  # strikePrice = 100 usd
         ALPHA,  # alpha = 0.1 / 2 / log 2
         EXPIRY_TIME,
-        "long name",
-        "long symbol",
-        "short name",
-        "short symbol",
+        longToken,
+        shortToken,
     )
 
     # mint 100 tokens to all users
@@ -72,37 +77,46 @@ def mm(OptionsMarketMaker, base_token, oracle, deployer, user, user2, user3):
 
 
 @pytest.fixture
-def ethmm(OptionsMarketMaker, oracle, deployer):
+def ethmm(OptionsMarketMaker, OptionsToken, oracle, deployer):
     zero_address = "0x0000000000000000000000000000000000000000"
-    return deployer.deploy(
-        OptionsMarketMaker,
+    mm = deployer.deploy(OptionsMarketMaker)
+    longToken = deployer.deploy(OptionsToken)
+    shortToken = deployer.deploy(OptionsToken)
+
+    longToken.initialize(mm, "long name", "long symbol", 18)
+    shortToken.initialize(mm, "short name", "short symbol", 18)
+    mm.initialize(
         zero_address,  # eth
         oracle,
         CALL,
         100 * SCALE,  # strikePrice = 100 usd
         ALPHA,  # alpha = 0.1 / 2 / log 2
         EXPIRY_TIME,
-        "long name",
-        "long symbol",
-        "short name",
-        "short symbol",
+        longToken,
+        shortToken,
     )
+    return mm
 
 
 @pytest.fixture
-def putmm(OptionsMarketMaker, usd_token, oracle, deployer, user, user2, user3):
-    mm = deployer.deploy(
-        OptionsMarketMaker,
+def putmm(
+    OptionsMarketMaker, OptionsToken, usd_token, oracle, deployer, user, user2, user3
+):
+    mm = deployer.deploy(OptionsMarketMaker)
+    longToken = deployer.deploy(OptionsToken)
+    shortToken = deployer.deploy(OptionsToken)
+
+    longToken.initialize(mm, "long name", "long symbol", 18)
+    shortToken.initialize(mm, "short name", "short symbol", 18)
+    mm.initialize(
         usd_token,
         oracle,
         PUT,
         100 * SCALE,  # strikePrice = 100 usd
         ALPHA,  # alpha = 0.1 / 2 / log 2
         EXPIRY_TIME,
-        "long name",
-        "long symbol",
-        "short name",
-        "short symbol",
+        longToken,
+        shortToken,
     )
 
     # mint 10000 tokens to all users
@@ -446,7 +460,7 @@ def test_calc_lslmsr_cost(mm):
 def test_settle(mm, oracle, user, fast_forward):
     oracle.setPrice(123 * SCALE)
     with reverts("Cannot be called before expiry"):
-        mm.settle()
+        mm.settle({"from": user})
 
     # can only call settle() after expiry time and can only call once
     fast_forward(EXPIRY_TIME)
@@ -461,7 +475,7 @@ def test_settle(mm, oracle, user, fast_forward):
     }
 
     with reverts("Already settled"):
-        mm.settle()
+        mm.settle({"from": user})
 
 
 def test_redeem_in_the_money(
@@ -485,7 +499,7 @@ def test_redeem_in_the_money(
     with reverts("Cannot be called before settlement"):
         mm.redeem({"from": user})
 
-    mm.settle()
+    mm.settle({"from": user})
     tx1 = mm.redeem({"from": user})
     tx2 = mm.redeem({"from": user2})
 
@@ -550,7 +564,7 @@ def test_redeem_out_of_the_money(
     oracle.setPrice(99 * SCALE)
 
     fast_forward(EXPIRY_TIME)
-    mm.settle()
+    mm.settle({"from": user})
     tx1 = mm.redeem({"from": user})
     tx2 = mm.redeem({"from": user2})
 
@@ -585,7 +599,7 @@ def test_redeem_eth(OptionsToken, ethmm, oracle, user, fast_forward):
     ethmm.buy(10 * SCALE, 0, 1000 * SCALE, {"from": user, "value": 12 * SCALE})
     oracle.setPrice(125 * SCALE)
     fast_forward(EXPIRY_TIME)
-    ethmm.settle()
+    ethmm.settle({"from": user})
 
     bal = user.balance()
     tx = ethmm.redeem({"from": user})
@@ -698,7 +712,7 @@ def test_redeem_in_the_money_put(putmm, usd_token, oracle, user, user2, fast_for
     with reverts("Cannot be called before settlement"):
         putmm.redeem({"from": user})
 
-    putmm.settle()
+    putmm.settle({"from": user})
     assert putmm.settlementPrice() == 80 * SCALE
     assert putmm.normalizedSettlementPrice() == SCALE // 80
 
@@ -766,10 +780,10 @@ def test_emergency_methods(MockOracle, mm, deployer, user, fast_forward):
     assert mm.expiryTime() == EXPIRY_TIME - 1
 
     fast_forward(EXPIRY_TIME)
-    mm.settle()
+    mm.settle({"from": user})
 
     with reverts("Already settled"):
-        mm.settle()
+        mm.settle({"from": user})
     with reverts("Ownable: caller is not the owner"):
         mm.forceSettle({"from": user})
 
@@ -790,25 +804,3 @@ def test_pause_unpause(mm, deployer, user, long_token):
         mm.unpause({"from": user})
     mm.unpause({"from": deployer})
     mm.buy(1 * SCALE, 0, 1000 * SCALE, {"from": user})
-
-
-def test_decimals(OptionsMarketMaker, OptionsToken, MockToken, oracle, deployer):
-    base_token12 = deployer.deploy(MockToken)
-    base_token12.setDecimals(12)
-    mm = deployer.deploy(
-        OptionsMarketMaker,
-        base_token12,
-        oracle,
-        CALL,
-        100 * SCALE,  # strikePrice = 100 usd
-        ALPHA,  # alpha = 0.1 / 2 / log 2
-        EXPIRY_TIME,
-        "long name",
-        "long symbol",
-        "short name",
-        "short symbol",
-    )
-    long_token = OptionsToken.at(mm.longToken())
-    short_token = OptionsToken.at(mm.shortToken())
-    assert long_token.decimals() == 12
-    assert short_token.decimals() == 12
