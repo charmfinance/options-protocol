@@ -9,20 +9,21 @@ from brownie import (
 
 # deployment parameters
 ACCOUNT = "deployer"
-PAIR = "BTC/USD"
+PAIR = "RINKEBY_ETH/USD"
 
 
+# addresses can be found here: https://docs.chain.link/docs/ethereum-addresses
 CHAINLINK_PAIRS = {
-    "KOVAN_ETH/USD": (
-        "0x9326BFA02ADD2366b30bacB125260Af641031331",
-        "0x0000000000000000000000000000000000000000",
-    ),
     "BTC/USD": (
         "0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c",
         "0x0000000000000000000000000000000000000000",
     ),
     "ETH/USD": (
         "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",
+        "0x0000000000000000000000000000000000000000",
+    ),
+    "RINKEBY_ETH/USD": (
+        "0x8A753747A1Fa494EC906cE90E9f37563A8AF630e",
         "0x0000000000000000000000000000000000000000",
     ),
 }

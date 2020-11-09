@@ -14,9 +14,10 @@ from brownie import (
 # deployment parameters
 ACCOUNT = "deployer"
 BASE_TOKEN = "ETH"
-EXPIRY_DATE = "13 Nov 2020"
-STRIKE_PRICES = [350]
+EXPIRY_DATE = "20 Nov 2020"
+STRIKE_PRICES = [400]
 LIQUIDITY_PARAM = 0.05
+NETWORK = "rinkeby"
 
 
 # constants
@@ -26,20 +27,31 @@ QUOTE_TOKEN = "USDC"
 
 
 DEPLOYED_ORACLES = {
-    "BTC/USDC": "0xe3F5abfC874b6B5A3416b0A01c3913eE11B8A02C",
-    "ETH/USDC": "0x4DA31B35fc13298A473aDF620844033B9F9342AD",
-    "KOVAN_ETH/USDC": "0xe3F5abfC874b6B5A3416b0A01c3913eE11B8A02C",
+    "mainnet": {
+        "BTC/USDC": "0xe3F5abfC874b6B5A3416b0A01c3913eE11B8A02C",
+        "ETH/USDC": "0x4DA31B35fc13298A473aDF620844033B9F9342AD",
+    },
+    "rinkeby": {
+        "ETH/USDC": "0xD014CDc41f9AF7A6456c920aD17fFf14F136640F",
+    }
 }
 
 TOKEN_ADDRESSES = {
-    "WBTC": "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
-    "ETH": "0x0000000000000000000000000000000000000000",
-    "USDC": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-    "KOVAN_ETH": "0x0000000000000000000000000000000000000000",
+    "mainnet": {
+        "WBTC": "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+        "ETH": "0x0000000000000000000000000000000000000000",
+        "USDC": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    },
+    "rinkeby": {
+        "ETH": "0x0000000000000000000000000000000000000000",
+        "USDC": "0xf575E3EdeC1d241B9F34653BFBb7586aD3267896",
+    }
 }
 
-# kovan
-FACTORY = "0x4Bf573458cE753D6626f2c4165E995D22193bc13"
+FACTORY = {
+    "mainnet": "",
+    "rinkeby": "0x27723C23B6CEE082751690602035De87DB5431Be",
+}
 
 
 def create_market(deployer, strike_price, is_put):
@@ -61,11 +73,11 @@ def create_market(deployer, strike_price, is_put):
         long_symbol = f"{BASE_TOKEN} {expiry_code} {strike_price} C"
         short_symbol = f"{BASE_TOKEN} {expiry_code} {strike_price} CV"
 
-    base_token = TOKEN_ADDRESSES[QUOTE_TOKEN if is_put else BASE_TOKEN]
-    oracle = DEPLOYED_ORACLES[BASE_TOKEN + "/" + QUOTE_TOKEN]
+    base_token = TOKEN_ADDRESSES[NETWORK][QUOTE_TOKEN if is_put else BASE_TOKEN]
+    oracle = DEPLOYED_ORACLES[NETWORK][BASE_TOKEN + "/" + QUOTE_TOKEN]
 
     # brownie doesn't let us use OptionsFactory.at
-    factory = Contract.from_explorer(FACTORY)
+    factory = Contract.from_explorer(FACTORY[NETWORK])
     factory.createMarket(
         base_token,
         oracle,
@@ -92,8 +104,7 @@ def main():
 
     markets = []
     for strike_price in STRIKE_PRICES:
-        # for is_put in [False, True]:
-        for is_put in [False]:
+        for is_put in [False, True]:
             market = create_market(deployer, strike_price, is_put)
             markets.append(market)
             # deploy_seed_rewards(deployer, market)
