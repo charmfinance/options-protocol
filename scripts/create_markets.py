@@ -12,7 +12,7 @@ from brownie import (
 
 
 # deployment parameters
-ACCOUNT = "charm"
+ACCOUNT = "deployer"
 BASE_TOKEN = "ETH"
 EXPIRY_DATE = "13 Nov 2020"
 STRIKE_PRICES = [350]
@@ -87,7 +87,7 @@ def create_market(deployer, strike_price, is_put):
 
 
 def main():
-    deployer = accounts.load("deployer")
+    deployer = accounts.load(ACCOUNT)
     balance = deployer.balance()
 
     markets = []

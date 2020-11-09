@@ -1,7 +1,7 @@
 from brownie import accounts, CharmToken
 
 
-ACCOUNT = "charm"
+ACCOUNT = "deployer"
 
 
 def main():

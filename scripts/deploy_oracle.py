@@ -8,7 +8,7 @@ from brownie import (
 
 
 # deployment parameters
-ACCOUNT = "charm"
+ACCOUNT = "deployer"
 PAIR = "BTC/USD"
 
 
@@ -29,7 +29,7 @@ CHAINLINK_PAIRS = {
 
 
 def main():
-    deployer = accounts.load("charm")
+    deployer = accounts.load(ACCOUNT)
     balance = deployer.balance()
 
     price_feed1, price_feed2 = CHAINLINK_PAIRS[PAIR]
