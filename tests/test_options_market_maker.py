@@ -422,15 +422,24 @@ def test_calc_lslmsr_cost(mm):
 
     # >> python calc_lslmsr_cost.py 1 1 0.1
     # 1100000000000000128
-    assert mm.calcLsLmsrCost(1 * SCALE, 1 * SCALE, alpha) == 1100000000000000007801447287920083588
+    assert (
+        mm.calcLsLmsrCost(1 * SCALE, 1 * SCALE, alpha)
+        == 1100000000000000007801447287920083588
+    )
 
     # >> python calc_lslmsr_cost.py 5 5 0.1
     # 5500000000000000000
-    assert mm.calcLsLmsrCost(5 * SCALE, 5 * SCALE, alpha) == 5500000000000000039007236439600417943
+    assert (
+        mm.calcLsLmsrCost(5 * SCALE, 5 * SCALE, alpha)
+        == 5500000000000000039007236439600417943
+    )
 
     # >> python calc_lslmsr_cost.py 3 11 0.1
     # 11000366311880366080
-    assert mm.calcLsLmsrCost(3 * SCALE, 11 * SCALE, alpha) == 11000366311880366618741971338433052667
+    assert (
+        mm.calcLsLmsrCost(3 * SCALE, 11 * SCALE, alpha)
+        == 11000366311880366618741971338433052667
+    )
 
     # >> python calc_lslmsr_cost.py 1000000000000 5 0.1
     # 1000000068793027574674002804736
@@ -444,7 +453,10 @@ def test_calc_lslmsr_cost(mm):
 
     # >> python calc_lslmsr_cost.py 1 1 0.000000000001
     # 1000000000001000064
-    assert mm.calcLsLmsrCost(1 * SCALE, 1 * SCALE, alpha) == 1000000000000999999278510749738162706
+    assert (
+        mm.calcLsLmsrCost(1 * SCALE, 1 * SCALE, alpha)
+        == 1000000000000999999278510749738162706
+    )
 
     # max commission = 10**12
     alpha = int(SCALE * 10 ** 12 // 2 // log(2))

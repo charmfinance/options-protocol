@@ -33,7 +33,7 @@ DEPLOYED_ORACLES = {
     },
     "rinkeby": {
         "ETH/USDC": "0xD014CDc41f9AF7A6456c920aD17fFf14F136640F",
-    }
+    },
 }
 
 TOKEN_ADDRESSES = {
@@ -45,7 +45,7 @@ TOKEN_ADDRESSES = {
     "rinkeby": {
         "ETH": "0x0000000000000000000000000000000000000000",
         "USDC": "0x52f81a76DE1858873B7e40aC9424AC5Dd188D215",
-    }
+    },
 }
 
 FACTORY = {
