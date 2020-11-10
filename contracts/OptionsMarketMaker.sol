@@ -36,6 +36,7 @@ contract OptionsMarketMaker is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     event Redeemed(address indexed account, uint256 longSharesIn, uint256 shortSharesIn, uint256 amountOut);
 
     uint256 public constant SCALE = 1e18;
+    uint256 public constant SCALE_SQ = 1e36;
 
     OptionsToken public longToken;
     OptionsToken public shortToken;
@@ -252,7 +253,7 @@ contract OptionsMarketMaker is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
 
     // invert the strike price and settlement price for put options
     function invertIfPut(uint256 x) public view returns (uint256) {
-        return isPutMarket ? SCALE.mul(SCALE).div(x) : x;
+        return isPutMarket ? SCALE_SQ.div(x) : x;
     }
 
     /**
@@ -265,7 +266,7 @@ contract OptionsMarketMaker is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         uint256 lsLmsrCost = calcLsLmsrCost(longToken.totalSupply(), shortToken.totalSupply(), alpha);
 
         // multiply by the strike price for puts
-        return isPutMarket ? lsLmsrCost.mul(strikePrice).div(SCALE) : lsLmsrCost;
+        return isPutMarket ? lsLmsrCost.mul(strikePrice).div(SCALE_SQ) : lsLmsrCost.div(SCALE);
     }
 
     /**
@@ -335,6 +336,8 @@ contract OptionsMarketMaker is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
      * calculating exponentials
      *
      *   C(q1, q2) = b * log(1 + exp(abs(q1 - q2) / b)) + max(q1, q2)
+     *
+     * Answer is multiplied by `SCALE`
      */
     function calcLsLmsrCost(
         uint256 q1,
@@ -365,7 +368,7 @@ contract OptionsMarketMaker is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         int128 log = ABDKMath64x64.ln(ABDKMath64x64.add(exp, 1 << 64));
 
         // b * log(1 + exp(abs(q1 - q2) / b)) + max(q1, q2)
-        return ABDKMath64x64.mulu(log, b).div(SCALE).add(max);
+        return ABDKMath64x64.mulu(log, b).add(max.mul(SCALE));
     }
 
     // emergency use only. to be removed in future versions

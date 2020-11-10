@@ -416,27 +416,27 @@ def test_calc_lslmsr_cost(mm):
     alpha = int(SCALE // 10 // 2 // log(2))
 
     assert mm.calcLsLmsrCost(0, 0, alpha) == 0
-    assert mm.calcLsLmsrCost(1, 0, alpha) == 1
-    assert mm.calcLsLmsrCost(0, 1, alpha) == 1
-    assert mm.calcLsLmsrCost(1, 1, alpha) == 1
+    assert mm.calcLsLmsrCost(1, 0, alpha) == 1000000068793027542
+    assert mm.calcLsLmsrCost(0, 1, alpha) == 1000000068793027542
+    assert mm.calcLsLmsrCost(1, 1, alpha) == 1100000000000000007
 
     # >> python calc_lslmsr_cost.py 1 1 0.1
     # 1100000000000000128
-    assert mm.calcLsLmsrCost(1 * SCALE, 1 * SCALE, alpha) == 1100000000000000007
+    assert mm.calcLsLmsrCost(1 * SCALE, 1 * SCALE, alpha) == 1100000000000000007801447287920083588
 
     # >> python calc_lslmsr_cost.py 5 5 0.1
     # 5500000000000000000
-    assert mm.calcLsLmsrCost(5 * SCALE, 5 * SCALE, alpha) == 5500000000000000039
+    assert mm.calcLsLmsrCost(5 * SCALE, 5 * SCALE, alpha) == 5500000000000000039007236439600417943
 
     # >> python calc_lslmsr_cost.py 3 11 0.1
     # 11000366311880366080
-    assert mm.calcLsLmsrCost(3 * SCALE, 11 * SCALE, alpha) == 11000366311880366618
+    assert mm.calcLsLmsrCost(3 * SCALE, 11 * SCALE, alpha) == 11000366311880366618741971338433052667
 
     # >> python calc_lslmsr_cost.py 1000000000000 5 0.1
     # 1000000068793027574674002804736
     assert (
         mm.calcLsLmsrCost(10 ** 12 * SCALE, 5 * SCALE, alpha)
-        == 1000000068793027551929301695942
+        == 1000000068793027551929301695942633118558265113489
     )
 
     # max commission = 10**-12
@@ -444,7 +444,7 @@ def test_calc_lslmsr_cost(mm):
 
     # >> python calc_lslmsr_cost.py 1 1 0.000000000001
     # 1000000000001000064
-    assert mm.calcLsLmsrCost(1 * SCALE, 1 * SCALE, alpha) == 1000000000000999999
+    assert mm.calcLsLmsrCost(1 * SCALE, 1 * SCALE, alpha) == 1000000000000999999278510749738162706
 
     # max commission = 10**12
     alpha = int(SCALE * 10 ** 12 // 2 // log(2))
@@ -453,7 +453,7 @@ def test_calc_lslmsr_cost(mm):
     # 1000000000000999959739389444096
     assert (
         mm.calcLsLmsrCost(1 * SCALE, 1 * SCALE, alpha)
-        == 1000000000001000136983480685343
+        == 1000000000001000136983480685343088851928710937500
     )
 
 
@@ -621,8 +621,8 @@ def test_put(OptionsToken, putmm, oracle, usd_token, user, fast_forward):
 
     # >> python calc_lslmsr_cost.py 100 0 0.1
     # 100000006879302762496
-    assert usd_token.balanceOf(putmm) == 100000006879302754200
-    assert tx.return_value == 100000006879302754200
+    assert usd_token.balanceOf(putmm) == 100000006879302754205
+    assert tx.return_value == 100000006879302754205
     assert usd_token.balanceOf(user) + usd_token.balanceOf(putmm) == 10000 * SCALE
     assert long_token.totalSupply() == 1 * SCALE
     assert short_token.totalSupply() == 0
@@ -631,7 +631,7 @@ def test_put(OptionsToken, putmm, oracle, usd_token, user, fast_forward):
         "isBuy": True,
         "longShares": 1 * SCALE,
         "shortShares": 0,
-        "cost": 100000006879302754200,
+        "cost": 100000006879302754205,
         "newLongSupply": 1 * SCALE,
         "newShortSupply": 0,
     }
@@ -641,8 +641,8 @@ def test_put(OptionsToken, putmm, oracle, usd_token, user, fast_forward):
 
     # >> python calc_lslmsr_cost.py 100 200 0.1
     # 200211968079890808832
-    assert usd_token.balanceOf(putmm) == 200211968079890787800
-    assert tx.return_value == 200211968079890787800 - 100000006879302754200
+    assert usd_token.balanceOf(putmm) == 200211968079890787869
+    assert tx.return_value == 200211968079890787869 - 100000006879302754205
     assert usd_token.balanceOf(user) + usd_token.balanceOf(putmm) == 10000 * SCALE
     assert long_token.totalSupply() == 1 * SCALE
     assert short_token.totalSupply() == 2 * SCALE
@@ -651,7 +651,7 @@ def test_put(OptionsToken, putmm, oracle, usd_token, user, fast_forward):
         "isBuy": True,
         "longShares": 0,
         "shortShares": 2 * SCALE,
-        "cost": 200211968079890787800 - 100000006879302754200,
+        "cost": 200211968079890787869 - 100000006879302754205,
         "newLongSupply": 1 * SCALE,
         "newShortSupply": 2 * SCALE,
     }
@@ -727,25 +727,25 @@ def test_redeem_in_the_money_put(putmm, usd_token, oracle, user, user2, fast_for
 
     # >>> 0.21584755073661324 * 5 + 0.863390202946453 * 5
     # 5.396188768415331
-    assert tx1.return_value == 539618876841533010392
+    assert tx1.return_value == 539618876841533010416
 
     # >>> 0.21584755073661324 * 5 + 0.863390202946453 * 10
     # 9.713139783147597
-    assert tx2.return_value == 971313978314759418708
+    assert tx2.return_value == 971313978314759418749
 
-    assert usd_token.balanceOf(user) - bal1 == 539618876841533010392
-    assert usd_token.balanceOf(user2) - bal2 == 971313978314759418708
+    assert usd_token.balanceOf(user) - bal1 == 539618876841533010416
+    assert usd_token.balanceOf(user2) - bal2 == 971313978314759418749
     assert tx1.events["Redeemed"] == {
         "account": user,
         "longSharesIn": 5 * SCALE,
         "shortSharesIn": 5 * SCALE,
-        "amountOut": 539618876841533010392,
+        "amountOut": 539618876841533010416,
     }
     assert tx2.events["Redeemed"] == {
         "account": user2,
         "longSharesIn": 5 * SCALE,
         "shortSharesIn": 10 * SCALE,
-        "amountOut": 971313978314759418708,
+        "amountOut": 971313978314759418749,
     }
 
     # can't call again
