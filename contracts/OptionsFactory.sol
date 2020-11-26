@@ -2,15 +2,17 @@
 
 pragma solidity ^0.6.12;
 
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 
 import "./libraries/CloneFactory.sol";
+import "./libraries/UniERC20.sol";
+import "./libraries/openzeppelin/ERC20UpgradeSafe.sol";
 import "./OptionsMarketMaker.sol";
+import "./OptionsSymbol.sol";
 
-contract OptionsFactory is CloneFactory {
+contract OptionsFactory is CloneFactory, OptionsSymbol {
     using Address for address;
     using SafeERC20 for IERC20;
     using UniERC20 for IERC20;
@@ -29,26 +31,28 @@ contract OptionsFactory is CloneFactory {
 
     function createMarket(
         address baseToken,
+        address quoteToken,
         address oracle,
         bool isPutMarket,
         uint256 strikePrice,
         uint256 alpha,
-        uint256 expiryTime,
-        string memory longName,
-        string memory longSymbol,
-        string memory shortName,
-        string memory shortSymbol
+        uint256 expiryTime
     ) external returns (address market) {
         market = createClone(marketLibrary);
         address longToken = createClone(optionsTokenLibrary);
         address shortToken = createClone(optionsTokenLibrary);
 
-        uint8 decimals = IERC20(baseToken).isETH() ? 18 : ERC20UpgradeSafe(baseToken).decimals();
-        OptionsToken(longToken).initialize(market, longName, longSymbol, decimals);
-        OptionsToken(shortToken).initialize(market, shortName, shortSymbol, decimals);
+        string memory baseSymbol = IERC20(baseToken).isETH() ? "ETH" : ERC20UpgradeSafe(baseToken).symbol();
+        string memory longSymbol = getSymbol(baseSymbol, strikePrice, expiryTime, isPutMarket, true);
+        string memory shortSymbol = getSymbol(baseSymbol, strikePrice, expiryTime, isPutMarket, false);
+
+        address token = isPutMarket ? quoteToken : baseToken;
+        uint8 decimals = IERC20(token).isETH() ? 18 : ERC20UpgradeSafe(token).decimals();
+        OptionsToken(longToken).initialize(market, longSymbol, longSymbol, decimals);
+        OptionsToken(shortToken).initialize(market, shortSymbol, shortSymbol, decimals);
 
         OptionsMarketMaker(market).initialize(
-            baseToken,
+            token,
             oracle,
             isPutMarket,
             strikePrice,

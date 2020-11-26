@@ -15,7 +15,7 @@ from brownie import (
 ACCOUNT = "deployer"
 BASE_TOKEN = "ETH"
 EXPIRY_DATE = "04 Dec 2020"
-STRIKE_PRICES = [500]
+STRIKE_PRICES = [550]
 LIQUIDITY_PARAM = 0.05
 NETWORK = "rinkeby"
 
@@ -50,7 +50,7 @@ TOKEN_ADDRESSES = {
 
 FACTORY = {
     "mainnet": "",
-    "rinkeby": "0x869C636deeA101f11a0A37e1f179329C1a2bAFCa",
+    "rinkeby": "0xA8d6D6623fc492eA9acbE39EE929E7205fE66687",
 }
 
 
@@ -65,30 +65,18 @@ def create_market(deployer, strike_price, is_put):
     humanized = expiry.humanize(arrow.utcnow())
     print(f"Expiry: {expiry.isoformat()} ({humanized})")
 
-    expiry_code = expiry.format("DDMMMYYYY").upper()
-    if is_put:
-        long_symbol = f"{BASE_TOKEN} {expiry_code} {strike_price} P"
-        short_symbol = f"{BASE_TOKEN} {expiry_code} {strike_price} SP"
-    else:
-        long_symbol = f"{BASE_TOKEN} {expiry_code} {strike_price} C"
-        short_symbol = f"{BASE_TOKEN} {expiry_code} {strike_price} CV"
-
-    base_token = TOKEN_ADDRESSES[NETWORK][QUOTE_TOKEN if is_put else BASE_TOKEN]
     oracle = DEPLOYED_ORACLES[NETWORK][BASE_TOKEN + "/" + QUOTE_TOKEN]
 
     # brownie doesn't let us use OptionsFactory.at
     factory = Contract.from_explorer(FACTORY[NETWORK])
     factory.createMarket(
-        base_token,
+        TOKEN_ADDRESSES[NETWORK][BASE_TOKEN],
+        TOKEN_ADDRESSES[NETWORK][QUOTE_TOKEN],
         oracle,
         is_put,
         strike_wei,
         alpha_wei,
         expiry.timestamp,
-        long_symbol,
-        long_symbol,
-        short_symbol,
-        short_symbol,
         {"from": deployer},
     )
 
