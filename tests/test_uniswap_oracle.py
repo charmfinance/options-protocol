@@ -13,7 +13,7 @@ TIME4 = 2610000000
 
 
 def test_oracle_base_token(
-    UniswapOracle, MockUniswapV2Pair, MockToken, CharmToken, accounts, fast_forward
+    UniswapOracle, MockUniswapV2Pair, MockToken, accounts, fast_forward
 ):
     deployer, user, user2 = accounts[:3]
     eth = deployer.deploy(MockToken)
@@ -21,7 +21,7 @@ def test_oracle_base_token(
     eth.setDecimals(18)
     usd.setDecimals(6)
 
-    charm = deployer.deploy(CharmToken)
+    charm = deployer.deploy(MockToken)
     pair = deployer.deploy(MockUniswapV2Pair, eth, usd)
 
     multiplier = 10 ** 12
@@ -62,7 +62,6 @@ def test_oracle_base_token(
     assert oracle.getPrice() == 400 * SCALE
 
     # send reward to oracle
-    charm.addMinter(deployer, {"from": deployer})
     charm.mint(oracle, 100 * SCALE, {"from": deployer})
     assert charm.balanceOf(oracle) == 100 * SCALE
     oracle.takeSnapshot({"from": user})
