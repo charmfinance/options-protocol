@@ -287,7 +287,7 @@ def test_initialize_errors(a, OptionMarket, MockToken, MockOracle, OptionsToken,
         )
 
 
-def test_buy_and_sell_calls(a, OptionMarket, MockToken, MockOracle, OptionsToken):
+def test_buy_and_sell_calls(a, OptionMarket, MockToken, MockOracle, OptionsToken, fast_forward):
     return # TODO remove
 
     # setup args
@@ -429,8 +429,23 @@ def test_buy_and_sell_calls(a, OptionMarket, MockToken, MockOracle, OptionsToken
     assert shortTokens[0].balanceOf(alice) == 0
     assert shortTokens[3].balanceOf(alice) == 0
 
+    # test large trade - buy 10^18 calls
+    tx = market.buy(CALL, 0, 10**18 * SCALE, 10**20 * SCALE, {"from": alice})
+    cost = lslmsr([10**18, 0, 0, 0, 0], 0.1) + 10**18 * PERCENT
+    assert approx(tx.return_value) == cost
+    assert approx(baseToken.balanceOf(alice)) == 10**20 * SCALE - cost
+    assert longTokens[0].balanceOf(alice) == 10**18 * SCALE
+
+    # cannot buy or sell after expiry
+    fast_forward(2000000000)
+    with reverts("Already expired"):
+        market.buy(CALL, 1, 1 * SCALE, 100 * SCALE, {"from": alice})
+    with reverts("Already expired"):
+        market.sell(COVER, 2, 1 * SCALE, 0, {"from": alice})
+
 
 def test_buy_and_sell_puts(a, OptionMarket, MockToken, MockOracle, OptionsToken):
+    return # TODO remove
 
     # setup args
     deployer, alice = a[:2]
@@ -504,6 +519,7 @@ def test_buy_and_sell_puts(a, OptionMarket, MockToken, MockOracle, OptionsToken)
 
 
 def test_buy_and_sell_with_eth(a, OptionMarket, MockToken, MockOracle, OptionsToken):
+    return # TODO remove
 
     # setup args
     deployer, alice = a[:2]
@@ -549,4 +565,69 @@ def test_buy_and_sell_with_eth(a, OptionMarket, MockToken, MockOracle, OptionsTo
     assert approx(alice.balance()) == 100 * SCALE - 4 * PERCENT
     assert longTokens[0].balanceOf(alice) == 0
 
+
+def test_balance_and_supply_cap(a, OptionMarket, MockToken, MockOracle, OptionsToken):
+    # return # TODO remove
+
+    # setup args
+    deployer, alice, bob = a[:3]
+    baseToken = deployer.deploy(MockToken)
+    oracle = deployer.deploy(MockOracle)
+    longTokens = [deployer.deploy(OptionsToken) for _ in range(4)]
+    shortTokens = [deployer.deploy(OptionsToken) for _ in range(4)]
+
+    # deploy and initialize
+    market = deployer.deploy(OptionMarket)
+    market.initialize(
+        baseToken,
+        oracle,
+        longTokens,
+        shortTokens,
+        [300 * SCALE, 400 * SCALE, 500 * SCALE, 600 * SCALE],
+        2000000000,  # expiry = 18 May 2033
+        10 * PERCENT,  # alpha = 0.1
+        False,  # call
+        1 * PERCENT,  # tradingFee = 1%
+        1000 * SCALE,
+        1500 * SCALE,
+    )
+    for token in longTokens + shortTokens:
+        token.initialize(market, "name", "symbol", 18)
+
+    # give users base tokens
+    baseToken.mint(alice, 10000 * SCALE, {"from": deployer})
+    baseToken.approve(market, 10000 * SCALE, {"from": alice})
+    baseToken.mint(bob, 10000 * SCALE, {"from": deployer})
+    baseToken.approve(market, 10000 * SCALE, {"from": bob})
+
+    # can't buy 1001 calls
+    with reverts("Exceeded balance cap"):
+        market.buy(CALL, 0, 1001 * SCALE, 2000 * SCALE, {"from": alice})
+
+    # but can buy 800
+    market.buy(CALL, 0, 800 * SCALE, 2000 * SCALE, {"from": alice})
+
+    # can't buy 201 calls
+    with reverts("Exceeded balance cap"):
+        market.buy(CALL, 0, 201 * SCALE, 2000 * SCALE, {"from": alice})
+
+    # but can buy 1000 of other options
+    market.buy(CALL, 3, 1000 * SCALE, 2000 * SCALE, {"from": alice})
+    market.buy(COVER, 1, 1000 * SCALE, 2000 * SCALE, {"from": alice})
+
+    # bob can't buy 701 calls but can buy 700
+    with reverts("Exceeded total supply cap"):
+        market.buy(CALL, 0, 701 * SCALE, 2000 * SCALE, {"from": bob})
+    market.buy(CALL, 0, 700 * SCALE, 2000 * SCALE, {"from": bob})
+
+    # bob can't buy 501 covers but can buy 500
+    with reverts("Exceeded total supply cap"):
+        market.buy(COVER, 1, 501 * SCALE, 2000 * SCALE, {"from": bob})
+    market.buy(COVER, 1, 500 * SCALE, 2000 * SCALE, {"from": bob})
+
+    # alice sells 100 then bob can buy 100 more
+    market.sell(COVER, 1, 100 * SCALE, 0, {"from": alice})
+    with reverts("Exceeded total supply cap"):
+        market.buy(COVER, 1, 101 * SCALE, 2000 * SCALE, {"from": bob})
+    market.buy(COVER, 1, 100 * SCALE, 2000 * SCALE, {"from": bob})
 
