@@ -39,8 +39,8 @@ def test_option_factory(
         quoteToken,
         oracle,
         [300 * SCALE, 400 * SCALE, 500 * SCALE],  # strikes
-        SCALE // 10,  # alpha
         2000000000,  # expiry
+        SCALE // 10,  # alpha
         isPut,
         SCALE // 100,  # trading fee
         1000 * SCALE,  # balance cap
