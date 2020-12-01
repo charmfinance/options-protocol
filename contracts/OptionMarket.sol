@@ -118,7 +118,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         uint256 strikeIndex,
         uint256 optionsOut,
         uint256 maxAmountIn
-    ) public payable nonReentrant returns (uint256 amountIn) {
+    ) external payable nonReentrant returns (uint256 amountIn) {
         require(!isExpired(), "Already expired");
         require(!isPaused, "This method has been paused");
         require(strikeIndex < numStrikes, "Index too large");
@@ -161,7 +161,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         uint256 strikeIndex,
         uint256 optionsIn,
         uint256 minAmountOut
-    ) public nonReentrant returns (uint256 amountOut) {
+    ) external nonReentrant returns (uint256 amountOut) {
         require(!isExpired(), "Already expired");
         require(!isPaused, "This method has been paused");
         require(strikeIndex < numStrikes, "Index too large");
@@ -216,7 +216,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         emit Settled(settlementPrice);
     }
 
-    function redeem() public nonReentrant returns (uint256 payoff) {
+    function redeem() external nonReentrant returns (uint256 payoff) {
         require(isExpired(), "Cannot be called before expiry");
         require(isSettled, "Cannot be called before settlement");
         require(!isPaused, "This method has been paused");
