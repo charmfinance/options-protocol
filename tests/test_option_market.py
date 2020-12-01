@@ -3,7 +3,7 @@ import pytest
 from pytest import approx
 
 
-SCALE = 10**18
+SCALE = 10 ** 18
 PERCENT = SCALE // 100
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 
@@ -13,20 +13,31 @@ COVER = False
 
 def lslmsr(q, alpha):
     from math import exp, log
+
     b = alpha * sum(q)
     if b == 0:
         return 0
     mx = max(q)
-    a = sum(exp((x-mx)/b) for x in q)
+    a = sum(exp((x - mx) / b) for x in q)
     cost = mx + b * log(a)
     return SCALE * cost
 
 
 @pytest.mark.parametrize("isEth", [False, True])
-@pytest.mark.parametrize("alpha", [1, 10 * PERCENT, SCALE-1])
+@pytest.mark.parametrize("alpha", [1, 10 * PERCENT, SCALE - 1])
 @pytest.mark.parametrize("isPut", [False, True])
-@pytest.mark.parametrize("tradingFee", [0, 10 * PERCENT, SCALE-1])
-def test_initialize(a, OptionMarket, MockToken, MockOracle, OptionsToken, isEth, alpha, isPut, tradingFee):
+@pytest.mark.parametrize("tradingFee", [0, 10 * PERCENT, SCALE - 1])
+def test_initialize(
+    a,
+    OptionMarket,
+    MockToken,
+    MockOracle,
+    OptionsToken,
+    isEth,
+    alpha,
+    isPut,
+    tradingFee,
+):
 
     # setup args
     deployer = a[0]
@@ -76,7 +87,10 @@ def test_initialize(a, OptionMarket, MockToken, MockOracle, OptionsToken, isEth,
 
     # check strike price array
     for i in range(4):
-        assert market.strikePrices(i) == [300 * SCALE, 400 * SCALE, 500 * SCALE, 600 * SCALE][i]
+        assert (
+            market.strikePrices(i)
+            == [300 * SCALE, 400 * SCALE, 500 * SCALE, 600 * SCALE][i]
+        )
     with reverts():
         market.strikePrices(4)
 
@@ -99,7 +113,9 @@ def test_initialize(a, OptionMarket, MockToken, MockOracle, OptionsToken, isEth,
 
 @pytest.mark.parametrize("isPut", [False, True])
 @pytest.mark.parametrize("isEth", [False, True])
-def test_initialize_errors(a, OptionMarket, MockToken, MockOracle, OptionsToken, isPut, isEth):
+def test_initialize_errors(
+    a, OptionMarket, MockToken, MockOracle, OptionsToken, isPut, isEth
+):
 
     # setup args
     deployer = a[0]
@@ -286,7 +302,9 @@ def test_initialize_errors(a, OptionMarket, MockToken, MockOracle, OptionsToken,
 
 
 @pytest.mark.parametrize("isEth", [False, True])
-def test_buy_and_sell_calls(a, OptionMarket, MockToken, MockOracle, OptionsToken, fast_forward, isEth):
+def test_buy_and_sell_calls(
+    a, OptionMarket, MockToken, MockOracle, OptionsToken, fast_forward, isEth
+):
 
     # setup args
     deployer, alice = a[:2]
@@ -626,7 +644,9 @@ def test_buy_and_sell_puts(a, OptionMarket, MockToken, MockOracle, OptionsToken)
 
 
 @pytest.mark.parametrize("isPut", [False, True])
-def test_balance_and_supply_cap(a, OptionMarket, MockToken, MockOracle, OptionsToken, isPut):
+def test_balance_and_supply_cap(
+    a, OptionMarket, MockToken, MockOracle, OptionsToken, isPut
+):
 
     # setup args
     deployer, alice, bob = a[:3]
@@ -693,7 +713,9 @@ def test_balance_and_supply_cap(a, OptionMarket, MockToken, MockOracle, OptionsT
 
 @pytest.mark.parametrize("isEth", [False, True])
 @pytest.mark.parametrize("isPut", [False, True])
-def test_settle(a, OptionMarket, MockToken, MockOracle, OptionsToken, fast_forward, isEth, isPut):
+def test_settle(
+    a, OptionMarket, MockToken, MockOracle, OptionsToken, fast_forward, isEth, isPut
+):
 
     # setup args
     deployer, alice = a[:2]
@@ -738,7 +760,9 @@ def test_settle(a, OptionMarket, MockToken, MockOracle, OptionsToken, fast_forwa
 
 
 @pytest.mark.parametrize("isEth", [False, True])
-def test_redeem(a, OptionMarket, MockToken, MockOracle, OptionsToken, fast_forward, isEth):
+def test_redeem(
+    a, OptionMarket, MockToken, MockOracle, OptionsToken, fast_forward, isEth
+):
 
     # setup args
     deployer, alice, bob = a[:3]
@@ -824,7 +848,9 @@ def test_redeem(a, OptionMarket, MockToken, MockOracle, OptionsToken, fast_forwa
     }
 
 
-def test_buy_and_redeem_large_size(a, OptionMarket, MockToken, MockOracle, OptionsToken, fast_forward):
+def test_buy_and_redeem_large_size(
+    a, OptionMarket, MockToken, MockOracle, OptionsToken, fast_forward
+):
 
     # setup args
     deployer, alice = a[:2]
@@ -880,7 +906,9 @@ def test_buy_and_redeem_large_size(a, OptionMarket, MockToken, MockOracle, Optio
 
 @pytest.mark.parametrize("isEth", [False, True])
 @pytest.mark.parametrize("isPut", [False, True])
-def test_emergency_methods(a, OptionMarket, MockToken, MockOracle, OptionsToken, fast_forward, isEth, isPut):
+def test_emergency_methods(
+    a, OptionMarket, MockToken, MockOracle, OptionsToken, fast_forward, isEth, isPut
+):
 
     # setup args
     deployer, alice = a[:2]
@@ -921,7 +949,9 @@ def test_emergency_methods(a, OptionMarket, MockToken, MockOracle, OptionsToken,
     market.pause({"from": deployer})
 
     with reverts("This method has been paused"):
-        market.buy(CALL, 0, 1 * PERCENT, 100 * SCALE, {"from": alice, "value": 50 * SCALE})
+        market.buy(
+            CALL, 0, 1 * PERCENT, 100 * SCALE, {"from": alice, "value": 50 * SCALE}
+        )
 
     with reverts("Ownable: caller is not the owner"):
         market.unpause({"from": alice})
@@ -957,4 +987,3 @@ def test_emergency_methods(a, OptionMarket, MockToken, MockOracle, OptionsToken,
 
     market.transferOwnership(alice, {"from": deployer})
     assert market.owner() == alice
-
