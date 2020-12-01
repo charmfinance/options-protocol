@@ -24,14 +24,13 @@ PATHS = [
     "contracts/libraries/CloneFactory.sol",
     "contracts/libraries/UniERC20.sol",
     "contracts/ChainlinkOracle.sol",
-    "contracts/OptionsSymbol.sol",
+    "contracts/OptionSymbol.sol",
+    "contracts/OptionToken.sol",
+    "contracts/OptionMarket.sol",
+    "contracts/OptionFactory.sol",
     "contracts/OptionsToken.sol",
     "contracts/OptionsMarketMaker.sol",
     "contracts/OptionsFactory.sol",
-    # "contracts/mocks/MockToken.sol",
-    # "contracts/CharmToken.sol",
-    # "interfaces/IUniswapV2Pair.sol",
-    # "contracts/UniswapOracle.sol",
 ]
 
 PREFIX = """
