@@ -15,7 +15,6 @@ import "./libraries/openzeppelin/ReentrancyGuardUpgradeSafe.sol";
 import "../interfaces/IOracle.sol";
 import "./OptionsToken.sol";
 
-
 contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     using Address for address;
     using SafeERC20 for IERC20;
@@ -80,7 +79,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         require(_strikePrices.length > 0, "Strike prices must not be empty");
         require(_strikePrices[0] > 0, "Strike prices must be > 0");
         for (uint256 i = 0; i < _strikePrices.length - 1; i++) {
-            require(_strikePrices[i] < _strikePrices[i+1], "Strike prices must be increasing");
+            require(_strikePrices[i] < _strikePrices[i + 1], "Strike prices must be increasing");
         }
 
         require(_alpha > 0, "Alpha must be > 0");
@@ -145,15 +144,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         uint256 balanceAfter = baseToken.uniBalanceOf(address(this));
         require(baseToken.isETH() || balanceAfter.sub(balanceBefore) == amountIn, "Deflationary tokens not supported");
 
-        emit Trade(
-            msg.sender,
-            strikeIndex,
-            true,
-            isLong,
-            optionsOut,
-            amountIn,
-            option.totalSupply()
-        );
+        emit Trade(msg.sender, strikeIndex, true, isLong, optionsOut, amountIn, option.totalSupply());
     }
 
     function sell(
@@ -183,15 +174,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
 
         baseToken.uniTransfer(msg.sender, amountOut);
 
-        emit Trade(
-            msg.sender,
-            strikeIndex,
-            false,
-            isLong,
-            optionsIn,
-            amountOut,
-            option.totalSupply()
-        );
+        emit Trade(msg.sender, strikeIndex, false, isLong, optionsIn, amountOut, option.totalSupply());
     }
 
     /**
@@ -240,7 +223,6 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     }
 
     function calcCost() public view returns (uint256) {
-
         // initally set s to total supply of longs
         uint256 s;
         for (uint256 i = 0; i < numStrikes; i++) {
@@ -257,7 +239,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         for (uint256 i = 0; i < numStrikes; i++) {
             s = s.add(shortTokens[i].totalSupply());
             s = s.sub(longTokens[i].totalSupply());
-            q[i+1] = s;
+            q[i + 1] = s;
             max = Math.max(max, s);
             sum = sum.add(s);
         }
@@ -270,7 +252,6 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         uint256 b = sum.mul(alpha);
         int128 sumExp;
         for (uint256 i = 0; i < q.length; i++) {
-
             // max(q) - q_i
             uint256 diff = max.sub(q[i]);
 
