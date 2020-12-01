@@ -52,6 +52,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
 
     uint256 public maxStrikePrice;
     uint256 public numStrikes;
+    bool public isPaused;
     bool public isSettled;
     uint256 public settlementPrice;
     uint256 public costAtSettlement;
@@ -119,6 +120,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         uint256 maxAmountIn
     ) public payable nonReentrant returns (uint256 amountIn) {
         require(!isExpired(), "Already expired");
+        require(!isPaused, "This method has been paused");
         require(strikeIndex < numStrikes, "Index too large");
         require(optionsOut > 0, "optionsOut must be > 0");
 
@@ -161,6 +163,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         uint256 minAmountOut
     ) public nonReentrant returns (uint256 amountOut) {
         require(!isExpired(), "Already expired");
+        require(!isPaused, "This method has been paused");
         require(strikeIndex < numStrikes, "Index too large");
         require(optionsIn > 0, "optionsIn must be > 0");
 
@@ -191,27 +194,6 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         );
     }
 
-    // function long(
-    //     uint256 strikeIndex,
-    //     uint256 optionsOut,
-    //     uint256 minAmountOut
-    // ) external payable returns (uint256 amountOut) {
-    //     require(strikeIndex < numStrikes, "Index too large");
-    //     require(optionsOut > 0, "optionsOut must be > 0");
-    //     uint256 balance = shortTokens[strikeIndex].balanceOf(msg.sender);
-    //     uint256 buyAmount;
-    //     uint256 sellAmount;
-    //     if (balance > 0) {
-    //         uint256 qty = Math.min(balance, optionsOut);
-    //         optionsOut = optionsOut.sub(qty);
-    //         sellAmount = sell(false, strikeIndex, qty, 0);
-    //     }
-
-    //     if (optionsOut > 0) {
-    //         buyAmount = buy(true, strikeIndex, optionsOut, 0);
-    //     }
-    // }
-
     /**
      * Retrieves and stores the settlement price from the oracle
      *
@@ -235,6 +217,10 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     }
 
     function redeem() public nonReentrant returns (uint256 payoff) {
+        require(isExpired(), "Cannot be called before expiry");
+        require(isSettled, "Cannot be called before settlement");
+        require(!isPaused, "This method has been paused");
+
         uint256 payoffBefore = calcPayoff();
         for (uint256 i = 0; i < numStrikes; i++) {
             uint256 longBalance = longTokens[i].balanceOf(msg.sender);
@@ -325,5 +311,31 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
 
     function isExpired() public view returns (bool) {
         return block.timestamp >= expiryTime;
+    }
+
+    // emergency use only. to be removed in future versions
+    function pause() external onlyOwner {
+        isPaused = true;
+    }
+
+    // emergency use only. to be removed in future versions
+    function unpause() external onlyOwner {
+        isPaused = false;
+    }
+
+    // emergency use only. to be removed in future versions
+    function setOracle(IOracle _oracle) external onlyOwner {
+        oracle = _oracle;
+    }
+
+    // emergency use only. to be removed in future versions
+    function setExpiryTime(uint256 _expiryTime) external onlyOwner {
+        expiryTime = _expiryTime;
+    }
+
+    // emergency use only. to be removed in future versions
+    function forceSettle() external onlyOwner {
+        isSettled = false;
+        settle();
     }
 }

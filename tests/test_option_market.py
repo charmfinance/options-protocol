@@ -720,7 +720,14 @@ def test_redeem(a, OptionMarket, MockToken, MockOracle, OptionsToken, fast_forwa
     market.buy(COVER, 1, 3 * SCALE, 100 * SCALE, {"from": bob})
     market.sell(CALL, 3, 2 * SCALE, 0, {"from": bob})
 
+    with reverts("Cannot be called before expiry"):
+        market.redeem({"from": alice})
+
     fast_forward(2000000000)
+
+    with reverts("Cannot be called before settlement"):
+        market.redeem({"from": alice})
+
     market.settle({"from": alice})
 
     cost = lslmsr([3, 4, 4, 1, 3], 0.1)
@@ -797,4 +804,83 @@ def test_buy_and_redeem_large_size(a, OptionMarket, MockToken, MockOracle, Optio
     assert approx(tx.return_value) == cost
     assert approx(baseToken.balanceOf(market)) == 6 * 1e18 * PERCENT
     assert approx(baseToken.balanceOf(alice)) == 1e20 * SCALE - 6 * 1e18 * PERCENT
+
+
+def test_emergency_methods(a, OptionMarket, MockToken, MockOracle, OptionsToken, fast_forward):
+
+    # setup args
+    deployer, alice = a[:2]
+    baseToken = deployer.deploy(MockToken)
+    oracle = deployer.deploy(MockOracle)
+    oracle2 = deployer.deploy(MockOracle)
+    longTokens = [deployer.deploy(OptionsToken) for _ in range(4)]
+    shortTokens = [deployer.deploy(OptionsToken) for _ in range(4)]
+    oracle.setPrice(444 * SCALE)
+    oracle2.setPrice(555 * SCALE)
+
+    # deploy and initialize
+    market = deployer.deploy(OptionMarket)
+    market.initialize(
+        baseToken,
+        oracle,
+        longTokens,
+        shortTokens,
+        [300 * SCALE, 400 * SCALE, 500 * SCALE, 600 * SCALE],
+        2000000000,  # expiry = 18 May 2033
+        10 * PERCENT,  # alpha = 0.1
+        False,  # call
+        1 * PERCENT,  # tradingFee = 1%
+        1e20 * SCALE,
+        1e20 * SCALE,
+    )
+    for token in longTokens + shortTokens:
+        token.initialize(market, "name", "symbol", 18)
+
+    # give users base tokens
+    baseToken.mint(alice, 100 * SCALE, {"from": deployer})
+    baseToken.approve(market, 100 * SCALE, {"from": alice})
+
+    # pause and unpause
+    with reverts("Ownable: caller is not the owner"):
+        market.pause({"from": alice})
+    market.pause({"from": deployer})
+
+    with reverts("This method has been paused"):
+        market.buy(CALL, 0, 1 * SCALE, 100 * SCALE, {"from": alice})
+
+    with reverts("Ownable: caller is not the owner"):
+        market.unpause({"from": alice})
+    market.unpause({"from": deployer})
+    market.buy(CALL, 0, 1 * SCALE, 100 * SCALE, {"from": alice})
+
+    # change oracle and expiry
+    with reverts("Ownable: caller is not the owner"):
+        market.setOracle(oracle2, {"from": alice})
+    with reverts("Ownable: caller is not the owner"):
+        market.setExpiryTime(2000000000 - 1, {"from": alice})
+
+    market.setOracle(oracle2, {"from": deployer})
+    assert market.oracle() == oracle2
+
+    market.setExpiryTime(2000000000 - 1, {"from": deployer})
+    assert market.expiryTime() == 2000000000 - 1
+
+    # force settle
+    fast_forward(2000000000)
+    market.settle({"from": alice})
+
+    with reverts("Ownable: caller is not the owner"):
+        market.forceSettle({"from": alice})
+
+    market.forceSettle({"from": deployer})
+    oracle2.setPrice(555 * SCALE)
+    assert market.settlementPrice() == 555 * SCALE
+
+    # change owner
+    with reverts("Ownable: caller is not the owner"):
+        market.transferOwnership(alice, {"from": alice})
+
+    market.transferOwnership(alice, {"from": deployer})
+    assert market.owner() == alice
+
 
