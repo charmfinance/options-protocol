@@ -25,15 +25,15 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         address indexed account,
         uint256 indexed strikeIndex,
         bool isBuy,
-        bool isLong,
-        uint256 options,
-        uint256 amount,
+        bool isLongToken,
+        uint256 size,
+        uint256 cost,
         uint256 newSupply
     );
 
     event Settled(uint256 settlementPrice);
 
-    event Redeemed(address indexed account, uint256 indexed strikeIndex, uint256 options, uint256 amount);
+    event Redeemed(address indexed account, uint256 payoff);
 
     uint256 public constant SCALE = 1e18;
 
@@ -113,7 +113,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     }
 
     function buy(
-        bool isLong,
+        bool isLongToken,
         uint256 strikeIndex,
         uint256 optionsOut,
         uint256 maxAmountIn
@@ -124,7 +124,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         require(optionsOut > 0, "optionsOut must be > 0");
 
         uint256 costBefore = calcCost();
-        OptionsToken option = isLong ? longTokens[strikeIndex] : shortTokens[strikeIndex];
+        OptionsToken option = isLongToken ? longTokens[strikeIndex] : shortTokens[strikeIndex];
         option.mint(msg.sender, optionsOut);
         require(option.balanceOf(msg.sender) <= balanceCap, "Exceeded balance cap");
         require(option.totalSupply() <= totalSupplyCap, "Exceeded total supply cap");
@@ -144,11 +144,11 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         uint256 balanceAfter = baseToken.uniBalanceOf(address(this));
         require(baseToken.isETH() || balanceAfter.sub(balanceBefore) == amountIn, "Deflationary tokens not supported");
 
-        emit Trade(msg.sender, strikeIndex, true, isLong, optionsOut, amountIn, option.totalSupply());
+        emit Trade(msg.sender, strikeIndex, true, isLongToken, optionsOut, amountIn, option.totalSupply());
     }
 
     function sell(
-        bool isLong,
+        bool isLongToken,
         uint256 strikeIndex,
         uint256 optionsIn,
         uint256 minAmountOut
@@ -159,7 +159,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         require(optionsIn > 0, "optionsIn must be > 0");
 
         uint256 costBefore = calcCost();
-        OptionsToken option = isLong ? longTokens[strikeIndex] : shortTokens[strikeIndex];
+        OptionsToken option = isLongToken ? longTokens[strikeIndex] : shortTokens[strikeIndex];
         option.burn(msg.sender, optionsIn);
 
         uint256 costDiff = costBefore.sub(calcCost());
@@ -174,7 +174,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
 
         baseToken.uniTransfer(msg.sender, amountOut);
 
-        emit Trade(msg.sender, strikeIndex, false, isLong, optionsIn, amountOut, option.totalSupply());
+        emit Trade(msg.sender, strikeIndex, false, isLongToken, optionsIn, amountOut, option.totalSupply());
     }
 
     /**
@@ -220,6 +220,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         payoff = payoffBefore.sub(calcPayoff()).div(SCALE);
         payoff = payoff.mul(costAtSettlement).div(totalPayoff);
         baseToken.uniTransfer(msg.sender, payoff);
+        emit Redeemed(msg.sender, payoff);
     }
 
     function calcCost() public view returns (uint256) {

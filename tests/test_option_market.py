@@ -27,7 +27,6 @@ def lslmsr(q, alpha):
 @pytest.mark.parametrize("isPut", [False, True])
 @pytest.mark.parametrize("tradingFee", [0, 10 * PERCENT, SCALE-1])
 def test_initialize(a, OptionMarket, MockToken, MockOracle, OptionsToken, isEth, alpha, isPut, tradingFee):
-    return # TODO remove
 
     # setup args
     deployer = a[0]
@@ -62,7 +61,7 @@ def test_initialize(a, OptionMarket, MockToken, MockOracle, OptionsToken, isEth,
     assert market.balanceCap() == 1000 * SCALE
     assert market.totalSupplyCap() == 1500 * SCALE
 
-    assert market.maxStrikePrice() == 600
+    assert market.maxStrikePrice() == 600 * SCALE
     assert market.numStrikes() == 4
 
     # check token arrays
@@ -101,7 +100,6 @@ def test_initialize(a, OptionMarket, MockToken, MockOracle, OptionsToken, isEth,
 @pytest.mark.parametrize("isPut", [False, True])
 @pytest.mark.parametrize("isEth", [False, True])
 def test_initialize_errors(a, OptionMarket, MockToken, MockOracle, OptionsToken, isPut, isEth):
-    return # TODO remove
 
     # setup args
     deployer = a[0]
@@ -261,7 +259,7 @@ def test_initialize_errors(a, OptionMarket, MockToken, MockOracle, OptionsToken,
             oracle,
             longTokens,
             shortTokens,
-            [0, 400, 500, 600],
+            [0, 400 * SCALE, 500 * SCALE, 600 * SCALE],
             2000000000,  # expiry = 18 May 2033
             1e17,  # alpha = 0.1
             isPut,
@@ -277,7 +275,7 @@ def test_initialize_errors(a, OptionMarket, MockToken, MockOracle, OptionsToken,
             oracle,
             longTokens,
             shortTokens,
-            [300 * SCALE, 400 * SCALE, 500 * SCALE, 600 * SCALE],
+            [300 * SCALE, 400 * SCALE, 500 * SCALE, 500 * SCALE],
             2000000000,  # expiry = 18 May 2033
             1e17,  # alpha = 0.1
             isPut,
@@ -289,7 +287,6 @@ def test_initialize_errors(a, OptionMarket, MockToken, MockOracle, OptionsToken,
 
 @pytest.mark.parametrize("isEth", [False, True])
 def test_buy_and_sell_calls(a, OptionMarket, MockToken, MockOracle, OptionsToken, fast_forward, isEth):
-    # return # TODO remove
 
     # setup args
     deployer, alice = a[:2]
@@ -345,6 +342,15 @@ def test_buy_and_sell_calls(a, OptionMarket, MockToken, MockOracle, OptionsToken
     assert approx(tx.return_value) == cost
     assert approx(getBalance(alice)) == 100 * SCALE - cost
     assert longTokens[0].balanceOf(alice) == 2 * SCALE
+    assert tx.events["Trade"] == {
+        "account": alice,
+        "strikeIndex": 0,
+        "isBuy": True,
+        "isLongToken": True,
+        "size": 2 * SCALE,
+        "cost": tx.return_value,
+        "newSupply": 2 * SCALE,
+    }
 
     # buy 3 calls
     tx = market.buy(CALL, 2, 3 * SCALE, 100 * SCALE, {"from": alice, "value": value})
@@ -354,6 +360,15 @@ def test_buy_and_sell_calls(a, OptionMarket, MockToken, MockOracle, OptionsToken
     assert approx(getBalance(alice)) == 100 * SCALE - cost2
     assert longTokens[0].balanceOf(alice) == 2 * SCALE
     assert longTokens[2].balanceOf(alice) == 3 * SCALE
+    assert tx.events["Trade"] == {
+        "account": alice,
+        "strikeIndex": 2,
+        "isBuy": True,
+        "isLongToken": True,
+        "size": 3 * SCALE,
+        "cost": tx.return_value,
+        "newSupply": 3 * SCALE,
+    }
 
     # buy 5 covers
     tx = market.buy(COVER, 3, 5 * SCALE, 100 * SCALE, {"from": alice, "value": value})
@@ -364,6 +379,15 @@ def test_buy_and_sell_calls(a, OptionMarket, MockToken, MockOracle, OptionsToken
     assert longTokens[0].balanceOf(alice) == 2 * SCALE
     assert longTokens[2].balanceOf(alice) == 3 * SCALE
     assert shortTokens[3].balanceOf(alice) == 5 * SCALE
+    assert tx.events["Trade"] == {
+        "account": alice,
+        "strikeIndex": 3,
+        "isBuy": True,
+        "isLongToken": False,
+        "size": 5 * SCALE,
+        "cost": tx.return_value,
+        "newSupply": 5 * SCALE,
+    }
 
     # buy 6 covers
     tx = market.buy(COVER, 0, 6 * SCALE, 100 * SCALE, {"from": alice, "value": value})
@@ -375,6 +399,15 @@ def test_buy_and_sell_calls(a, OptionMarket, MockToken, MockOracle, OptionsToken
     assert longTokens[2].balanceOf(alice) == 3 * SCALE
     assert shortTokens[0].balanceOf(alice) == 6 * SCALE
     assert shortTokens[3].balanceOf(alice) == 5 * SCALE
+    assert tx.events["Trade"] == {
+        "account": alice,
+        "strikeIndex": 0,
+        "isBuy": True,
+        "isLongToken": False,
+        "size": 6 * SCALE,
+        "cost": tx.return_value,
+        "newSupply": 6 * SCALE,
+    }
 
     # can't sell more than you have
     with reverts("ERC20: burn amount exceeds balance"):
@@ -394,6 +427,15 @@ def test_buy_and_sell_calls(a, OptionMarket, MockToken, MockOracle, OptionsToken
     assert longTokens[2].balanceOf(alice) == 3 * SCALE
     assert shortTokens[0].balanceOf(alice) == 4 * SCALE
     assert shortTokens[3].balanceOf(alice) == 5 * SCALE
+    assert tx.events["Trade"] == {
+        "account": alice,
+        "strikeIndex": 0,
+        "isBuy": False,
+        "isLongToken": False,
+        "size": 2 * SCALE,
+        "cost": tx.return_value,
+        "newSupply": 4 * SCALE,
+    }
 
     # sell 2 calls
     tx = market.sell(CALL, 0, 2 * SCALE, 0, {"from": alice})
@@ -405,6 +447,15 @@ def test_buy_and_sell_calls(a, OptionMarket, MockToken, MockOracle, OptionsToken
     assert longTokens[2].balanceOf(alice) == 3 * SCALE
     assert shortTokens[0].balanceOf(alice) == 4 * SCALE
     assert shortTokens[3].balanceOf(alice) == 5 * SCALE
+    assert tx.events["Trade"] == {
+        "account": alice,
+        "strikeIndex": 0,
+        "isBuy": False,
+        "isLongToken": True,
+        "size": 2 * SCALE,
+        "cost": tx.return_value,
+        "newSupply": 0,
+    }
 
     # sell 3 calls
     tx = market.sell(CALL, 2, 3 * SCALE, 0, {"from": alice})
@@ -416,6 +467,15 @@ def test_buy_and_sell_calls(a, OptionMarket, MockToken, MockOracle, OptionsToken
     assert longTokens[2].balanceOf(alice) == 0
     assert shortTokens[0].balanceOf(alice) == 4 * SCALE
     assert shortTokens[3].balanceOf(alice) == 5 * SCALE
+    assert tx.events["Trade"] == {
+        "account": alice,
+        "strikeIndex": 2,
+        "isBuy": False,
+        "isLongToken": True,
+        "size": 3 * SCALE,
+        "cost": tx.return_value,
+        "newSupply": 0,
+    }
 
     # sell 5 covers
     tx = market.sell(COVER, 3, 5 * SCALE, 0, {"from": alice})
@@ -427,6 +487,15 @@ def test_buy_and_sell_calls(a, OptionMarket, MockToken, MockOracle, OptionsToken
     assert longTokens[2].balanceOf(alice) == 0
     assert shortTokens[0].balanceOf(alice) == 4 * SCALE
     assert shortTokens[3].balanceOf(alice) == 0
+    assert tx.events["Trade"] == {
+        "account": alice,
+        "strikeIndex": 3,
+        "isBuy": False,
+        "isLongToken": False,
+        "size": 5 * SCALE,
+        "cost": tx.return_value,
+        "newSupply": 0,
+    }
 
     # sell 4 covers
     tx = market.sell(COVER, 0, 4 * SCALE, 0, {"from": alice})
@@ -438,6 +507,15 @@ def test_buy_and_sell_calls(a, OptionMarket, MockToken, MockOracle, OptionsToken
     assert longTokens[2].balanceOf(alice) == 0
     assert shortTokens[0].balanceOf(alice) == 0
     assert shortTokens[3].balanceOf(alice) == 0
+    assert tx.events["Trade"] == {
+        "account": alice,
+        "strikeIndex": 0,
+        "isBuy": False,
+        "isLongToken": False,
+        "size": 4 * SCALE,
+        "cost": tx.return_value,
+        "newSupply": 0,
+    }
 
     # cannot buy or sell after expiry
     fast_forward(2000000000)
@@ -448,7 +526,6 @@ def test_buy_and_sell_calls(a, OptionMarket, MockToken, MockOracle, OptionsToken
 
 
 def test_buy_and_sell_puts(a, OptionMarket, MockToken, MockOracle, OptionsToken):
-    # return # TODO remove
 
     # setup args
     deployer, alice = a[:2]
@@ -495,6 +572,15 @@ def test_buy_and_sell_puts(a, OptionMarket, MockToken, MockOracle, OptionsToken)
     assert approx(tx.return_value) == cost
     assert approx(baseToken.balanceOf(alice)) == 10000 * SCALE - cost
     assert longTokens[0].balanceOf(alice) == 2 * SCALE
+    assert tx.events["Trade"] == {
+        "account": alice,
+        "strikeIndex": 0,
+        "isBuy": True,
+        "isLongToken": True,
+        "size": 2 * SCALE,
+        "cost": tx.return_value,
+        "newSupply": 2 * SCALE,
+    }
 
     # buy 5 covers
     tx = market.buy(COVER, 2, 5 * SCALE, 10000 * SCALE, {"from": alice})
@@ -504,6 +590,15 @@ def test_buy_and_sell_puts(a, OptionMarket, MockToken, MockOracle, OptionsToken)
     assert approx(baseToken.balanceOf(alice)) == 10000 * SCALE - cost2
     assert longTokens[0].balanceOf(alice) == 2 * SCALE
     assert shortTokens[2].balanceOf(alice) == 5 * SCALE
+    assert tx.events["Trade"] == {
+        "account": alice,
+        "strikeIndex": 2,
+        "isBuy": True,
+        "isLongToken": False,
+        "size": 5 * SCALE,
+        "cost": tx.return_value,
+        "newSupply": 5 * SCALE,
+    }
 
     # can't sell more than you have
     with reverts("ERC20: burn amount exceeds balance"):
@@ -519,11 +614,19 @@ def test_buy_and_sell_puts(a, OptionMarket, MockToken, MockOracle, OptionsToken)
     assert approx(baseToken.balanceOf(alice)) == 10000 * SCALE - cost2
     assert longTokens[0].balanceOf(alice) == 2 * SCALE
     assert shortTokens[2].balanceOf(alice) == 3 * SCALE
+    assert tx.events["Trade"] == {
+        "account": alice,
+        "strikeIndex": 2,
+        "isBuy": False,
+        "isLongToken": False,
+        "size": 2 * SCALE,
+        "cost": tx.return_value,
+        "newSupply": 3 * SCALE,
+    }
 
 
 @pytest.mark.parametrize("isPut", [False, True])
 def test_balance_and_supply_cap(a, OptionMarket, MockToken, MockOracle, OptionsToken, isPut):
-    return # TODO remove
 
     # setup args
     deployer, alice, bob = a[:3]
@@ -704,6 +807,10 @@ def test_redeem(a, OptionMarket, MockToken, MockOracle, OptionsToken, fast_forwa
     assert approx(tx.return_value) == cost * alicePayoff / payoff
     assert approx(balance - getBalance(market)) == cost * alicePayoff / payoff
     assert approx(getBalance(alice) - aliceBalance) == cost * alicePayoff / payoff
+    assert tx.events["Redeemed"] == {
+        "account": alice,
+        "payoff": tx.return_value,
+    }
 
     balance = getBalance(market)
     bobBalance = getBalance(bob)
@@ -711,6 +818,10 @@ def test_redeem(a, OptionMarket, MockToken, MockOracle, OptionsToken, fast_forwa
     assert approx(tx.return_value) == cost * bobPayoff / payoff
     assert approx(balance - getBalance(market)) == cost * bobPayoff / payoff
     assert approx(getBalance(bob) - bobBalance) == cost * bobPayoff / payoff
+    assert tx.events["Redeemed"] == {
+        "account": bob,
+        "payoff": tx.return_value,
+    }
 
 
 def test_buy_and_redeem_large_size(a, OptionMarket, MockToken, MockOracle, OptionsToken, fast_forward):
