@@ -1,9 +1,8 @@
 from brownie import (
     accounts,
-    OptionsFactory,
-    OptionsMarketMaker,
-    OptionsToken,
-    SeedRewards,
+    OptionFactory,
+    OptionMarket,
+    OptionToken,
 )
 
 
@@ -11,9 +10,9 @@ def main():
     deployer = accounts.load("deployer")
     balance = deployer.balance()
 
-    market = deployer.deploy(OptionsMarketMaker)
-    optionsToken = deployer.deploy(OptionsToken)
-    factory = deployer.deploy(OptionsFactory, market, optionsToken)
+    optionMarket = deployer.deploy(OptionMarket)
+    optionToken = deployer.deploy(OptionToken)
+    factory = deployer.deploy(OptionFactory, optionMarket, optionToken)
 
     print(f"Factory address: {factory.address}")
     print(f"Gas used in deployment: {(balance - deployer.balance()) / 1e18:.4f} ETH")

@@ -1,13 +1,13 @@
 import arrow
 from math import log
+import time
 
 from brownie import (
     accounts,
     Contract,
-    OptionsFactory,
-    OptionsMarketMaker,
-    OptionsToken,
-    SeedRewards,
+    OptionFactory,
+    OptionMarket,
+    OptionToken,
 )
 
 
@@ -15,8 +15,8 @@ from brownie import (
 ACCOUNT = "deployer"
 BASE_TOKEN = "ETH"
 EXPIRY_DATE = "11 Dec 2020"
-STRIKE_PRICES = [550]
-LIQUIDITY_PARAM = 0.15
+STRIKE_PRICES = [400, 500, 600]
+LIQUIDITY_PARAM = 0.20
 NETWORK = "rinkeby"
 
 
@@ -24,6 +24,9 @@ NETWORK = "rinkeby"
 SCALE = 10 ** 18
 EXPIRY_TIME = "16:00"
 QUOTE_TOKEN = "USDC"
+TRADING_FEE = 0.01
+BALANCE_CAP = 100
+SUPPLY_CAP = 10000
 
 
 DEPLOYED_ORACLES = {
@@ -50,13 +53,15 @@ TOKEN_ADDRESSES = {
 
 FACTORY = {
     "mainnet": "",
-    "rinkeby": "0xA8d6D6623fc492eA9acbE39EE929E7205fE66687",
+    # "rinkeby": "0xA8d6D6623fc492eA9acbE39EE929E7205fE66687",  # v1. remove
+    "rinkeby": "0x7d8d7Db940B39ef2B13ea53cF1081f62412e4df2",
 }
 
 
-def create_market(deployer, strike_price, is_put):
-    strike_wei = int(SCALE * strike_price)
-    alpha_wei = int(SCALE * LIQUIDITY_PARAM // 2 / log(2))
+def create_market(deployer, is_put):
+    n = len(STRIKE_PRICES)
+    alpha_wei = int(SCALE * LIQUIDITY_PARAM / log(n) / n)
+    strike_prices_wei = [int(SCALE * px + 1e-9) for px in STRIKE_PRICES]
 
     expiry = arrow.get(EXPIRY_DATE + " " + EXPIRY_TIME, "DD MMM YYYY HH:mm")
     if expiry < arrow.now():
@@ -67,23 +72,27 @@ def create_market(deployer, strike_price, is_put):
 
     oracle = DEPLOYED_ORACLES[NETWORK][BASE_TOKEN + "/" + QUOTE_TOKEN]
 
-    # brownie doesn't let us use OptionsFactory.at
+    # brownie doesn't let us use OptionFactory.at
     factory = Contract.from_explorer(FACTORY[NETWORK])
     factory.createMarket(
         TOKEN_ADDRESSES[NETWORK][BASE_TOKEN],
         TOKEN_ADDRESSES[NETWORK][QUOTE_TOKEN],
         oracle,
-        is_put,
-        strike_wei,
-        alpha_wei,
+        strike_prices_wei,
         expiry.timestamp,
+        alpha_wei,
+        is_put,
+        int(TRADING_FEE * SCALE + 1e-9),
+        BALANCE_CAP * SCALE,
+        SUPPLY_CAP * SCALE,
         {"from": deployer},
     )
 
     # brownie doesn't let us see the transaction return value
+    time.sleep(1)
     address = factory.markets(factory.numMarkets() - 1)
     print(f"Deployed at: {address}")
-    return OptionsMarketMaker.at(address)
+    return OptionMarket.at(address)
 
 
 def main():
@@ -91,17 +100,16 @@ def main():
     balance = deployer.balance()
 
     markets = []
-    for strike_price in STRIKE_PRICES:
-        for is_put in [False, True]:
-            market = create_market(deployer, strike_price, is_put)
-            markets.append(market)
-            # deploy_seed_rewards(deployer, market)
+    for is_put in [False, True]:
+        market = create_market(deployer, is_put)
+        markets.append(market)
 
     print(f"Gas used in deployment: {(balance - deployer.balance()) / 1e18:.4f} ETH")
-    print()
+    # print()
 
-    for market in markets:
-        for address in [market.longToken(), market.shortToken()]:
-            option = OptionsToken.at(address)
-            symbol = option.symbol()
-            print(f"{symbol}:\t{address}")
+    # for i in range(len(STRIKE_PRICES)):
+    #     for market in markets:
+    #         for address in [market.longTokens(i), market.shortTokens(i)]:
+    #             option = OptionToken.at(address)
+    #             symbol = option.symbol()
+    #             print(f"{symbol}:\t{address}")
