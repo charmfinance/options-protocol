@@ -11,7 +11,7 @@ import "./libraries/BokkyPooBahsDateTimeLibrary.sol";
 import "./libraries/UniERC20.sol";
 import "./libraries/openzeppelin/ERC20UpgradeSafe.sol";
 
-contract OptionsSymbol {
+contract OptionSymbol {
     using UniERC20 for IERC20;
     using SafeMath for uint256;
 
@@ -33,7 +33,7 @@ contract OptionsSymbol {
         //get option month string
         (string memory monthSymbol, ) = _getMonth(month);
 
-        string memory suffix = isPut ? (isLong ? "P" : "SP") : (isLong ? "C" : "CV");
+        string memory suffix = isPut ? (isLong ? "P" : "SP") : (isLong ? "C" : "SC");
 
         // concatenated symbol string: ETH 04DEC2020 500 C
         return

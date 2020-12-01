@@ -10,9 +10,9 @@ import "./libraries/CloneFactory.sol";
 import "./libraries/UniERC20.sol";
 import "./libraries/openzeppelin/ERC20UpgradeSafe.sol";
 import "./OptionsMarketMaker.sol";
-import "./OptionsSymbol.sol";
+import "./OptionSymbol.sol";
 
-contract OptionsFactory is CloneFactory, OptionsSymbol {
+contract OptionsFactory is CloneFactory, OptionSymbol {
     using Address for address;
     using SafeERC20 for IERC20;
     using UniERC20 for IERC20;

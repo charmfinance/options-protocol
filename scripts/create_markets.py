@@ -14,7 +14,7 @@ from brownie import (
 # deployment parameters
 ACCOUNT = "deployer"
 BASE_TOKEN = "ETH"
-EXPIRY_DATE = "04 Dec 2020"
+EXPIRY_DATE = "11 Dec 2020"
 STRIKE_PRICES = [550]
 LIQUIDITY_PARAM = 0.15
 NETWORK = "rinkeby"

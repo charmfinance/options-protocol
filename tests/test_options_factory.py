@@ -56,7 +56,7 @@ def test_options_factory(
     assert mm.expiryTime() == expiry
 
     suffix = "P" if is_put else "C"
-    suffix2 = "SP" if is_put else "CV"
+    suffix2 = "SP" if is_put else "SC"
     symbol = "ETH" if is_eth else "MOCK"
     if is_put:
         decimals = 6

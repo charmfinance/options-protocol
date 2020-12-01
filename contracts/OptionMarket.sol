@@ -13,7 +13,7 @@ import "./libraries/UniERC20.sol";
 import "./libraries/openzeppelin/OwnableUpgradeSafe.sol";
 import "./libraries/openzeppelin/ReentrancyGuardUpgradeSafe.sol";
 import "../interfaces/IOracle.sol";
-import "./OptionsToken.sol";
+import "./OptionToken.sol";
 
 contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     using Address for address;
@@ -39,8 +39,8 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
 
     IERC20 public baseToken;
     IOracle public oracle;
-    OptionsToken[] public longTokens;
-    OptionsToken[] public shortTokens;
+    OptionToken[] public longTokens;
+    OptionToken[] public shortTokens;
     uint256[] public strikePrices;
     uint256 public expiryTime;
     uint256 public alpha;
@@ -99,11 +99,11 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         totalSupplyCap = _totalSupplyCap;
 
         for (uint256 i = 0; i < _longTokens.length; i++) {
-            longTokens.push(OptionsToken(_longTokens[i]));
+            longTokens.push(OptionToken(_longTokens[i]));
         }
 
         for (uint256 i = 0; i < _shortTokens.length; i++) {
-            shortTokens.push(OptionsToken(_shortTokens[i]));
+            shortTokens.push(OptionToken(_shortTokens[i]));
         }
 
         maxStrikePrice = _strikePrices[_strikePrices.length - 1];
@@ -124,7 +124,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         require(optionsOut > 0, "optionsOut must be > 0");
 
         uint256 costBefore = calcCost();
-        OptionsToken option = isLongToken ? longTokens[strikeIndex] : shortTokens[strikeIndex];
+        OptionToken option = isLongToken ? longTokens[strikeIndex] : shortTokens[strikeIndex];
         option.mint(msg.sender, optionsOut);
         require(option.balanceOf(msg.sender) <= balanceCap, "Exceeded balance cap");
         require(option.totalSupply() <= totalSupplyCap, "Exceeded total supply cap");
@@ -159,7 +159,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         require(optionsIn > 0, "optionsIn must be > 0");
 
         uint256 costBefore = calcCost();
-        OptionsToken option = isLongToken ? longTokens[strikeIndex] : shortTokens[strikeIndex];
+        OptionToken option = isLongToken ? longTokens[strikeIndex] : shortTokens[strikeIndex];
         option.burn(msg.sender, optionsIn);
 
         uint256 costDiff = costBefore.sub(calcCost());
