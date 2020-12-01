@@ -22,8 +22,21 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     using UniERC20 for IERC20;
     using SafeMath for uint256;
 
+    event Trade(
+        address indexed account,
+        uint256 indexed strikeIndex,
+        bool isBuy,
+        bool isLong,
+        uint256 options,
+        uint256 amount,
+        uint256 newSupply
+    );
+
+    event Settled(uint256 settlementPrice);
+
+    event Redeemed(address indexed account, uint256 indexed strikeIndex, uint256 options, uint256 amount);
+
     uint256 public constant SCALE = 1e18;
-    uint256 public constant SCALE_SCALE = 1e36;
 
     IERC20 public baseToken;
     IOracle public oracle;
@@ -39,6 +52,10 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
 
     uint256 public maxStrikePrice;
     uint256 public numStrikes;
+    bool public isSettled;
+    uint256 public settlementPrice;
+    uint256 public costAtSettlement;
+    uint256 public totalPayoff;
 
     function initialize(
         address _baseToken,
@@ -97,25 +114,25 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
 
     function buy(
         bool isLong,
-        uint256 index,
+        uint256 strikeIndex,
         uint256 optionsOut,
         uint256 maxAmountIn
-    ) external payable nonReentrant returns (uint256 amountIn) {
+    ) public payable nonReentrant returns (uint256 amountIn) {
         require(!isExpired(), "Already expired");
-        require(index < numStrikes, "Index too large");
+        require(strikeIndex < numStrikes, "Index too large");
         require(optionsOut > 0, "optionsOut must be > 0");
 
         uint256 costBefore = calcCost();
-        OptionsToken option = isLong ? longTokens[index] : shortTokens[index];
+        OptionsToken option = isLong ? longTokens[strikeIndex] : shortTokens[strikeIndex];
         option.mint(msg.sender, optionsOut);
-        require(option.balanceOf(msg.sender) < balanceCap, "Exceeded balance cap");
-        require(option.totalSupply() < totalSupplyCap, "Exceeded total supply cap");
+        require(option.balanceOf(msg.sender) <= balanceCap, "Exceeded balance cap");
+        require(option.totalSupply() <= totalSupplyCap, "Exceeded total supply cap");
 
         uint256 costDiff = calcCost().sub(costBefore);
         uint256 fee = optionsOut.mul(tradingFee);
         if (isPut) {
             costDiff = costDiff.mul(maxStrikePrice).div(SCALE);
-            fee = fee.mul(strikePrices[index]).div(SCALE);
+            fee = fee.mul(strikePrices[strikeIndex]).div(SCALE);
         }
         amountIn = (costDiff.add(fee)).div(SCALE);
         require(amountIn > 0, "Amount in must be > 0");
@@ -125,34 +142,115 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         baseToken.uniTransferFromSenderToThis(amountIn);
         uint256 balanceAfter = baseToken.uniBalanceOf(address(this));
         require(baseToken.isETH() || balanceAfter.sub(balanceBefore) == amountIn, "Deflationary tokens not supported");
+
+        emit Trade(
+            msg.sender,
+            strikeIndex,
+            true,
+            isLong,
+            optionsOut,
+            amountIn,
+            option.totalSupply()
+        );
     }
 
     function sell(
         bool isLong,
-        uint256 index,
+        uint256 strikeIndex,
         uint256 optionsIn,
         uint256 minAmountOut
-    ) external nonReentrant returns (uint256 amountOut) {
+    ) public nonReentrant returns (uint256 amountOut) {
         require(!isExpired(), "Already expired");
-        require(index < numStrikes, "Index too large");
+        require(strikeIndex < numStrikes, "Index too large");
         require(optionsIn > 0, "optionsIn must be > 0");
 
         uint256 costBefore = calcCost();
-        OptionsToken option = isLong ? longTokens[index] : shortTokens[index];
+        OptionsToken option = isLong ? longTokens[strikeIndex] : shortTokens[strikeIndex];
         option.burn(msg.sender, optionsIn);
 
         uint256 costDiff = costBefore.sub(calcCost());
         uint256 fee = optionsIn.mul(tradingFee);
         if (isPut) {
             costDiff = costDiff.mul(maxStrikePrice).div(SCALE);
-            fee = fee.mul(strikePrices[index]).div(SCALE);
+            fee = fee.mul(strikePrices[strikeIndex]).div(SCALE);
         }
         amountOut = (costDiff.sub(fee)).div(SCALE);
         require(amountOut > 0, "Amount in must be > 0");
         require(amountOut >= minAmountOut, "Max slippage exceeded");
 
         baseToken.uniTransfer(msg.sender, amountOut);
-        return amountOut;
+
+        emit Trade(
+            msg.sender,
+            strikeIndex,
+            false,
+            isLong,
+            optionsIn,
+            amountOut,
+            option.totalSupply()
+        );
+    }
+
+    // function long(
+    //     uint256 strikeIndex,
+    //     uint256 optionsOut,
+    //     uint256 minAmountOut
+    // ) external payable returns (uint256 amountOut) {
+    //     require(strikeIndex < numStrikes, "Index too large");
+    //     require(optionsOut > 0, "optionsOut must be > 0");
+    //     uint256 balance = shortTokens[strikeIndex].balanceOf(msg.sender);
+    //     uint256 buyAmount;
+    //     uint256 sellAmount;
+    //     if (balance > 0) {
+    //         uint256 qty = Math.min(balance, optionsOut);
+    //         optionsOut = optionsOut.sub(qty);
+    //         sellAmount = sell(false, strikeIndex, qty, 0);
+    //     }
+
+    //     if (optionsOut > 0) {
+    //         buyAmount = buy(true, strikeIndex, optionsOut, 0);
+    //     }
+    // }
+
+    /**
+     * Retrieves and stores the settlement price from the oracle
+     *
+     * This method can be called by anyone after expiration and cannot be called
+     * more than once.
+     *
+     * After this method has been called, `redeem` can be called by users to
+     * trade in their options and receive their payouts
+     */
+    function settle() public nonReentrant {
+        require(isExpired(), "Cannot be called before expiry");
+        require(!isSettled, "Already settled");
+
+        isSettled = true;
+        settlementPrice = oracle.getPrice();
+        require(settlementPrice > 0, "Price from oracle must be > 0");
+
+        costAtSettlement = calcCost();
+        totalPayoff = calcPayoff();
+        emit Settled(settlementPrice);
+    }
+
+    function redeem() public nonReentrant returns (uint256 payoff) {
+        uint256 payoffBefore = calcPayoff();
+        for (uint256 i = 0; i < numStrikes; i++) {
+            uint256 longBalance = longTokens[i].balanceOf(msg.sender);
+            uint256 shortBalance = shortTokens[i].balanceOf(msg.sender);
+            if (longBalance > 0) {
+                longTokens[i].burn(msg.sender, longBalance);
+            }
+            if (shortBalance > 0) {
+                shortTokens[i].burn(msg.sender, shortBalance);
+            }
+        }
+
+        // loses accuracy but otherwise might overflow
+        payoff = payoffBefore.sub(calcPayoff()).div(SCALE);
+        payoff = payoff.mul(costAtSettlement).div(totalPayoff);
+        baseToken.uniTransfer(msg.sender, payoff);
     }
 
     function calcCost() public view returns (uint256) {
@@ -203,6 +301,26 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
 
         // b * log(sumExp) + max(q)
         return ABDKMath64x64.mulu(log, b).add(max.mul(SCALE));
+    }
+
+    function calcPayoff() public view returns (uint256 payoff) {
+        for (uint256 i = 0; i < numStrikes; i++) {
+            uint256 strikePrice = strikePrices[i];
+            uint256 longSupply = longTokens[i].totalSupply();
+            uint256 shortSupply = shortTokens[i].totalSupply();
+
+            uint256 diff;
+            if (isPut && settlementPrice < strikePrice) {
+                diff = strikePrice.sub(settlementPrice);
+            } else if (!isPut && settlementPrice > strikePrice) {
+                diff = settlementPrice.sub(strikePrice);
+            }
+            payoff = payoff.add(longSupply.mul(diff));
+            payoff = payoff.add(shortSupply.mul(Math.min(settlementPrice, strikePrice)));
+        }
+
+        // loses accuracy but otherwise might overflow in redeem()
+        payoff = payoff.div(SCALE);
     }
 
     function isExpired() public view returns (bool) {

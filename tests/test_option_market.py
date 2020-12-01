@@ -49,7 +49,7 @@ def test_initialize(a, OptionMarket, MockToken, MockOracle, OptionsToken, isEth,
         isPut,
         tradingFee,
         1000 * SCALE,
-        2000 * SCALE,
+        1500 * SCALE,
     )
 
     # check variables all set
@@ -60,7 +60,7 @@ def test_initialize(a, OptionMarket, MockToken, MockOracle, OptionsToken, isEth,
     assert market.isPut() == isPut
     assert market.tradingFee() == tradingFee
     assert market.balanceCap() == 1000 * SCALE
-    assert market.totalSupplyCap() == 2000 * SCALE
+    assert market.totalSupplyCap() == 1500 * SCALE
 
     assert market.maxStrikePrice() == 600
     assert market.numStrikes() == 4
@@ -94,7 +94,7 @@ def test_initialize(a, OptionMarket, MockToken, MockOracle, OptionsToken, isEth,
             isPut,
             1e16,  # tradingFee = 1%
             1000 * SCALE,
-            2000 * SCALE,
+            1500 * SCALE,
         )
 
 
@@ -123,7 +123,7 @@ def test_initialize_errors(a, OptionMarket, MockToken, MockOracle, OptionsToken,
             isPut,
             1e16,  # tradingFee = 1%
             1000 * SCALE,
-            2000 * SCALE,
+            1500 * SCALE,
         )
 
     market = deployer.deploy(OptionMarket)
@@ -139,7 +139,7 @@ def test_initialize_errors(a, OptionMarket, MockToken, MockOracle, OptionsToken,
             isPut,
             1e16,  # tradingFee = 1%
             1000 * SCALE,
-            2000 * SCALE,
+            1500 * SCALE,
         )
 
     market = deployer.deploy(OptionMarket)
@@ -155,7 +155,7 @@ def test_initialize_errors(a, OptionMarket, MockToken, MockOracle, OptionsToken,
             isPut,
             SCALE,  # tradingFee = 100%
             1000 * SCALE,
-            2000 * SCALE,
+            1500 * SCALE,
         )
 
     market = deployer.deploy(OptionMarket)
@@ -171,7 +171,7 @@ def test_initialize_errors(a, OptionMarket, MockToken, MockOracle, OptionsToken,
             isPut,
             1e16,  # tradingFee = 1%
             0,
-            2000 * SCALE,
+            1500 * SCALE,
         )
 
     market = deployer.deploy(OptionMarket)
@@ -203,7 +203,7 @@ def test_initialize_errors(a, OptionMarket, MockToken, MockOracle, OptionsToken,
             isPut,
             1e16,  # tradingFee = 1%
             1000 * SCALE,
-            2000 * SCALE,
+            1500 * SCALE,
         )
 
     market = deployer.deploy(OptionMarket)
@@ -219,7 +219,7 @@ def test_initialize_errors(a, OptionMarket, MockToken, MockOracle, OptionsToken,
             isPut,
             1e16,  # tradingFee = 1%
             1000 * SCALE,
-            2000 * SCALE,
+            1500 * SCALE,
         )
 
     market = deployer.deploy(OptionMarket)
@@ -235,7 +235,7 @@ def test_initialize_errors(a, OptionMarket, MockToken, MockOracle, OptionsToken,
             isPut,
             1e16,  # tradingFee = 1%
             1000 * SCALE,
-            2000 * SCALE,
+            1500 * SCALE,
         )
 
     market = deployer.deploy(OptionMarket)
@@ -251,7 +251,7 @@ def test_initialize_errors(a, OptionMarket, MockToken, MockOracle, OptionsToken,
             isPut,
             1e16,  # tradingFee = 1%
             1000 * SCALE,
-            2000 * SCALE,
+            1500 * SCALE,
         )
 
     market = deployer.deploy(OptionMarket)
@@ -267,7 +267,7 @@ def test_initialize_errors(a, OptionMarket, MockToken, MockOracle, OptionsToken,
             isPut,
             1e16,  # tradingFee = 1%
             1000 * SCALE,
-            2000 * SCALE,
+            1500 * SCALE,
         )
 
     market = deployer.deploy(OptionMarket)
@@ -283,7 +283,7 @@ def test_initialize_errors(a, OptionMarket, MockToken, MockOracle, OptionsToken,
             isPut,
             1e16,  # tradingFee = 1%
             1000 * SCALE,
-            2000 * SCALE,
+            1500 * SCALE,
         )
 
 
@@ -310,7 +310,7 @@ def test_buy_and_sell_calls(a, OptionMarket, MockToken, MockOracle, OptionsToken
         False,  # call
         1 * PERCENT,  # tradingFee = 1%
         1000 * SCALE,
-        2000 * SCALE,
+        1500 * SCALE,
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
@@ -467,7 +467,7 @@ def test_buy_and_sell_puts(a, OptionMarket, MockToken, MockOracle, OptionsToken)
         True,  # put
         1 * PERCENT,  # tradingFee = 1%
         1000 * SCALE,
-        2000 * SCALE,
+        1500 * SCALE,
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
@@ -540,7 +540,7 @@ def test_buy_and_sell_with_eth(a, OptionMarket, MockToken, MockOracle, OptionsTo
         False,
         1 * PERCENT,  # tradingFee = 1%
         1000 * SCALE,
-        2000 * SCALE,
+        1500 * SCALE,
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
@@ -566,8 +566,9 @@ def test_buy_and_sell_with_eth(a, OptionMarket, MockToken, MockOracle, OptionsTo
     assert longTokens[0].balanceOf(alice) == 0
 
 
-def test_balance_and_supply_cap(a, OptionMarket, MockToken, MockOracle, OptionsToken):
-    # return # TODO remove
+@pytest.mark.parametrize("isPut", [False, True])
+def test_balance_and_supply_cap(a, OptionMarket, MockToken, MockOracle, OptionsToken, isPut):
+    return # TODO remove
 
     # setup args
     deployer, alice, bob = a[:3]
@@ -575,6 +576,117 @@ def test_balance_and_supply_cap(a, OptionMarket, MockToken, MockOracle, OptionsT
     oracle = deployer.deploy(MockOracle)
     longTokens = [deployer.deploy(OptionsToken) for _ in range(4)]
     shortTokens = [deployer.deploy(OptionsToken) for _ in range(4)]
+
+    # deploy and initialize
+    market = deployer.deploy(OptionMarket)
+    market.initialize(
+        baseToken,
+        oracle,
+        longTokens,
+        shortTokens,
+        [300 * SCALE, 400 * SCALE, 500 * SCALE, 600 * SCALE],
+        2000000000,  # expiry = 18 May 2033
+        10 * PERCENT,  # alpha = 0.1
+        isPut,
+        1 * PERCENT,  # tradingFee = 1%
+        1000 * SCALE,
+        1500 * SCALE,
+    )
+    for token in longTokens + shortTokens:
+        token.initialize(market, "name", "symbol", 18)
+
+    # give users base tokens
+    baseToken.mint(alice, 1e8 * SCALE, {"from": deployer})
+    baseToken.approve(market, 1e8 * SCALE, {"from": alice})
+    baseToken.mint(bob, 1e8 * SCALE, {"from": deployer})
+    baseToken.approve(market, 1e8 * SCALE, {"from": bob})
+
+    # can't buy 1001 calls
+    with reverts("Exceeded balance cap"):
+        market.buy(CALL, 0, 1001 * SCALE, 1e8 * SCALE, {"from": alice})
+
+    # but can buy 800
+    market.buy(CALL, 0, 800 * SCALE, 1e8 * SCALE, {"from": alice})
+
+    # can't buy 201 calls
+    with reverts("Exceeded balance cap"):
+        market.buy(CALL, 0, 201 * SCALE, 1e8 * SCALE, {"from": alice})
+
+    # but can buy 1000 of other options
+    market.buy(CALL, 3, 1000 * SCALE, 1e8 * SCALE, {"from": alice})
+    market.buy(COVER, 1, 1000 * SCALE, 1e8 * SCALE, {"from": alice})
+
+    # bob can't buy 701 calls but can buy 700
+    with reverts("Exceeded total supply cap"):
+        market.buy(CALL, 0, 701 * SCALE, 1e8 * SCALE, {"from": bob})
+    market.buy(CALL, 0, 700 * SCALE, 1e8 * SCALE, {"from": bob})
+
+    # bob can't buy 501 covers but can buy 500
+    with reverts("Exceeded total supply cap"):
+        market.buy(COVER, 1, 501 * SCALE, 1e8 * SCALE, {"from": bob})
+    market.buy(COVER, 1, 500 * SCALE, 1e8 * SCALE, {"from": bob})
+
+    # alice sells 100 then bob can buy 100 more
+    market.sell(COVER, 1, 100 * SCALE, 0, {"from": alice})
+    with reverts("Exceeded total supply cap"):
+        market.buy(COVER, 1, 101 * SCALE, 1e8 * SCALE, {"from": bob})
+    market.buy(COVER, 1, 100 * SCALE, 1e8 * SCALE, {"from": bob})
+
+
+@pytest.mark.parametrize("isPut", [False, True])
+def test_settle(a, OptionMarket, MockToken, MockOracle, OptionsToken, fast_forward, isPut):
+
+    # setup args
+    deployer, alice = a[:2]
+    baseToken = deployer.deploy(MockToken)
+    oracle = deployer.deploy(MockOracle)
+    longTokens = [deployer.deploy(OptionsToken) for _ in range(4)]
+    shortTokens = [deployer.deploy(OptionsToken) for _ in range(4)]
+    oracle.setPrice(444 * SCALE)
+
+    # deploy and initialize
+    market = deployer.deploy(OptionMarket)
+    market.initialize(
+        baseToken,
+        oracle,
+        longTokens,
+        shortTokens,
+        [300 * SCALE, 400 * SCALE, 500 * SCALE, 600 * SCALE],
+        2000000000,  # expiry = 18 May 2033
+        10 * PERCENT,  # alpha = 0.1
+        isPut,
+        1 * PERCENT,  # tradingFee = 1%
+        1000 * SCALE,
+        1500 * SCALE,
+    )
+    for token in longTokens + shortTokens:
+        token.initialize(market, "name", "symbol", 18)
+
+    with reverts("Cannot be called before expiry"):
+        market.settle({"from": alice})
+
+    # can only call settle() after expiry time and can only call once
+    fast_forward(2000000000)
+    assert market.settlementPrice() == 0
+    tx = market.settle({"from": alice})
+    assert market.settlementPrice() == 444 * SCALE
+    assert tx.events["Settled"] == {
+        "settlementPrice": 444 * SCALE,
+    }
+
+    with reverts("Already settled"):
+        market.settle({"from": alice})
+
+
+def test_redeem(a, OptionMarket, MockToken, MockOracle, OptionsToken, fast_forward):
+
+    # setup args
+    deployer, alice, bob = a[:3]
+    baseToken = deployer.deploy(MockToken)
+    oracle = deployer.deploy(MockOracle)
+    longTokens = [deployer.deploy(OptionsToken) for _ in range(4)]
+    shortTokens = [deployer.deploy(OptionsToken) for _ in range(4)]
+    oracle.setPrice(444 * SCALE)
 
     # deploy and initialize
     market = deployer.deploy(OptionMarket)
@@ -595,39 +707,94 @@ def test_balance_and_supply_cap(a, OptionMarket, MockToken, MockOracle, OptionsT
         token.initialize(market, "name", "symbol", 18)
 
     # give users base tokens
-    baseToken.mint(alice, 10000 * SCALE, {"from": deployer})
-    baseToken.approve(market, 10000 * SCALE, {"from": alice})
-    baseToken.mint(bob, 10000 * SCALE, {"from": deployer})
-    baseToken.approve(market, 10000 * SCALE, {"from": bob})
+    baseToken.mint(alice, 100 * SCALE, {"from": deployer})
+    baseToken.approve(market, 100 * SCALE, {"from": alice})
+    baseToken.mint(bob, 100 * SCALE, {"from": deployer})
+    baseToken.approve(market, 100 * SCALE, {"from": bob})
 
-    # can't buy 1001 calls
-    with reverts("Exceeded balance cap"):
-        market.buy(CALL, 0, 1001 * SCALE, 2000 * SCALE, {"from": alice})
+    # buy 2 calls (strike=300)
+    market.buy(CALL, 0, 2 * SCALE, 100 * SCALE, {"from": alice})
 
-    # but can buy 800
-    market.buy(CALL, 0, 800 * SCALE, 2000 * SCALE, {"from": alice})
+    # buy 1 call (strike=600) and 3 covers (strike=400)
+    market.buy(CALL, 3, 3 * SCALE, 100 * SCALE, {"from": bob})
+    market.buy(COVER, 1, 3 * SCALE, 100 * SCALE, {"from": bob})
+    market.sell(CALL, 3, 2 * SCALE, 0, {"from": bob})
 
-    # can't buy 201 calls
-    with reverts("Exceeded balance cap"):
-        market.buy(CALL, 0, 201 * SCALE, 2000 * SCALE, {"from": alice})
+    fast_forward(2000000000)
+    market.settle({"from": alice})
 
-    # but can buy 1000 of other options
-    market.buy(CALL, 3, 1000 * SCALE, 2000 * SCALE, {"from": alice})
-    market.buy(COVER, 1, 1000 * SCALE, 2000 * SCALE, {"from": alice})
+    cost = lslmsr([3, 4, 4, 1, 3], 0.1)
+    alicePayoff = 2 * (444 - 300)
+    bobPayoff = 3 * 400
+    payoff = alicePayoff + bobPayoff
+    assert approx(market.costAtSettlement()) == cost * SCALE
+    assert market.totalPayoff() == payoff * SCALE
 
-    # bob can't buy 701 calls but can buy 700
-    with reverts("Exceeded total supply cap"):
-        market.buy(CALL, 0, 701 * SCALE, 2000 * SCALE, {"from": bob})
-    market.buy(CALL, 0, 700 * SCALE, 2000 * SCALE, {"from": bob})
+    balance = baseToken.balanceOf(market)
+    aliceBalance = baseToken.balanceOf(alice)
+    tx = market.redeem({"from": alice})
+    assert approx(tx.return_value) == cost * alicePayoff / payoff
+    assert approx(balance - baseToken.balanceOf(market)) == cost * alicePayoff / payoff
+    assert approx(baseToken.balanceOf(alice) - aliceBalance) == cost * alicePayoff / payoff
 
-    # bob can't buy 501 covers but can buy 500
-    with reverts("Exceeded total supply cap"):
-        market.buy(COVER, 1, 501 * SCALE, 2000 * SCALE, {"from": bob})
-    market.buy(COVER, 1, 500 * SCALE, 2000 * SCALE, {"from": bob})
+    balance = baseToken.balanceOf(market)
+    bobBalance = baseToken.balanceOf(bob)
+    tx = market.redeem({"from": bob})
+    assert approx(tx.return_value) == cost * bobPayoff / payoff
+    assert approx(balance - baseToken.balanceOf(market)) == cost * bobPayoff / payoff
+    assert approx(baseToken.balanceOf(bob) - bobBalance) == cost * bobPayoff / payoff
 
-    # alice sells 100 then bob can buy 100 more
-    market.sell(COVER, 1, 100 * SCALE, 0, {"from": alice})
-    with reverts("Exceeded total supply cap"):
-        market.buy(COVER, 1, 101 * SCALE, 2000 * SCALE, {"from": bob})
-    market.buy(COVER, 1, 100 * SCALE, 2000 * SCALE, {"from": bob})
+
+def test_buy_and_redeem_large_size(a, OptionMarket, MockToken, MockOracle, OptionsToken, fast_forward):
+
+    # setup args
+    deployer, alice = a[:2]
+    baseToken = deployer.deploy(MockToken)
+    oracle = deployer.deploy(MockOracle)
+    longTokens = [deployer.deploy(OptionsToken) for _ in range(4)]
+    shortTokens = [deployer.deploy(OptionsToken) for _ in range(4)]
+    oracle.setPrice(444 * SCALE)
+
+    # deploy and initialize
+    market = deployer.deploy(OptionMarket)
+    market.initialize(
+        baseToken,
+        oracle,
+        longTokens,
+        shortTokens,
+        [300 * SCALE, 400 * SCALE, 500 * SCALE, 600 * SCALE],
+        2000000000,  # expiry = 18 May 2033
+        10 * PERCENT,  # alpha = 0.1
+        False,  # call
+        1 * PERCENT,  # tradingFee = 1%
+        1e20 * SCALE,
+        1e20 * SCALE,
+    )
+    for token in longTokens + shortTokens:
+        token.initialize(market, "name", "symbol", 18)
+
+    # give users base tokens
+    baseToken.mint(alice, 1e20 * SCALE, {"from": deployer})
+    baseToken.approve(market, 1e20 * SCALE, {"from": alice})
+
+    # buy, sell, buy large trade
+    market.buy(CALL, 3, 1e18 * SCALE, 1e20 * SCALE, {"from": alice})
+    market.sell(CALL, 3, 1e18 * SCALE, 0, {"from": alice})
+    market.buy(CALL, 3, 1e18 * SCALE, 1e20 * SCALE, {"from": alice})
+
+    # buy, sell, buy large trade
+    market.buy(COVER, 0, 1e18 * SCALE, 1e20 * SCALE, {"from": alice})
+    market.sell(COVER, 0, 1e18 * SCALE, 0, {"from": alice})
+    market.buy(COVER, 0, 1e18 * SCALE, 1e20 * SCALE, {"from": alice})
+
+    fast_forward(2000000000)
+    market.settle({"from": alice})
+
+    cost = lslmsr([1e18, 2e18, 2e18, 2e18, 1e18], 0.1)
+    assert approx(market.costAtSettlement()) == cost * SCALE
+
+    tx = market.redeem({"from": alice})
+    assert approx(tx.return_value) == cost
+    assert approx(baseToken.balanceOf(market)) == 6 * 1e18 * PERCENT
+    assert approx(baseToken.balanceOf(alice)) == 1e20 * SCALE - 6 * 1e18 * PERCENT
 
