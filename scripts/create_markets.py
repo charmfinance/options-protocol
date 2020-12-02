@@ -54,7 +54,7 @@ TOKEN_ADDRESSES = {
 FACTORY = {
     "mainnet": "",
     # "rinkeby": "0xA8d6D6623fc492eA9acbE39EE929E7205fE66687",  # v1. remove
-    "rinkeby": "0x7d8d7Db940B39ef2B13ea53cF1081f62412e4df2",
+    "rinkeby": "0x1B8f7C42531b5a5D2B89B83E7A23920075040f47",
 }
 
 
