@@ -5,6 +5,7 @@ pragma solidity ^0.6.12;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 import "./libraries/CloneFactory.sol";
 import "./libraries/UniERC20.sol";
@@ -12,7 +13,7 @@ import "./libraries/openzeppelin/ERC20UpgradeSafe.sol";
 import "./OptionMarket.sol";
 import "./OptionSymbol.sol";
 
-contract OptionFactory is CloneFactory, OptionSymbol {
+contract OptionFactory is CloneFactory, OptionSymbol, ReentrancyGuard {
     using Address for address;
     using SafeERC20 for IERC20;
     using UniERC20 for IERC20;
@@ -50,7 +51,7 @@ contract OptionFactory is CloneFactory, OptionSymbol {
         uint256 _tradingFee,
         uint256 _balanceCap,
         uint256 _totalSupplyCap
-    ) external returns (address market) {
+    ) external nonReentrant returns (address market) {
         // set member variables to avoid stack too deep error
         // TODO: cleaner way to do this?
         oracle = _oracle;
