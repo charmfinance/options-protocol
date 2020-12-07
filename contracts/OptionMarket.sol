@@ -70,7 +70,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
      * @param _expiryTime       Expiration time as a unix timestamp
      * @param _isPut            Whether long token represents a call or a put
      * @param _tradingFee       Trading fee expressed in wei
-     * @param _balanceCap       Expiration time as a unix timestamp
+     * @param _balanceCap       Cap on how many options can be bought per account
      */
     function initialize(
         address _baseToken,
