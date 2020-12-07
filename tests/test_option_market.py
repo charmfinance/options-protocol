@@ -59,7 +59,6 @@ def test_initialize(
         isPut,
         tradingFee,
         1000 * SCALE,
-        1500 * SCALE,
     )
 
     # check variables all set
@@ -70,7 +69,6 @@ def test_initialize(
     assert market.isPut() == isPut
     assert market.tradingFee() == tradingFee
     assert market.balanceCap() == 1000 * SCALE
-    assert market.totalSupplyCap() == 1500 * SCALE
 
     assert market.maxStrikePrice() == 600 * SCALE
     assert market.numStrikes() == 4
@@ -107,7 +105,6 @@ def test_initialize(
             isPut,
             1e16,  # tradingFee = 1%
             1000 * SCALE,
-            1500 * SCALE,
         )
 
 
@@ -137,7 +134,6 @@ def test_initialize_errors(
             isPut,
             1e16,  # tradingFee = 1%
             1000 * SCALE,
-            1500 * SCALE,
         )
 
     market = deployer.deploy(OptionMarket)
@@ -153,7 +149,6 @@ def test_initialize_errors(
             isPut,
             1e16,  # tradingFee = 1%
             1000 * SCALE,
-            1500 * SCALE,
         )
 
     market = deployer.deploy(OptionMarket)
@@ -169,7 +164,6 @@ def test_initialize_errors(
             isPut,
             SCALE,  # tradingFee = 100%
             1000 * SCALE,
-            1500 * SCALE,
         )
 
     market = deployer.deploy(OptionMarket)
@@ -184,23 +178,6 @@ def test_initialize_errors(
             1e17,  # alpha = 0.1
             isPut,
             1e16,  # tradingFee = 1%
-            0,
-            1500 * SCALE,
-        )
-
-    market = deployer.deploy(OptionMarket)
-    with reverts("Total supply cap must be > 0"):
-        market.initialize(
-            baseToken,
-            oracle,
-            longTokens,
-            shortTokens,
-            [300 * SCALE, 400 * SCALE, 500 * SCALE, 600 * SCALE],
-            2000000000,  # expiry = 18 May 2033
-            1e17,  # alpha = 0.1
-            isPut,
-            1e16,  # tradingFee = 1%
-            1000 * SCALE,
             0,
         )
 
@@ -217,7 +194,6 @@ def test_initialize_errors(
             isPut,
             1e16,  # tradingFee = 1%
             1000 * SCALE,
-            1500 * SCALE,
         )
 
     market = deployer.deploy(OptionMarket)
@@ -233,7 +209,6 @@ def test_initialize_errors(
             isPut,
             1e16,  # tradingFee = 1%
             1000 * SCALE,
-            1500 * SCALE,
         )
 
     market = deployer.deploy(OptionMarket)
@@ -249,7 +224,6 @@ def test_initialize_errors(
             isPut,
             1e16,  # tradingFee = 1%
             1000 * SCALE,
-            1500 * SCALE,
         )
 
     market = deployer.deploy(OptionMarket)
@@ -265,7 +239,6 @@ def test_initialize_errors(
             isPut,
             1e16,  # tradingFee = 1%
             1000 * SCALE,
-            1500 * SCALE,
         )
 
     market = deployer.deploy(OptionMarket)
@@ -281,7 +254,6 @@ def test_initialize_errors(
             isPut,
             1e16,  # tradingFee = 1%
             1000 * SCALE,
-            1500 * SCALE,
         )
 
     market = deployer.deploy(OptionMarket)
@@ -297,7 +269,6 @@ def test_initialize_errors(
             isPut,
             1e16,  # tradingFee = 1%
             1000 * SCALE,
-            1500 * SCALE,
         )
 
 
@@ -329,7 +300,6 @@ def test_buy_and_sell_calls(
         False,  # call
         1 * PERCENT,  # tradingFee = 1%
         1000 * SCALE,
-        1500 * SCALE,
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
@@ -585,7 +555,6 @@ def test_buy_and_sell_puts(a, OptionMarket, MockToken, MockOracle, OptionsToken)
         True,  # put
         1 * PERCENT,  # tradingFee = 1%
         1000 * SCALE,
-        1500 * SCALE,
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
@@ -701,7 +670,6 @@ def test_balance_and_supply_cap(
         isPut,
         1 * PERCENT,  # tradingFee = 1%
         1000 * SCALE,
-        1500 * SCALE,
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
@@ -726,22 +694,6 @@ def test_balance_and_supply_cap(
     # but can buy 1000 of other options
     market.buy(CALL, 3, 1000 * SCALE, 1e8 * SCALE, {"from": alice})
     market.buy(COVER, 1, 1000 * SCALE, 1e8 * SCALE, {"from": alice})
-
-    # bob can't buy 701 calls but can buy 700
-    with reverts("Exceeded total supply cap"):
-        market.buy(CALL, 0, 701 * SCALE, 1e8 * SCALE, {"from": bob})
-    market.buy(CALL, 0, 700 * SCALE, 1e8 * SCALE, {"from": bob})
-
-    # bob can't buy 501 covers but can buy 500
-    with reverts("Exceeded total supply cap"):
-        market.buy(COVER, 1, 501 * SCALE, 1e8 * SCALE, {"from": bob})
-    market.buy(COVER, 1, 500 * SCALE, 1e8 * SCALE, {"from": bob})
-
-    # alice sells 100 then bob can buy 100 more
-    market.sell(COVER, 1, 100 * SCALE, 0, {"from": alice})
-    with reverts("Exceeded total supply cap"):
-        market.buy(COVER, 1, 101 * SCALE, 1e8 * SCALE, {"from": bob})
-    market.buy(COVER, 1, 100 * SCALE, 1e8 * SCALE, {"from": bob})
 
 
 @pytest.mark.parametrize("isEth", [False, True])
@@ -771,7 +723,6 @@ def test_settle(
         isPut,
         1 * PERCENT,  # tradingFee = 1%
         1000 * SCALE,
-        1500 * SCALE,
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
@@ -821,7 +772,6 @@ def test_redeem_calls(
         False,  # call
         1 * PERCENT,  # tradingFee = 1%
         1000 * SCALE,
-        1500 * SCALE,
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
@@ -911,7 +861,6 @@ def test_redeem_puts(
         True,  # put
         1 * PERCENT,  # tradingFee = 1%
         1000 * SCALE,
-        1500 * SCALE,
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
@@ -1008,7 +957,6 @@ def test_buy_and_redeem_large_size(
         False,  # call
         1 * PERCENT,  # tradingFee = 1%
         1e20 * SCALE,
-        1e20 * SCALE,
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
@@ -1067,7 +1015,6 @@ def test_emergency_methods(
         10 * PERCENT,  # alpha = 0.1
         isPut,
         1 * PERCENT,  # tradingFee = 1%
-        1e20 * SCALE,
         1e20 * SCALE,
     )
     for token in longTokens + shortTokens:
