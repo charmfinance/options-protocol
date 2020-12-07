@@ -14,8 +14,11 @@ from brownie import (
 # deployment parameters
 ACCOUNT = "deployer"
 BASE_TOKEN = "ETH"
+BASE_TOKEN = "WBTC"
 EXPIRY_DATE = "11 Dec 2020"
+EXPIRY_DATE = "18 Dec 2020"
 STRIKE_PRICES = [400, 500, 600]
+STRIKE_PRICES = [20000, 25000, 30000]
 LIQUIDITY_PARAM = 0.20
 NETWORK = "rinkeby"
 
@@ -36,6 +39,7 @@ DEPLOYED_ORACLES = {
     },
     "rinkeby": {
         "ETH/USDC": "0xD014CDc41f9AF7A6456c920aD17fFf14F136640F",
+        "WBTC/USDC": "0xECe365B379E1dD183B20fc5f022230C044d51404",
     },
 }
 
@@ -48,6 +52,7 @@ TOKEN_ADDRESSES = {
     "rinkeby": {
         "ETH": "0x0000000000000000000000000000000000000000",
         "USDC": "0xE7d541c18D6aDb863F4C570065c57b75a53a64d3",
+        "WBTC": "0xfFf8641a3E2AA350624db17BDb0eb3998E314926",
     },
 }
 
