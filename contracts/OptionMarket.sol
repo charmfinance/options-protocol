@@ -39,6 +39,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     event Redeemed(address indexed account, uint256 payoff);
 
     uint256 public constant SCALE = 1e18;
+    uint256 public constant SCALE_SCALE = 1e36;
 
     IERC20 public baseToken;
     IOracle public oracle;
@@ -154,13 +155,8 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         require(option.balanceOf(msg.sender) <= balanceCap, "Exceeded balance cap");
         require(option.totalSupply() <= totalSupplyCap, "Exceeded total supply cap");
 
-        uint256 costDiff = calcCost().sub(costBefore);
-        uint256 fee = optionsOut.mul(tradingFee);
-        if (isPut) {
-            costDiff = costDiff.mul(maxStrikePrice).div(SCALE);
-            fee = fee.mul(strikePrices[strikeIndex]).div(SCALE);
-        }
-        amountIn = (costDiff.add(fee)).div(SCALE);
+        amountIn = calcCost().sub(costBefore);
+        amountIn = amountIn.add(calcFee(optionsOut, strikeIndex));
         require(amountIn > 0, "Amount in must be > 0");
         require(amountIn <= maxAmountIn, "Max slippage exceeded");
 
@@ -194,13 +190,8 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         OptionToken option = isLongToken ? longTokens[strikeIndex] : shortTokens[strikeIndex];
         option.burn(msg.sender, optionsIn);
 
-        uint256 costDiff = costBefore.sub(calcCost());
-        uint256 fee = optionsIn.mul(tradingFee);
-        if (isPut) {
-            costDiff = costDiff.mul(maxStrikePrice).div(SCALE);
-            fee = fee.mul(strikePrices[strikeIndex]).div(SCALE);
-        }
-        amountOut = (costDiff.sub(fee)).div(SCALE);
+        amountOut = costBefore.sub(calcCost());
+        amountOut = amountOut.sub(calcFee(optionsIn, strikeIndex));
         require(amountOut > 0, "Amount in must be > 0");
         require(amountOut >= minAmountOut, "Max slippage exceeded");
 
@@ -255,7 +246,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         }
 
         // loses accuracy but otherwise might overflow
-        payoff = payoffBefore.sub(calcPayoff()).div(SCALE);
+        payoff = payoffBefore.sub(calcPayoff());
         payoff = payoff.mul(costAtSettlement).div(totalPayoff);
         baseToken.uniTransfer(msg.sender, payoff);
         emit Redeemed(msg.sender, payoff);
@@ -281,7 +272,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
      *
      *   m = max(q_1, ..., q_n)
      *
-     * Answer is multiplied by `SCALE`
+     * Answer is multiplied by strike price for puts
      */
     function calcCost() public view returns (uint256) {
         // initally set s to total supply of longTokens
@@ -327,7 +318,8 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         int128 log = ABDKMath64x64.ln(sumExp);
 
         // b * log(sumExp) + max(q)
-        return ABDKMath64x64.mulu(log, b).add(max.mul(SCALE));
+        uint256 cost = ABDKMath64x64.mulu(log, b).add(max.mul(SCALE));
+        return isPut ? cost.mul(maxStrikePrice).div(SCALE_SCALE) : cost.div(SCALE);
     }
 
     /**
@@ -357,20 +349,18 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         payoff = payoff.div(SCALE);
     }
 
+    function calcFee(uint256 amount, uint256 strikeIndex) public view returns (uint256) {
+        uint256 fee = amount.mul(tradingFee);
+        return isPut ? fee.mul(strikePrices[strikeIndex]).div(SCALE_SCALE) : fee.div(SCALE);
+    }
+
     function isExpired() public view returns (bool) {
         return block.timestamp >= expiryTime;
     }
 
     function skim() public nonReentrant onlyOwner returns (uint256 amount) {
         uint256 balanceBefore = baseToken.uniBalanceOf(address(this));
-        uint256 balanceAfter;
-        if (isSettled) {
-            balanceAfter = calcPayoff();
-        } else if (isPut) {
-            balanceAfter = calcCost().mul(maxStrikePrice).div(SCALE).div(SCALE);
-        } else {
-            balanceAfter = calcCost().div(SCALE);
-        }
+        uint256 balanceAfter = isSettled ? calcPayoff() : calcCost();
         amount = balanceBefore.sub(balanceAfter);
         if (amount > 0) {
             baseToken.uniTransfer(msg.sender, amount);
