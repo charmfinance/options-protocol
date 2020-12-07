@@ -15,6 +15,9 @@ import "./libraries/openzeppelin/ReentrancyGuardUpgradeSafe.sol";
 import "../interfaces/IOracle.sol";
 import "./OptionToken.sol";
 
+/**
+ * Automated market maker that lets users buy and sell options from it
+ */
 contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     using Address for address;
     using SafeERC20 for IERC20;
@@ -57,6 +60,19 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     uint256 public costAtSettlement;
     uint256 public totalPayoff;
 
+    /**
+     * @param _baseToken        Underlying ERC20 token. Represents ETH if equal to 0x0
+     * @param _oracle           Oracle from which the settlement price is obtained
+     * @param _longTokens       Long options
+     * @param _shortTokens      Short options
+     * @param _strikePrices     Strike prices expressed in wei
+     * @param _alpha            Liquidity parameter for cost function expressed in wei
+     * @param _expiryTime       Expiration time as a unix timestamp
+     * @param _isPut            Whether long token represents a call or a put
+     * @param _tradingFee       Trading fee expressed in wei
+     * @param _balanceCap       Expiration time as a unix timestamp
+     * @param _totalSupplyCap   Expiration time as a unix timestamp
+     */
     function initialize(
         address _baseToken,
         address _oracle,
@@ -78,6 +94,8 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
 
         require(_strikePrices.length > 0, "Strike prices must not be empty");
         require(_strikePrices[0] > 0, "Strike prices must be > 0");
+
+        // check strike prices are in increasing order
         for (uint256 i = 0; i < _strikePrices.length - 1; i++) {
             require(_strikePrices[i] < _strikePrices[i + 1], "Strike prices must be increasing");
         }
@@ -112,6 +130,13 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         require(!isExpired(), "Already expired");
     }
 
+    /**
+     * Buy `optionsOut` quantity of options
+     *
+     * Revert if the resulting cost would be greater than `maxAmountIn`
+     *
+     * This method cannot be called after expiration
+     */
     function buy(
         bool isLongToken,
         uint256 strikeIndex,
@@ -147,6 +172,13 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         emit Trade(msg.sender, strikeIndex, true, isLongToken, optionsOut, amountIn, option.totalSupply());
     }
 
+    /**
+     * Sell `optionsIn` quantity of options
+     *
+     * Revert if the resulting cost would be greater than `minAmountOut`
+     *
+     * This method cannot be called after expiration
+     */
     function sell(
         bool isLongToken,
         uint256 strikeIndex,
@@ -199,6 +231,12 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         emit Settled(settlementPrice);
     }
 
+    /**
+     * Called by a user to redeem all their options and receive payout
+     *
+     * This method can only be called after `settle` has been called and the
+     * settlement price has been set
+     */
     function redeem() external nonReentrant returns (uint256 payoff) {
         require(isExpired(), "Cannot be called before expiry");
         require(isSettled, "Cannot be called before settlement");
@@ -223,20 +261,41 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         emit Redeemed(msg.sender, payoff);
     }
 
+    /**
+     * Calculates the LS-LMSR cost function (Othman et al., 2013)
+     *
+     *   C(q_1, ..., q_n) = b * log(exp(q_1 / b) + ... + exp(q_n / b))
+     *
+     * where
+     *
+     *   q_i = total supply of ith spread
+     *   b = alpha * (q_1 + ... + q_n)
+     *   alpha = LS-LMSR constant that determines liquidity sensitivity
+     *
+     * An equivalent expression for C is used to avoid overflow when
+     * calculating exponentials
+     *
+     *   C(q_1, ..., q_n) = m + b * log(exp((q_1 - m) / b) + ... + exp((q_n - m) / b))
+     *
+     * where
+     * 
+     *   m = max(q_1, ..., q_n)
+     *
+     * Answer is multiplied by `SCALE`
+     */
     function calcCost() public view returns (uint256) {
-        // initally set s to total supply of longs
+        // initally set s to total supply of longTokens
         uint256 s;
         for (uint256 i = 0; i < numStrikes; i++) {
             s = s.add(longTokens[i].totalSupply());
         }
 
-        // q[i] is total supply of longs[:i] and shorts[i:]
         uint256[] memory q = new uint256[](numStrikes + 1);
         q[0] = s;
         uint256 max = s;
         uint256 sum = s;
 
-        // s keeps track of running sum
+        // set q[i] to be total supply of longTokens[:i] and shortTokens[i:]
         for (uint256 i = 0; i < numStrikes; i++) {
             s = s.add(shortTokens[i].totalSupply());
             s = s.sub(longTokens[i].totalSupply());
@@ -245,7 +304,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
             sum = sum.add(s);
         }
 
-        // no options bought yet
+        // if no options bought yet
         if (sum == 0) {
             return 0;
         }
@@ -271,6 +330,9 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         return ABDKMath64x64.mulu(log, b).add(max.mul(SCALE));
     }
 
+    /**
+     * Calculates amount of `baseToken` that needs to be paid out to all users
+     */
     function calcPayoff() public view returns (uint256 payoff) {
         for (uint256 i = 0; i < numStrikes; i++) {
             uint256 strikePrice = strikePrices[i];
@@ -279,11 +341,17 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
 
             uint256 diff;
             if (isPut && settlementPrice < strikePrice) {
+
+                // put payoff = max(K - S, 0)
                 diff = strikePrice.sub(settlementPrice);
             } else if (!isPut && settlementPrice > strikePrice) {
+
+                // call payoff = max(S - K, 0)
                 diff = settlementPrice.sub(strikePrice);
             }
             payoff = payoff.add(longSupply.mul(diff));
+
+            // short payoff = min(S, K)
             payoff = payoff.add(shortSupply.mul(Math.min(settlementPrice, strikePrice)));
         }
 
