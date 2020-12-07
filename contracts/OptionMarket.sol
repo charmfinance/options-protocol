@@ -278,7 +278,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
      *   C(q_1, ..., q_n) = m + b * log(exp((q_1 - m) / b) + ... + exp((q_n - m) / b))
      *
      * where
-     * 
+     *
      *   m = max(q_1, ..., q_n)
      *
      * Answer is multiplied by `SCALE`
@@ -341,11 +341,9 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
 
             uint256 diff;
             if (isPut && settlementPrice < strikePrice) {
-
                 // put payoff = max(K - S, 0)
                 diff = strikePrice.sub(settlementPrice);
             } else if (!isPut && settlementPrice > strikePrice) {
-
                 // call payoff = max(S - K, 0)
                 diff = settlementPrice.sub(strikePrice);
             }
@@ -361,6 +359,22 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
 
     function isExpired() public view returns (bool) {
         return block.timestamp >= expiryTime;
+    }
+
+    function skim() public nonReentrant onlyOwner returns (uint256 amount) {
+        uint256 balanceBefore = baseToken.uniBalanceOf(address(this));
+        uint256 balanceAfter;
+        if (isSettled) {
+            balanceAfter = calcPayoff();
+        } else if (isPut) {
+            balanceAfter = calcCost().mul(maxStrikePrice).div(SCALE).div(SCALE);
+        } else {
+            balanceAfter = calcCost().div(SCALE);
+        }
+        amount = balanceBefore.sub(balanceAfter);
+        if (amount > 0) {
+            baseToken.uniTransfer(msg.sender, amount);
+        }
     }
 
     // emergency use only. to be removed in future versions

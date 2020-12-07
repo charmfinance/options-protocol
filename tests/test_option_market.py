@@ -435,6 +435,21 @@ def test_buy_and_sell_calls(
     with reverts("ERC20: burn amount exceeds balance"):
         market.sell(COVER, 1, 1 * SCALE, 0, {"from": alice})
 
+    # only pool owner can skim
+    with reverts("Ownable: caller is not the owner"):
+        market.skim({"from": alice})
+
+    balance1 = getBalance(deployer)
+    tx = market.skim({"from": deployer})
+    assert approx(tx.return_value) == 16 * PERCENT
+    assert approx(getBalance(deployer) - balance1) == 16 * PERCENT
+
+    # can't skim again
+    balance1 = getBalance(deployer)
+    tx = market.skim({"from": deployer})
+    assert tx.return_value == 0 * PERCENT
+    assert getBalance(deployer) - balance1 == 0
+
     # sell 2 covers
     tx = market.sell(COVER, 0, 2 * SCALE, 0, {"from": alice})
     cost1 = lslmsr([5, 9, 9, 6, 11], 0.1) + 16 * PERCENT
@@ -535,6 +550,11 @@ def test_buy_and_sell_calls(
         "newSupply": 0,
     }
 
+    balance1 = getBalance(deployer)
+    tx = market.skim({"from": deployer})
+    assert approx(tx.return_value) == 16 * PERCENT
+    assert approx(getBalance(deployer) - balance1) == 16 * PERCENT
+
     # cannot buy or sell after expiry
     fast_forward(2000000000)
     with reverts("Already expired"):
@@ -624,6 +644,11 @@ def test_buy_and_sell_puts(a, OptionMarket, MockToken, MockOracle, OptionsToken)
     with reverts("ERC20: burn amount exceeds balance"):
         market.sell(COVER, 1, 1 * SCALE, 0, {"from": alice})
 
+    assert baseToken.balanceOf(deployer) == 0
+    tx = market.skim({"from": deployer})
+    assert approx(tx.return_value) == 300 * 2 * PERCENT + 500 * 5 * PERCENT
+    assert approx(baseToken.balanceOf(deployer)) == 300 * 2 * PERCENT + 500 * 5 * PERCENT
+
     # sell 2 covers
     tx = market.sell(COVER, 2, 2 * SCALE, 0, {"from": alice})
     cost1 = 600 * lslmsr([2, 0, 0, 5, 5], 0.1) + 300 * 2 * PERCENT + 500 * 5 * PERCENT
@@ -641,6 +666,10 @@ def test_buy_and_sell_puts(a, OptionMarket, MockToken, MockOracle, OptionsToken)
         "cost": tx.return_value,
         "newSupply": 3 * SCALE,
     }
+
+    tx = market.skim({"from": deployer})
+    assert approx(tx.return_value) == 500 * 2 * PERCENT
+    assert approx(baseToken.balanceOf(deployer)) == 300 * 2 * PERCENT + 500 * 7 * PERCENT
 
 
 @pytest.mark.parametrize("isPut", [False, True])
@@ -846,6 +875,11 @@ def test_redeem(
         "account": bob,
         "payoff": tx.return_value,
     }
+
+    balance1 = getBalance(deployer)
+    tx = market.skim({"from": deployer})
+    assert approx(tx.return_value) == 10 * PERCENT
+    assert approx(getBalance(deployer) - balance1) == 10 * PERCENT
 
 
 def test_buy_and_redeem_large_size(
