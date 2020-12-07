@@ -14,6 +14,7 @@ TOKEN_SYMBOLS = {
     "0x0000000000000000000000000000000000000000": "ETH",
     "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48": "USDC",
     "0xE7d541c18D6aDb863F4C570065c57b75a53a64d3": "USDC",  # rinkeby
+    "0xfFf8641a3E2AA350624db17BDb0eb3998E314926": "WBTC",  # rinkeby
 }
 
 
@@ -36,6 +37,8 @@ def main():
                 "address": address,
                 "baseAddress": baseAddress,
                 "baseSymbol": baseSymbol,
+                "decimals": longTokens[0].decimals(),
+                "underlyingSymbol": longTokens[0].symbol().split()[0],
                 "oracleAddress": market.oracle(),
                 "expiryTime": market.expiryTime(),
                 "alpha": market.alpha(),
