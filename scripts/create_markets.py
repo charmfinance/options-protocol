@@ -28,8 +28,6 @@ SCALE = 10 ** 18
 EXPIRY_TIME = "16:00"
 QUOTE_TOKEN = "USDC"
 TRADING_FEE = 0.01
-BALANCE_CAP = 100
-SUPPLY_CAP = 10000
 
 
 DEPLOYED_ORACLES = {
@@ -59,7 +57,7 @@ TOKEN_ADDRESSES = {
 FACTORY = {
     "mainnet": "",
     # "rinkeby": "0xA8d6D6623fc492eA9acbE39EE929E7205fE66687",  # v1. remove
-    "rinkeby": "0x1B8f7C42531b5a5D2B89B83E7A23920075040f47",
+    "rinkeby": "0x17e54471d69e59152e966DE03E29442A34cf19B5",
 }
 
 
@@ -88,8 +86,6 @@ def create_market(deployer, is_put):
         alpha_wei,
         is_put,
         int(TRADING_FEE * SCALE + 1e-9),
-        BALANCE_CAP * SCALE,
-        SUPPLY_CAP * SCALE,
         {"from": deployer},
     )
 

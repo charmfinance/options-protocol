@@ -44,8 +44,6 @@ def main():
                 "alpha": market.alpha(),
                 "isPut": market.isPut(),
                 "tradingFee": market.tradingFee(),
-                "balanceCap": market.balanceCap(),
-                "totalSupplyCap": market.totalSupplyCap(),
                 "strikePrices": [market.strikePrices(i) for i in range(n)],
                 "longAddresses": [token.address for token in longTokens],
                 "longSymbols": [token.symbol() for token in longTokens],
