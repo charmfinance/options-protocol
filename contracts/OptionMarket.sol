@@ -50,7 +50,6 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     uint256 public alpha;
     bool public isPut;
     uint256 public tradingFee;
-    uint256 public balanceCap;
 
     uint256 public maxStrikePrice;
     uint256 public numStrikes;
@@ -70,7 +69,6 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
      * @param _expiryTime       Expiration time as a unix timestamp
      * @param _isPut            Whether long token represents a call or a put
      * @param _tradingFee       Trading fee expressed in wei
-     * @param _balanceCap       Cap on how many options can be bought per account
      */
     function initialize(
         address _baseToken,
@@ -81,8 +79,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         uint256 _expiryTime,
         uint256 _alpha,
         bool _isPut,
-        uint256 _tradingFee,
-        uint256 _balanceCap
+        uint256 _tradingFee
     ) public initializer {
         __ReentrancyGuard_init();
         __Ownable_init();
@@ -101,7 +98,6 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         require(_alpha > 0, "Alpha must be > 0");
         require(_alpha < SCALE, "Alpha must be < 1");
         require(_tradingFee < SCALE, "Trading fee must be < 1");
-        require(_balanceCap > 0, "Balance cap must be > 0");
 
         baseToken = IERC20(_baseToken);
         oracle = IOracle(_oracle);
@@ -110,7 +106,6 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         alpha = _alpha;
         isPut = _isPut;
         tradingFee = _tradingFee;
-        balanceCap = _balanceCap;
 
         for (uint256 i = 0; i < _longTokens.length; i++) {
             longTokens.push(OptionToken(_longTokens[i]));
@@ -147,7 +142,6 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         uint256 costBefore = calcCost();
         OptionToken option = isLongToken ? longTokens[strikeIndex] : shortTokens[strikeIndex];
         option.mint(msg.sender, optionsOut);
-        require(option.balanceOf(msg.sender) <= balanceCap, "Exceeded balance cap");
 
         amountIn = calcCost().sub(costBefore);
         amountIn = amountIn.add(calcFee(optionsOut, strikeIndex));

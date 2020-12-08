@@ -58,7 +58,6 @@ def test_initialize(
         alpha,
         isPut,
         tradingFee,
-        1000 * SCALE,
     )
 
     # check variables all set
@@ -68,7 +67,6 @@ def test_initialize(
     assert market.alpha() == alpha
     assert market.isPut() == isPut
     assert market.tradingFee() == tradingFee
-    assert market.balanceCap() == 1000 * SCALE
 
     assert market.maxStrikePrice() == 600 * SCALE
     assert market.numStrikes() == 4
@@ -104,7 +102,6 @@ def test_initialize(
             1e17,  # alpha = 0.1
             isPut,
             1e16,  # tradingFee = 1%
-            1000 * SCALE,
         )
 
 
@@ -133,7 +130,6 @@ def test_initialize_errors(
             0,  # alpha = 0
             isPut,
             1e16,  # tradingFee = 1%
-            1000 * SCALE,
         )
 
     market = deployer.deploy(OptionMarket)
@@ -148,7 +144,6 @@ def test_initialize_errors(
             SCALE,  # alpha = 1
             isPut,
             1e16,  # tradingFee = 1%
-            1000 * SCALE,
         )
 
     market = deployer.deploy(OptionMarket)
@@ -163,22 +158,6 @@ def test_initialize_errors(
             1e17,  # alpha = 0.1
             isPut,
             SCALE,  # tradingFee = 100%
-            1000 * SCALE,
-        )
-
-    market = deployer.deploy(OptionMarket)
-    with reverts("Balance cap must be > 0"):
-        market.initialize(
-            baseToken,
-            oracle,
-            longTokens,
-            shortTokens,
-            [300 * SCALE, 400 * SCALE, 500 * SCALE, 600 * SCALE],
-            2000000000,  # expiry = 18 May 2033
-            1e17,  # alpha = 0.1
-            isPut,
-            1e16,  # tradingFee = 1%
-            0,
         )
 
     market = deployer.deploy(OptionMarket)
@@ -193,7 +172,6 @@ def test_initialize_errors(
             1e17,  # alpha = 0.1
             isPut,
             1e16,  # tradingFee = 1%
-            1000 * SCALE,
         )
 
     market = deployer.deploy(OptionMarket)
@@ -208,7 +186,6 @@ def test_initialize_errors(
             1e17,  # alpha = 0.1
             isPut,
             1e16,  # tradingFee = 1%
-            1000 * SCALE,
         )
 
     market = deployer.deploy(OptionMarket)
@@ -223,7 +200,6 @@ def test_initialize_errors(
             1e17,  # alpha = 0.1
             isPut,
             1e16,  # tradingFee = 1%
-            1000 * SCALE,
         )
 
     market = deployer.deploy(OptionMarket)
@@ -238,7 +214,6 @@ def test_initialize_errors(
             1e17,  # alpha = 0.1
             isPut,
             1e16,  # tradingFee = 1%
-            1000 * SCALE,
         )
 
     market = deployer.deploy(OptionMarket)
@@ -253,7 +228,6 @@ def test_initialize_errors(
             1e17,  # alpha = 0.1
             isPut,
             1e16,  # tradingFee = 1%
-            1000 * SCALE,
         )
 
     market = deployer.deploy(OptionMarket)
@@ -268,7 +242,6 @@ def test_initialize_errors(
             1e17,  # alpha = 0.1
             isPut,
             1e16,  # tradingFee = 1%
-            1000 * SCALE,
         )
 
 
@@ -299,7 +272,6 @@ def test_buy_and_sell_calls(
         10 * PERCENT,  # alpha = 0.1
         False,  # call
         1 * PERCENT,  # tradingFee = 1%
-        1000 * SCALE,
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
@@ -554,7 +526,6 @@ def test_buy_and_sell_puts(a, OptionMarket, MockToken, MockOracle, OptionsToken)
         10 * PERCENT,  # alpha = 0.1
         True,  # put
         1 * PERCENT,  # tradingFee = 1%
-        1000 * SCALE,
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
@@ -645,57 +616,6 @@ def test_buy_and_sell_puts(a, OptionMarket, MockToken, MockOracle, OptionsToken)
     )
 
 
-@pytest.mark.parametrize("isPut", [False, True])
-def test_balance_and_supply_cap(
-    a, OptionMarket, MockToken, MockOracle, OptionsToken, isPut
-):
-
-    # setup args
-    deployer, alice, bob = a[:3]
-    baseToken = deployer.deploy(MockToken)
-    oracle = deployer.deploy(MockOracle)
-    longTokens = [deployer.deploy(OptionsToken) for _ in range(4)]
-    shortTokens = [deployer.deploy(OptionsToken) for _ in range(4)]
-
-    # deploy and initialize
-    market = deployer.deploy(OptionMarket)
-    market.initialize(
-        baseToken,
-        oracle,
-        longTokens,
-        shortTokens,
-        [300 * SCALE, 400 * SCALE, 500 * SCALE, 600 * SCALE],
-        2000000000,  # expiry = 18 May 2033
-        10 * PERCENT,  # alpha = 0.1
-        isPut,
-        1 * PERCENT,  # tradingFee = 1%
-        1000 * SCALE,
-    )
-    for token in longTokens + shortTokens:
-        token.initialize(market, "name", "symbol", 18)
-
-    # give users base tokens
-    baseToken.mint(alice, 1e8 * SCALE, {"from": deployer})
-    baseToken.approve(market, 1e8 * SCALE, {"from": alice})
-    baseToken.mint(bob, 1e8 * SCALE, {"from": deployer})
-    baseToken.approve(market, 1e8 * SCALE, {"from": bob})
-
-    # can't buy 1001 calls
-    with reverts("Exceeded balance cap"):
-        market.buy(CALL, 0, 1001 * SCALE, 1e8 * SCALE, {"from": alice})
-
-    # but can buy 800
-    market.buy(CALL, 0, 800 * SCALE, 1e8 * SCALE, {"from": alice})
-
-    # can't buy 201 calls
-    with reverts("Exceeded balance cap"):
-        market.buy(CALL, 0, 201 * SCALE, 1e8 * SCALE, {"from": alice})
-
-    # but can buy 1000 of other options
-    market.buy(CALL, 3, 1000 * SCALE, 1e8 * SCALE, {"from": alice})
-    market.buy(COVER, 1, 1000 * SCALE, 1e8 * SCALE, {"from": alice})
-
-
 @pytest.mark.parametrize("isEth", [False, True])
 @pytest.mark.parametrize("isPut", [False, True])
 def test_settle(
@@ -722,7 +642,6 @@ def test_settle(
         10 * PERCENT,  # alpha = 0.1
         isPut,
         1 * PERCENT,  # tradingFee = 1%
-        1000 * SCALE,
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
@@ -771,7 +690,6 @@ def test_redeem_calls(
         10 * PERCENT,  # alpha = 0.1
         False,  # call
         1 * PERCENT,  # tradingFee = 1%
-        1000 * SCALE,
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
@@ -860,7 +778,6 @@ def test_redeem_puts(
         10 * PERCENT,  # alpha = 0.1
         True,  # put
         1 * PERCENT,  # tradingFee = 1%
-        1000 * SCALE,
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
@@ -956,7 +873,6 @@ def test_buy_and_redeem_large_size(
         10 * PERCENT,  # alpha = 0.1
         False,  # call
         1 * PERCENT,  # tradingFee = 1%
-        1e20 * SCALE,
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
@@ -1015,7 +931,6 @@ def test_emergency_methods(
         10 * PERCENT,  # alpha = 0.1
         isPut,
         1 * PERCENT,  # tradingFee = 1%
-        1e20 * SCALE,
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)

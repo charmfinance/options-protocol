@@ -30,8 +30,6 @@ contract OptionFactory is CloneFactory, OptionSymbol, ReentrancyGuard {
     uint256 private expiryTime;
     bool private isPut;
     uint256 private tradingFee;
-    uint256 private balanceCap;
-    uint256 private totalSupplyCap;
 
     constructor(address _optionMarketLibrary, address _optionTokenLibrary) public {
         require(_optionMarketLibrary != address(0), "optionMarketLibrary should not be address 0");
@@ -48,9 +46,7 @@ contract OptionFactory is CloneFactory, OptionSymbol, ReentrancyGuard {
         uint256 _expiryTime,
         uint256 _alpha,
         bool _isPut,
-        uint256 _tradingFee,
-        uint256 _balanceCap,
-        uint256 _totalSupplyCap
+        uint256 _tradingFee
     ) external nonReentrant returns (address market) {
         // set member variables to avoid stack too deep error
         // TODO: cleaner way to do this?
@@ -60,8 +56,6 @@ contract OptionFactory is CloneFactory, OptionSymbol, ReentrancyGuard {
         alpha = _alpha;
         isPut = _isPut;
         tradingFee = _tradingFee;
-        balanceCap = _balanceCap;
-        totalSupplyCap = _totalSupplyCap;
 
         market = createClone(optionMarketLibrary);
         address baseToken = isPut ? _quoteToken : _baseToken;
@@ -89,9 +83,7 @@ contract OptionFactory is CloneFactory, OptionSymbol, ReentrancyGuard {
             expiryTime,
             alpha,
             isPut,
-            tradingFee,
-            balanceCap,
-            totalSupplyCap
+            tradingFee
         );
         OptionMarket(market).transferOwnership(msg.sender);
         markets.push(market);
