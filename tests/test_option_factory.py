@@ -43,8 +43,6 @@ def test_option_factory(
         SCALE // 10,  # alpha
         isPut,
         SCALE // 100,  # trading fee
-        1000 * SCALE,  # balance cap
-        1500 * SCALE,  # supply cap
     )
 
     market = OptionMarket.at(tx.return_value)
@@ -57,8 +55,6 @@ def test_option_factory(
     assert market.strikePrices(2) == 500 * SCALE
     assert market.alpha() == SCALE // 10
     assert market.expiryTime() == 2000000000
-    assert market.balanceCap() == 1000 * SCALE
-    assert market.totalSupplyCap() == 1500 * SCALE
 
     suffix = "P" if isPut else "C"
     suffix2 = "SP" if isPut else "SC"
