@@ -179,8 +179,10 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         option.burn(msg.sender, optionsIn);
 
         amountOut = costBefore.sub(calcCost());
-        amountOut = amountOut.sub(calcFee(optionsIn, strikeIndex));
-        require(amountOut > 0, "Amount in must be > 0");
+        uint256 fee = calcFee(optionsIn, strikeIndex);
+        require(amountOut > fee, "Amount out must be > 0");
+
+        amountOut = amountOut.sub(fee);
         require(amountOut >= minAmountOut, "Max slippage exceeded");
 
         baseToken.uniTransfer(msg.sender, amountOut);
@@ -263,10 +265,10 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
      * Answer is multiplied by strike price for puts
      */
     function calcCost() public view returns (uint256) {
-        // initally set s to total supply of longTokens
+        // initally set s to total supply of shortTokens
         uint256 s;
         for (uint256 i = 0; i < numStrikes; i++) {
-            s = s.add(longTokens[i].totalSupply());
+            s = s.add(shortTokens[i].totalSupply());
         }
 
         uint256[] memory q = new uint256[](numStrikes + 1);
@@ -276,8 +278,8 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
 
         // set q[i] to be total supply of longTokens[:i] and shortTokens[i:]
         for (uint256 i = 0; i < numStrikes; i++) {
-            s = s.add(shortTokens[i].totalSupply());
-            s = s.sub(longTokens[i].totalSupply());
+            s = s.add(longTokens[i].totalSupply());
+            s = s.sub(shortTokens[i].totalSupply());
             q[i + 1] = s;
             max = Math.max(max, s);
             sum = sum.add(s);
