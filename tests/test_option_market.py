@@ -544,7 +544,7 @@ def test_buy_and_sell_puts(a, OptionMarket, MockToken, MockOracle, OptionsToken)
 
     # buy 2 puts
     tx = market.buy(PUT, 0, 2 * SCALE, 10000 * SCALE, {"from": alice})
-    cost = 600 * lslmsr([0, 2, 2, 2, 2], 0.1) + 300 * 2 * PERCENT
+    cost = 600 * lslmsr([2, 0, 0, 0, 0], 0.1) + 300 * 2 * PERCENT
     assert approx(tx.return_value) == cost
     assert approx(baseToken.balanceOf(alice)) == 10000 * SCALE - cost
     assert longTokens[0].balanceOf(alice) == 2 * SCALE
@@ -560,8 +560,8 @@ def test_buy_and_sell_puts(a, OptionMarket, MockToken, MockOracle, OptionsToken)
 
     # buy 5 covers
     tx = market.buy(COVER, 2, 5 * SCALE, 10000 * SCALE, {"from": alice})
-    cost1 = 600 * lslmsr([0, 2, 2, 2, 2], 0.1) + 300 * 2 * PERCENT
-    cost2 = 600 * lslmsr([5, 7, 7, 2, 2], 0.1) + 300 * 2 * PERCENT + 500 * 5 * PERCENT
+    cost1 = 600 * lslmsr([2, 0, 0, 0, 0], 0.1) + 300 * 2 * PERCENT
+    cost2 = 600 * lslmsr([2, 0, 0, 5, 5], 0.1) + 300 * 2 * PERCENT + 500 * 5 * PERCENT
     assert approx(tx.return_value) == cost2 - cost1
     assert approx(baseToken.balanceOf(alice)) == 10000 * SCALE - cost2
     assert longTokens[0].balanceOf(alice) == 2 * SCALE
@@ -591,8 +591,8 @@ def test_buy_and_sell_puts(a, OptionMarket, MockToken, MockOracle, OptionsToken)
 
     # sell 2 covers
     tx = market.sell(COVER, 2, 2 * SCALE, 0, {"from": alice})
-    cost1 = 600 * lslmsr([5, 7, 7, 2, 2], 0.1) + 300 * 2 * PERCENT + 500 * 5 * PERCENT
-    cost2 = 600 * lslmsr([3, 5, 5, 2, 2], 0.1) + 300 * 2 * PERCENT + 500 * 7 * PERCENT
+    cost1 = 600 * lslmsr([2, 0, 0, 5, 5], 0.1) + 300 * 2 * PERCENT + 500 * 5 * PERCENT
+    cost2 = 600 * lslmsr([2, 0, 0, 3, 3], 0.1) + 300 * 2 * PERCENT + 500 * 7 * PERCENT
     assert approx(tx.return_value) == cost1 - cost2
     assert approx(baseToken.balanceOf(alice)) == 10000 * SCALE - cost2
     assert longTokens[0].balanceOf(alice) == 2 * SCALE
@@ -804,7 +804,7 @@ def test_redeem_puts(
 
     market.settle({"from": alice})
 
-    cost = 600 * lslmsr([3, 3, 0, 2, 3], 0.1)
+    cost = 600 * lslmsr([3, 3, 6, 4, 3], 0.1)
     alicePayoff = 2 * (500 - 444)
     bobPayoff = 3 * 400 + 1 * (600 - 444)
     payoff = alicePayoff + bobPayoff
