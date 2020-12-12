@@ -32,7 +32,7 @@ def test_initialize(
     OptionMarket,
     MockToken,
     MockOracle,
-    OptionsToken,
+    OptionToken,
     isEth,
     alpha,
     isPut,
@@ -42,8 +42,8 @@ def test_initialize(
     deployer = a[0]
     baseToken = ZERO_ADDRESS if isEth else deployer.deploy(MockToken)
     oracle = deployer.deploy(MockOracle)
-    longTokens = [deployer.deploy(OptionsToken) for _ in range(4)]
-    shortTokens = [deployer.deploy(OptionsToken) for _ in range(4)]
+    longTokens = [deployer.deploy(OptionToken) for _ in range(4)]
+    shortTokens = [deployer.deploy(OptionToken) for _ in range(4)]
 
     # deploy and initialize
     market = deployer.deploy(OptionMarket)
@@ -107,14 +107,14 @@ def test_initialize(
 @pytest.mark.parametrize("isPut", [False, True])
 @pytest.mark.parametrize("isEth", [False, True])
 def test_initialize_errors(
-    a, OptionMarket, MockToken, MockOracle, OptionsToken, isPut, isEth
+    a, OptionMarket, MockToken, MockOracle, OptionToken, isPut, isEth
 ):
     # setup args
     deployer = a[0]
     baseToken = ZERO_ADDRESS if isEth else deployer.deploy(MockToken)
     oracle = deployer.deploy(MockOracle)
-    longTokens = [deployer.deploy(OptionsToken) for _ in range(4)]
-    shortTokens = [deployer.deploy(OptionsToken) for _ in range(4)]
+    longTokens = [deployer.deploy(OptionToken) for _ in range(4)]
+    shortTokens = [deployer.deploy(OptionToken) for _ in range(4)]
 
     market = deployer.deploy(OptionMarket)
     with reverts("Alpha must be > 0"):
@@ -245,15 +245,15 @@ def test_initialize_errors(
 
 @pytest.mark.parametrize("isEth", [False, True])
 def test_buy_and_sell_calls(
-    a, OptionMarket, MockToken, MockOracle, OptionsToken, fast_forward, isEth
+    a, OptionMarket, MockToken, MockOracle, OptionToken, fast_forward, isEth
 ):
 
     # setup args
     deployer, alice = a[:2]
     baseToken = ZERO_ADDRESS if isEth else deployer.deploy(MockToken)
     oracle = deployer.deploy(MockOracle)
-    longTokens = [deployer.deploy(OptionsToken) for _ in range(4)]
-    shortTokens = [deployer.deploy(OptionsToken) for _ in range(4)]
+    longTokens = [deployer.deploy(OptionToken) for _ in range(4)]
+    shortTokens = [deployer.deploy(OptionToken) for _ in range(4)]
 
     def getBalance(wallet):
         return wallet.balance() if isEth else baseToken.balanceOf(wallet)
@@ -503,14 +503,14 @@ def test_buy_and_sell_calls(
         market.sell(COVER, 2, 1 * SCALE, 0, {"from": alice})
 
 
-def test_buy_and_sell_puts(a, OptionMarket, MockToken, MockOracle, OptionsToken):
+def test_buy_and_sell_puts(a, OptionMarket, MockToken, MockOracle, OptionToken):
 
     # setup args
     deployer, alice = a[:2]
     baseToken = deployer.deploy(MockToken)
     oracle = deployer.deploy(MockOracle)
-    longTokens = [deployer.deploy(OptionsToken) for _ in range(4)]
-    shortTokens = [deployer.deploy(OptionsToken) for _ in range(4)]
+    longTokens = [deployer.deploy(OptionToken) for _ in range(4)]
+    shortTokens = [deployer.deploy(OptionToken) for _ in range(4)]
 
     # deploy and initialize
     market = deployer.deploy(OptionMarket)
@@ -617,15 +617,15 @@ def test_buy_and_sell_puts(a, OptionMarket, MockToken, MockOracle, OptionsToken)
 @pytest.mark.parametrize("isEth", [False, True])
 @pytest.mark.parametrize("isPut", [False, True])
 def test_settle(
-    a, OptionMarket, MockToken, MockOracle, OptionsToken, fast_forward, isEth, isPut
+    a, OptionMarket, MockToken, MockOracle, OptionToken, fast_forward, isEth, isPut
 ):
 
     # setup args
     deployer, alice = a[:2]
     baseToken = ZERO_ADDRESS if isEth else deployer.deploy(MockToken)
     oracle = deployer.deploy(MockOracle)
-    longTokens = [deployer.deploy(OptionsToken) for _ in range(4)]
-    shortTokens = [deployer.deploy(OptionsToken) for _ in range(4)]
+    longTokens = [deployer.deploy(OptionToken) for _ in range(4)]
+    shortTokens = [deployer.deploy(OptionToken) for _ in range(4)]
     oracle.setPrice(444 * SCALE)
 
     # deploy and initialize
@@ -662,15 +662,15 @@ def test_settle(
 
 @pytest.mark.parametrize("isEth", [False, True])
 def test_redeem_calls(
-    a, OptionMarket, MockToken, MockOracle, OptionsToken, fast_forward, isEth
+    a, OptionMarket, MockToken, MockOracle, OptionToken, fast_forward, isEth
 ):
 
     # setup args
     deployer, alice, bob = a[:3]
     baseToken = ZERO_ADDRESS if isEth else deployer.deploy(MockToken)
     oracle = deployer.deploy(MockOracle)
-    longTokens = [deployer.deploy(OptionsToken) for _ in range(4)]
-    shortTokens = [deployer.deploy(OptionsToken) for _ in range(4)]
+    longTokens = [deployer.deploy(OptionToken) for _ in range(4)]
+    shortTokens = [deployer.deploy(OptionToken) for _ in range(4)]
     oracle.setPrice(444 * SCALE)
 
     def getBalance(wallet):
@@ -753,15 +753,15 @@ def test_redeem_calls(
 
 
 def test_redeem_puts(
-    a, OptionMarket, MockToken, MockOracle, OptionsToken, fast_forward
+    a, OptionMarket, MockToken, MockOracle, OptionToken, fast_forward
 ):
 
     # setup args
     deployer, alice, bob = a[:3]
     baseToken = deployer.deploy(MockToken)
     oracle = deployer.deploy(MockOracle)
-    longTokens = [deployer.deploy(OptionsToken) for _ in range(4)]
-    shortTokens = [deployer.deploy(OptionsToken) for _ in range(4)]
+    longTokens = [deployer.deploy(OptionToken) for _ in range(4)]
+    shortTokens = [deployer.deploy(OptionToken) for _ in range(4)]
     oracle.setPrice(444 * SCALE)
 
     # deploy and initialize
@@ -848,15 +848,15 @@ def test_redeem_puts(
 
 
 def test_buy_and_redeem_large_size(
-    a, OptionMarket, MockToken, MockOracle, OptionsToken, fast_forward
+    a, OptionMarket, MockToken, MockOracle, OptionToken, fast_forward
 ):
 
     # setup args
     deployer, alice = a[:2]
     baseToken = deployer.deploy(MockToken)
     oracle = deployer.deploy(MockOracle)
-    longTokens = [deployer.deploy(OptionsToken) for _ in range(4)]
-    shortTokens = [deployer.deploy(OptionsToken) for _ in range(4)]
+    longTokens = [deployer.deploy(OptionToken) for _ in range(4)]
+    shortTokens = [deployer.deploy(OptionToken) for _ in range(4)]
     oracle.setPrice(444 * SCALE)
 
     # deploy and initialize
@@ -904,7 +904,7 @@ def test_buy_and_redeem_large_size(
 @pytest.mark.parametrize("isEth", [False, True])
 @pytest.mark.parametrize("isPut", [False, True])
 def test_emergency_methods(
-    a, OptionMarket, MockToken, MockOracle, OptionsToken, fast_forward, isEth, isPut
+    a, OptionMarket, MockToken, MockOracle, OptionToken, fast_forward, isEth, isPut
 ):
 
     # setup args
@@ -912,8 +912,8 @@ def test_emergency_methods(
     baseToken = ZERO_ADDRESS if isEth else deployer.deploy(MockToken)
     oracle = deployer.deploy(MockOracle)
     oracle2 = deployer.deploy(MockOracle)
-    longTokens = [deployer.deploy(OptionsToken) for _ in range(4)]
-    shortTokens = [deployer.deploy(OptionsToken) for _ in range(4)]
+    longTokens = [deployer.deploy(OptionToken) for _ in range(4)]
+    shortTokens = [deployer.deploy(OptionToken) for _ in range(4)]
     oracle.setPrice(444 * SCALE)
     oracle2.setPrice(555 * SCALE)
 
@@ -986,15 +986,15 @@ def test_emergency_methods(
 
 @pytest.mark.parametrize("isEth", [False, True])
 def test_cannot_sell_when_amount_out_lower_than_fee(
-    a, OptionMarket, MockToken, MockOracle, OptionsToken, fast_forward, isEth
+    a, OptionMarket, MockToken, MockOracle, OptionToken, fast_forward, isEth
 ):
 
     # setup args
     deployer, alice = a[:2]
     baseToken = ZERO_ADDRESS if isEth else deployer.deploy(MockToken)
     oracle = deployer.deploy(MockOracle)
-    longTokens = [deployer.deploy(OptionsToken) for _ in range(3)]
-    shortTokens = [deployer.deploy(OptionsToken) for _ in range(3)]
+    longTokens = [deployer.deploy(OptionToken) for _ in range(3)]
+    shortTokens = [deployer.deploy(OptionToken) for _ in range(3)]
 
     def getBalance(wallet):
         return wallet.balance() if isEth else baseToken.balanceOf(wallet)
