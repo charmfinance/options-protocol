@@ -380,12 +380,14 @@ def test_buy_and_sell_calls(
         market.skim({"from": alice})
 
     balance1 = getBalance(deployer)
+    assert market.calcSkimAmount() == 16 * PERCENT
     tx = market.skim({"from": deployer})
     assert approx(tx.return_value) == 16 * PERCENT
     assert approx(getBalance(deployer) - balance1) == 16 * PERCENT
 
     # can't skim again
     balance1 = getBalance(deployer)
+    assert market.calcSkimAmount() == 0
     tx = market.skim({"from": deployer})
     assert tx.return_value == 0 * PERCENT
     assert getBalance(deployer) - balance1 == 0
