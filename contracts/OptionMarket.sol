@@ -26,20 +26,21 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
 
     event Trade(
         address indexed account,
-        uint256 indexed strikeIndex,
         bool isBuy,
         bool isLongToken,
+        uint256 strikeIndex,
         uint256 size,
         uint256 cost,
         uint256 newSupply
     );
 
-    event Settled(uint256 settlementPrice);
+    event Settled(uint256 expiryPrice);
 
-    event Redeemed(address indexed account, uint256 amount);
+    event Redeemed(address indexed account, bool isLongToken, uint256 strikeIndex, uint256 amount);
 
     uint256 public constant SCALE = 1e18;
     uint256 public constant SCALE_SCALE = 1e36;
+    uint256 public constant DISPUTE_PERIOD = 1 hours;
 
     IERC20 public baseToken;
     IOracle public oracle;
@@ -55,13 +56,13 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     uint256 public numStrikes;
     bool public isPaused;
     bool public isSettled;
-    uint256 public settlementPrice;
+    uint256 public expiryPrice;
     uint256 public costAtSettlement;
     uint256 public payoffAtSettlement;
 
     // cache calcCost and calcPayoff to save gas
-    uint256 public cost;
-    uint256 public payoff;
+    uint256 public lastCost;
+    uint256 public lastPayoff;
 
     /**
      * @param _baseToken        Underlying ERC20 token. Represents ETH if equal to 0x0
@@ -143,12 +144,12 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         require(strikeIndex < numStrikes, "Index too large");
         require(optionsOut > 0, "optionsOut must be > 0");
 
-        uint256 costBefore = cost;
+        uint256 costBefore = lastCost;
         OptionToken option = isLongToken ? longTokens[strikeIndex] : shortTokens[strikeIndex];
         option.mint(msg.sender, optionsOut);
 
-        cost = calcCost();
-        amountIn = cost.sub(costBefore);
+        lastCost = calcCost();
+        amountIn = lastCost.sub(costBefore);
         amountIn = amountIn.add(calcFee(optionsOut, strikeIndex));
         require(amountIn > 0, "Amount in must be > 0");
         require(amountIn <= maxAmountIn, "Max slippage exceeded");
@@ -157,8 +158,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         baseToken.uniTransferFromSenderToThis(amountIn);
         uint256 balanceAfter = baseToken.uniBalanceOf(address(this));
         require(baseToken.isETH() || balanceAfter.sub(balanceBefore) == amountIn, "Deflationary tokens not supported");
-
-        emit Trade(msg.sender, strikeIndex, true, isLongToken, optionsOut, amountIn, option.totalSupply());
+        emit Trade(msg.sender, true, isLongToken, strikeIndex, optionsOut, amountIn, option.totalSupply());
     }
 
     /**
@@ -179,12 +179,12 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         require(strikeIndex < numStrikes, "Index too large");
         require(optionsIn > 0, "optionsIn must be > 0");
 
-        uint256 costBefore = cost;
+        uint256 costBefore = lastCost;
         OptionToken option = isLongToken ? longTokens[strikeIndex] : shortTokens[strikeIndex];
         option.burn(msg.sender, optionsIn);
 
-        cost = calcCost();
-        amountOut = costBefore.sub(cost);
+        lastCost = calcCost();
+        amountOut = costBefore.sub(lastCost);
         uint256 fee = calcFee(optionsIn, strikeIndex);
         require(amountOut > fee, "Amount out must be > 0");
 
@@ -192,12 +192,11 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         require(amountOut >= minAmountOut, "Max slippage exceeded");
 
         baseToken.uniTransfer(msg.sender, amountOut);
-
-        emit Trade(msg.sender, strikeIndex, false, isLongToken, optionsIn, amountOut, option.totalSupply());
+        emit Trade(msg.sender, false, isLongToken, strikeIndex, optionsIn, amountOut, option.totalSupply());
     }
 
     /**
-     * Retrieves and stores the settlement price from the oracle
+     * Retrieves and stores the unerlying price from the oracle
      *
      * This method can be called by anyone after expiration and cannot be called
      * more than once.
@@ -210,13 +209,13 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         require(!isSettled, "Already settled");
 
         isSettled = true;
-        settlementPrice = oracle.getPrice();
-        require(settlementPrice > 0, "Price from oracle must be > 0");
+        expiryPrice = oracle.getPrice();
+        require(expiryPrice > 0, "Price from oracle must be > 0");
 
         costAtSettlement = calcCost();
         payoffAtSettlement = calcPayoff();
-        payoff = payoffAtSettlement;
-        emit Settled(settlementPrice);
+        lastPayoff = payoffAtSettlement;
+        emit Settled(expiryPrice);
     }
 
     /**
@@ -225,29 +224,25 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
      * This method can only be called after `settle` has been called and the
      * settlement price has been set
      */
-    function redeem() external nonReentrant returns (uint256 amount) {
+    function redeem(bool isLongToken, uint256 strikeIndex) external nonReentrant returns (uint256 amount) {
         require(isExpired(), "Cannot be called before expiry");
         require(isSettled, "Cannot be called before settlement");
+        require(!isDisputePeriod(), "Cannot be called during dispute period");
         require(!isPaused, "This method has been paused");
+        require(strikeIndex < numStrikes, "Index too large");
 
-        uint256 payoffBefore = payoff;
-        for (uint256 i = 0; i < numStrikes; i++) {
-            uint256 longBalance = longTokens[i].balanceOf(msg.sender);
-            uint256 shortBalance = shortTokens[i].balanceOf(msg.sender);
-            if (longBalance > 0) {
-                longTokens[i].burn(msg.sender, longBalance);
-            }
-            if (shortBalance > 0) {
-                shortTokens[i].burn(msg.sender, shortBalance);
-            }
-        }
+        OptionToken option = isLongToken ? longTokens[strikeIndex] : shortTokens[strikeIndex];
+        uint256 balance = option.balanceOf(msg.sender);
+        require(balance > 0, "Balance must be > 0");
 
-        // loses accuracy but otherwise might overflow
-        payoff = calcPayoff();
-        amount = payoffBefore.sub(payoff);
+        uint256 payoffBefore = lastPayoff;
+        option.burn(msg.sender, balance);
+        lastPayoff = calcPayoff();
+        amount = payoffBefore.sub(lastPayoff);
         amount = amount.mul(costAtSettlement).div(payoffAtSettlement);
+
         baseToken.uniTransfer(msg.sender, amount);
-        emit Redeemed(msg.sender, amount);
+        emit Redeemed(msg.sender, isLongToken, strikeIndex, amount);
     }
 
     /**
@@ -339,20 +334,20 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
             uint256 shortSupply = shortTokens[i].totalSupply();
 
             uint256 diff;
-            if (isPut && settlementPrice < strikePrice) {
+            if (isPut && expiryPrice < strikePrice) {
                 // put payoff = max(K - S, 0)
-                diff = strikePrice.sub(settlementPrice);
-            } else if (!isPut && settlementPrice > strikePrice) {
+                diff = strikePrice.sub(expiryPrice);
+            } else if (!isPut && expiryPrice > strikePrice) {
                 // call payoff = max(S - K, 0)
-                diff = settlementPrice.sub(strikePrice);
+                diff = expiryPrice.sub(strikePrice);
             }
             payoff = payoff.add(longSupply.mul(diff));
 
             // short payoff = min(S, K)
-            payoff = payoff.add(shortSupply.mul(Math.min(settlementPrice, strikePrice)));
+            payoff = payoff.add(shortSupply.mul(Math.min(expiryPrice, strikePrice)));
         }
 
-        // loses accuracy but otherwise might overflow in redeem()
+        // loses accuracy but otherwise might overflow in `redeem`
         payoff = payoff.div(SCALE);
     }
 
@@ -361,14 +356,22 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         return isPut ? fee.mul(strikePrices[strikeIndex]).div(SCALE_SCALE) : fee.div(SCALE);
     }
 
+    function calcSkimAmount() public view returns (uint256) {
+        uint256 balanceBefore = baseToken.uniBalanceOf(address(this));
+        uint256 balanceAfter = isSettled ? calcPayoff() : calcCost();
+        return balanceBefore.sub(balanceAfter);
+    }
+
     function isExpired() public view returns (bool) {
         return block.timestamp >= expiryTime;
     }
 
+    function isDisputePeriod() public view returns (bool) {
+        return block.timestamp >= expiryTime && block.timestamp < expiryTime + DISPUTE_PERIOD;
+    }
+
     function skim() public nonReentrant onlyOwner returns (uint256 amount) {
-        uint256 balanceBefore = baseToken.uniBalanceOf(address(this));
-        uint256 balanceAfter = isSettled ? calcPayoff() : calcCost();
-        amount = balanceBefore.sub(balanceAfter);
+        amount = calcSkimAmount();
         if (amount > 0) {
             baseToken.uniTransfer(msg.sender, amount);
         }
@@ -395,8 +398,9 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     }
 
     // emergency use only. to be removed in future versions
-    function forceSettle() external onlyOwner {
-        isSettled = false;
-        settle();
+    function disputeExpiryPrice(uint256 _expiryPrice) external onlyOwner {
+        require(isDisputePeriod(), "Not dispute period");
+        require(isSettled, "Cannot be called before settlement");
+        expiryPrice = _expiryPrice;
     }
 }

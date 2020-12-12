@@ -302,9 +302,9 @@ def test_buy_and_sell_calls(
     assert longTokens[0].balanceOf(alice) == 2 * SCALE
     assert tx.events["Trade"] == {
         "account": alice,
-        "strikeIndex": 0,
         "isBuy": True,
         "isLongToken": True,
+        "strikeIndex": 0,
         "size": 2 * SCALE,
         "cost": tx.return_value,
         "newSupply": 2 * SCALE,
@@ -320,9 +320,9 @@ def test_buy_and_sell_calls(
     assert longTokens[2].balanceOf(alice) == 3 * SCALE
     assert tx.events["Trade"] == {
         "account": alice,
-        "strikeIndex": 2,
         "isBuy": True,
         "isLongToken": True,
+        "strikeIndex": 2,
         "size": 3 * SCALE,
         "cost": tx.return_value,
         "newSupply": 3 * SCALE,
@@ -339,9 +339,9 @@ def test_buy_and_sell_calls(
     assert shortTokens[3].balanceOf(alice) == 5 * SCALE
     assert tx.events["Trade"] == {
         "account": alice,
-        "strikeIndex": 3,
         "isBuy": True,
         "isLongToken": False,
+        "strikeIndex": 3,
         "size": 5 * SCALE,
         "cost": tx.return_value,
         "newSupply": 5 * SCALE,
@@ -359,9 +359,9 @@ def test_buy_and_sell_calls(
     assert shortTokens[3].balanceOf(alice) == 5 * SCALE
     assert tx.events["Trade"] == {
         "account": alice,
-        "strikeIndex": 0,
         "isBuy": True,
         "isLongToken": False,
+        "strikeIndex": 0,
         "size": 6 * SCALE,
         "cost": tx.return_value,
         "newSupply": 6 * SCALE,
@@ -402,9 +402,9 @@ def test_buy_and_sell_calls(
     assert shortTokens[3].balanceOf(alice) == 5 * SCALE
     assert tx.events["Trade"] == {
         "account": alice,
-        "strikeIndex": 0,
         "isBuy": False,
         "isLongToken": False,
+        "strikeIndex": 0,
         "size": 2 * SCALE,
         "cost": tx.return_value,
         "newSupply": 4 * SCALE,
@@ -422,9 +422,9 @@ def test_buy_and_sell_calls(
     assert shortTokens[3].balanceOf(alice) == 5 * SCALE
     assert tx.events["Trade"] == {
         "account": alice,
-        "strikeIndex": 0,
         "isBuy": False,
         "isLongToken": True,
+        "strikeIndex": 0,
         "size": 2 * SCALE,
         "cost": tx.return_value,
         "newSupply": 0,
@@ -442,9 +442,9 @@ def test_buy_and_sell_calls(
     assert shortTokens[3].balanceOf(alice) == 5 * SCALE
     assert tx.events["Trade"] == {
         "account": alice,
-        "strikeIndex": 2,
         "isBuy": False,
         "isLongToken": True,
+        "strikeIndex": 2,
         "size": 3 * SCALE,
         "cost": tx.return_value,
         "newSupply": 0,
@@ -462,9 +462,9 @@ def test_buy_and_sell_calls(
     assert shortTokens[3].balanceOf(alice) == 0
     assert tx.events["Trade"] == {
         "account": alice,
-        "strikeIndex": 3,
         "isBuy": False,
         "isLongToken": False,
+        "strikeIndex": 3,
         "size": 5 * SCALE,
         "cost": tx.return_value,
         "newSupply": 0,
@@ -482,9 +482,9 @@ def test_buy_and_sell_calls(
     assert shortTokens[3].balanceOf(alice) == 0
     assert tx.events["Trade"] == {
         "account": alice,
-        "strikeIndex": 0,
         "isBuy": False,
         "isLongToken": False,
+        "strikeIndex": 0,
         "size": 4 * SCALE,
         "cost": tx.return_value,
         "newSupply": 0,
@@ -550,9 +550,9 @@ def test_buy_and_sell_puts(a, OptionMarket, MockToken, MockOracle, OptionToken):
     assert longTokens[0].balanceOf(alice) == 2 * SCALE
     assert tx.events["Trade"] == {
         "account": alice,
-        "strikeIndex": 0,
         "isBuy": True,
         "isLongToken": True,
+        "strikeIndex": 0,
         "size": 2 * SCALE,
         "cost": tx.return_value,
         "newSupply": 2 * SCALE,
@@ -568,9 +568,9 @@ def test_buy_and_sell_puts(a, OptionMarket, MockToken, MockOracle, OptionToken):
     assert shortTokens[2].balanceOf(alice) == 5 * SCALE
     assert tx.events["Trade"] == {
         "account": alice,
-        "strikeIndex": 2,
         "isBuy": True,
         "isLongToken": False,
+        "strikeIndex": 2,
         "size": 5 * SCALE,
         "cost": tx.return_value,
         "newSupply": 5 * SCALE,
@@ -599,9 +599,9 @@ def test_buy_and_sell_puts(a, OptionMarket, MockToken, MockOracle, OptionToken):
     assert shortTokens[2].balanceOf(alice) == 3 * SCALE
     assert tx.events["Trade"] == {
         "account": alice,
-        "strikeIndex": 2,
         "isBuy": False,
         "isLongToken": False,
+        "strikeIndex": 2,
         "size": 2 * SCALE,
         "cost": tx.return_value,
         "newSupply": 3 * SCALE,
@@ -649,11 +649,11 @@ def test_settle(
 
     # can only call settle() after expiry time and can only call once
     fast_forward(2000000000)
-    assert market.settlementPrice() == 0
+    assert market.expiryPrice() == 0
     tx = market.settle({"from": alice})
-    assert market.settlementPrice() == 444 * SCALE
+    assert market.expiryPrice() == 444 * SCALE
     assert tx.events["Settled"] == {
-        "settlementPrice": 444 * SCALE,
+        "expiryPrice": 444 * SCALE,
     }
 
     with reverts("Already settled"):
@@ -708,14 +708,17 @@ def test_redeem_calls(
     market.sell(CALL, 3, 2 * SCALE, 0, {"from": bob})
 
     with reverts("Cannot be called before expiry"):
-        market.redeem({"from": alice})
+        market.redeem(CALL, 0, {"from": alice})
 
     fast_forward(2000000000)
-
     with reverts("Cannot be called before settlement"):
-        market.redeem({"from": alice})
+        market.redeem(CALL, 0, {"from": alice})
 
     market.settle({"from": alice})
+    with reverts("Cannot be called during dispute period"):
+        market.redeem(CALL, 0, {"from": alice})
+
+    fast_forward(2000000000 + 3600)
 
     cost = lslmsr([3, 5, 2, 2, 3], 0.1)
     alicePayoff = 2 * (444 - 300)
@@ -726,23 +729,45 @@ def test_redeem_calls(
 
     balance = getBalance(market)
     aliceBalance = getBalance(alice)
-    tx = market.redeem({"from": alice})
+    tx = market.redeem(CALL, 0, {"from": alice})
     assert approx(tx.return_value) == cost * alicePayoff / payoff
     assert approx(balance - getBalance(market)) == cost * alicePayoff / payoff
     assert approx(getBalance(alice) - aliceBalance) == cost * alicePayoff / payoff
     assert tx.events["Redeemed"] == {
         "account": alice,
+        "isLongToken": True,
+        "strikeIndex": 0,
         "amount": tx.return_value,
+    }
+
+    with reverts("Balance must be > 0"):
+        market.redeem(CALL, 0, {"from": alice})
+    with reverts("Balance must be > 0"):
+        market.redeem(CALL, 1, {"from": alice})
+
+    balance = getBalance(market)
+    bobBalance = getBalance(bob)
+    tx = market.redeem(CALL, 3, {"from": bob})
+    assert approx(tx.return_value) == 0
+    assert approx(balance - getBalance(market)) == 0
+    assert approx(getBalance(bob) - bobBalance) == 0
+    assert tx.events["Redeemed"] == {
+        "account": bob,
+        "isLongToken": True,
+        "strikeIndex": 3,
+        "amount": 0,
     }
 
     balance = getBalance(market)
     bobBalance = getBalance(bob)
-    tx = market.redeem({"from": bob})
+    tx = market.redeem(COVER, 1, {"from": bob})
     assert approx(tx.return_value) == cost * bobPayoff / payoff
     assert approx(balance - getBalance(market)) == cost * bobPayoff / payoff
     assert approx(getBalance(bob) - bobBalance) == cost * bobPayoff / payoff
     assert tx.events["Redeemed"] == {
         "account": bob,
+        "isLongToken": False,
+        "strikeIndex": 1,
         "amount": tx.return_value,
     }
 
@@ -752,9 +777,7 @@ def test_redeem_calls(
     assert approx(getBalance(deployer) - balance1) == 10 * PERCENT
 
 
-def test_redeem_puts(
-    a, OptionMarket, MockToken, MockOracle, OptionToken, fast_forward
-):
+def test_redeem_puts(a, OptionMarket, MockToken, MockOracle, OptionToken, fast_forward):
 
     # setup args
     deployer, alice, bob = a[:3]
@@ -794,26 +817,20 @@ def test_redeem_puts(
     market.buy(COVER, 1, 3 * SCALE, 10000 * SCALE, {"from": bob})
     market.sell(PUT, 3, 2 * SCALE, 0, {"from": bob})
 
-    with reverts("Cannot be called before expiry"):
-        market.redeem({"from": alice})
-
-    fast_forward(2000000000)
-
-    with reverts("Cannot be called before settlement"):
-        market.redeem({"from": alice})
-
+    fast_forward(2000000000 + 3600)
     market.settle({"from": alice})
 
     cost = 600 * lslmsr([3, 3, 6, 4, 3], 0.1)
     alicePayoff = 2 * (500 - 444)
-    bobPayoff = 3 * 400 + 1 * (600 - 444)
-    payoff = alicePayoff + bobPayoff
+    bobPayoff1 = 3 * 400
+    bobPayoff2 = 1 * (600 - 444)
+    payoff = alicePayoff + bobPayoff1 + bobPayoff2
     assert approx(market.costAtSettlement()) == cost
     assert market.payoffAtSettlement() == payoff * SCALE
 
     balance = baseToken.balanceOf(market)
     aliceBalance = baseToken.balanceOf(alice)
-    tx = market.redeem({"from": alice})
+    tx = market.redeem(PUT, 2, {"from": alice})
     assert approx(tx.return_value) == cost * alicePayoff / payoff
     assert approx(balance - baseToken.balanceOf(market)) == cost * alicePayoff / payoff
     assert (
@@ -821,17 +838,34 @@ def test_redeem_puts(
     )
     assert tx.events["Redeemed"] == {
         "account": alice,
+        "isLongToken": True,
+        "strikeIndex": 2,
         "amount": tx.return_value,
     }
 
     balance = baseToken.balanceOf(market)
     bobBalance = baseToken.balanceOf(bob)
-    tx = market.redeem({"from": bob})
-    assert approx(tx.return_value) == cost * bobPayoff / payoff
-    assert approx(balance - baseToken.balanceOf(market)) == cost * bobPayoff / payoff
-    assert approx(baseToken.balanceOf(bob) - bobBalance) == cost * bobPayoff / payoff
+    tx = market.redeem(COVER, 1, {"from": bob})
+    assert approx(tx.return_value) == cost * bobPayoff1 / payoff
+    assert approx(balance - baseToken.balanceOf(market)) == cost * bobPayoff1 / payoff
+    assert approx(baseToken.balanceOf(bob) - bobBalance) == cost * bobPayoff1 / payoff
     assert tx.events["Redeemed"] == {
         "account": bob,
+        "isLongToken": False,
+        "strikeIndex": 1,
+        "amount": tx.return_value,
+    }
+
+    balance = baseToken.balanceOf(market)
+    bobBalance = baseToken.balanceOf(bob)
+    tx = market.redeem(PUT, 3, {"from": bob})
+    assert approx(tx.return_value) == cost * bobPayoff2 / payoff
+    assert approx(balance - baseToken.balanceOf(market)) == cost * bobPayoff2 / payoff
+    assert approx(baseToken.balanceOf(bob) - bobBalance) == cost * bobPayoff2 / payoff
+    assert tx.events["Redeemed"] == {
+        "account": bob,
+        "isLongToken": True,
+        "strikeIndex": 3,
         "amount": tx.return_value,
     }
 
@@ -889,14 +923,14 @@ def test_buy_and_redeem_large_size(
     market.sell(COVER, 0, 1e18 * SCALE, 0, {"from": alice})
     market.buy(COVER, 0, 1e18 * SCALE, 1e20 * SCALE, {"from": alice})
 
-    fast_forward(2000000000)
+    fast_forward(2000000000 + 3600)
     market.settle({"from": alice})
 
     cost = lslmsr([1e18, 0, 0, 0, 1e18], 0.1)
     assert approx(market.costAtSettlement()) == cost
 
-    tx = market.redeem({"from": alice})
-    assert approx(tx.return_value) == cost
+    market.redeem(COVER, 0, {"from": alice})
+    market.redeem(CALL, 3, {"from": alice})
     assert approx(baseToken.balanceOf(market)) == 6 * 1e18 * PERCENT
     assert approx(baseToken.balanceOf(alice)) == 1e20 * SCALE - 6 * 1e18 * PERCENT
 
@@ -965,16 +999,20 @@ def test_emergency_methods(
     market.setExpiryTime(2000000000 - 1, {"from": deployer})
     assert market.expiryTime() == 2000000000 - 1
 
-    # force settle
+    # dispute expiry price
     fast_forward(2000000000)
-    market.settle({"from": alice})
-
     with reverts("Ownable: caller is not the owner"):
-        market.forceSettle({"from": alice})
+        market.disputeExpiryPrice(666 * SCALE, {"from": alice})
+    with reverts("Cannot be called before settlement"):
+        market.disputeExpiryPrice(666 * SCALE, {"from": deployer})
 
-    market.forceSettle({"from": deployer})
-    oracle2.setPrice(555 * SCALE)
-    assert market.settlementPrice() == 555 * SCALE
+    market.settle({"from": alice})
+    market.disputeExpiryPrice(666 * SCALE, {"from": deployer})
+    assert market.expiryPrice() == 666 * SCALE
+
+    fast_forward(2000000000 + 3600)
+    with reverts("Not dispute period"):
+        market.disputeExpiryPrice(777 * SCALE, {"from": deployer})
 
     # change owner
     with reverts("Ownable: caller is not the owner"):
