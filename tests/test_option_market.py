@@ -722,7 +722,7 @@ def test_redeem_calls(
     bobPayoff = 3 * 400
     payoff = alicePayoff + bobPayoff
     assert approx(market.costAtSettlement()) == cost
-    assert market.totalPayoff() == payoff * SCALE
+    assert market.payoffAtSettlement() == payoff * SCALE
 
     balance = getBalance(market)
     aliceBalance = getBalance(alice)
@@ -732,7 +732,7 @@ def test_redeem_calls(
     assert approx(getBalance(alice) - aliceBalance) == cost * alicePayoff / payoff
     assert tx.events["Redeemed"] == {
         "account": alice,
-        "payoff": tx.return_value,
+        "amount": tx.return_value,
     }
 
     balance = getBalance(market)
@@ -743,7 +743,7 @@ def test_redeem_calls(
     assert approx(getBalance(bob) - bobBalance) == cost * bobPayoff / payoff
     assert tx.events["Redeemed"] == {
         "account": bob,
-        "payoff": tx.return_value,
+        "amount": tx.return_value,
     }
 
     balance1 = getBalance(deployer)
@@ -809,7 +809,7 @@ def test_redeem_puts(
     bobPayoff = 3 * 400 + 1 * (600 - 444)
     payoff = alicePayoff + bobPayoff
     assert approx(market.costAtSettlement()) == cost
-    assert market.totalPayoff() == payoff * SCALE
+    assert market.payoffAtSettlement() == payoff * SCALE
 
     balance = baseToken.balanceOf(market)
     aliceBalance = baseToken.balanceOf(alice)
@@ -821,7 +821,7 @@ def test_redeem_puts(
     )
     assert tx.events["Redeemed"] == {
         "account": alice,
-        "payoff": tx.return_value,
+        "amount": tx.return_value,
     }
 
     balance = baseToken.balanceOf(market)
@@ -832,7 +832,7 @@ def test_redeem_puts(
     assert approx(baseToken.balanceOf(bob) - bobBalance) == cost * bobPayoff / payoff
     assert tx.events["Redeemed"] == {
         "account": bob,
-        "payoff": tx.return_value,
+        "amount": tx.return_value,
     }
 
     balance1 = baseToken.balanceOf(deployer)

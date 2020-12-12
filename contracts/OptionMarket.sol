@@ -36,7 +36,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
 
     event Settled(uint256 settlementPrice);
 
-    event Redeemed(address indexed account, uint256 payoff);
+    event Redeemed(address indexed account, uint256 amount);
 
     uint256 public constant SCALE = 1e18;
     uint256 public constant SCALE_SCALE = 1e36;
@@ -57,7 +57,11 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     bool public isSettled;
     uint256 public settlementPrice;
     uint256 public costAtSettlement;
-    uint256 public totalPayoff;
+    uint256 public payoffAtSettlement;
+
+    // cache calcCost and calcPayoff to save gas
+    uint256 public cost;
+    uint256 public payoff;
 
     /**
      * @param _baseToken        Underlying ERC20 token. Represents ETH if equal to 0x0
@@ -139,11 +143,12 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         require(strikeIndex < numStrikes, "Index too large");
         require(optionsOut > 0, "optionsOut must be > 0");
 
-        uint256 costBefore = calcCost();
+        uint256 costBefore = cost;
         OptionToken option = isLongToken ? longTokens[strikeIndex] : shortTokens[strikeIndex];
         option.mint(msg.sender, optionsOut);
 
-        amountIn = calcCost().sub(costBefore);
+        cost = calcCost();
+        amountIn = cost.sub(costBefore);
         amountIn = amountIn.add(calcFee(optionsOut, strikeIndex));
         require(amountIn > 0, "Amount in must be > 0");
         require(amountIn <= maxAmountIn, "Max slippage exceeded");
@@ -174,11 +179,12 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         require(strikeIndex < numStrikes, "Index too large");
         require(optionsIn > 0, "optionsIn must be > 0");
 
-        uint256 costBefore = calcCost();
+        uint256 costBefore = cost;
         OptionToken option = isLongToken ? longTokens[strikeIndex] : shortTokens[strikeIndex];
         option.burn(msg.sender, optionsIn);
 
-        amountOut = costBefore.sub(calcCost());
+        cost = calcCost();
+        amountOut = costBefore.sub(cost);
         uint256 fee = calcFee(optionsIn, strikeIndex);
         require(amountOut > fee, "Amount out must be > 0");
 
@@ -208,7 +214,8 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         require(settlementPrice > 0, "Price from oracle must be > 0");
 
         costAtSettlement = calcCost();
-        totalPayoff = calcPayoff();
+        payoffAtSettlement = calcPayoff();
+        payoff = payoffAtSettlement;
         emit Settled(settlementPrice);
     }
 
@@ -218,12 +225,12 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
      * This method can only be called after `settle` has been called and the
      * settlement price has been set
      */
-    function redeem() external nonReentrant returns (uint256 payoff) {
+    function redeem() external nonReentrant returns (uint256 amount) {
         require(isExpired(), "Cannot be called before expiry");
         require(isSettled, "Cannot be called before settlement");
         require(!isPaused, "This method has been paused");
 
-        uint256 payoffBefore = calcPayoff();
+        uint256 payoffBefore = payoff;
         for (uint256 i = 0; i < numStrikes; i++) {
             uint256 longBalance = longTokens[i].balanceOf(msg.sender);
             uint256 shortBalance = shortTokens[i].balanceOf(msg.sender);
@@ -236,10 +243,11 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         }
 
         // loses accuracy but otherwise might overflow
-        payoff = payoffBefore.sub(calcPayoff());
-        payoff = payoff.mul(costAtSettlement).div(totalPayoff);
-        baseToken.uniTransfer(msg.sender, payoff);
-        emit Redeemed(msg.sender, payoff);
+        payoff = calcPayoff();
+        amount = payoffBefore.sub(payoff);
+        amount = amount.mul(costAtSettlement).div(payoffAtSettlement);
+        baseToken.uniTransfer(msg.sender, amount);
+        emit Redeemed(msg.sender, amount);
     }
 
     /**
