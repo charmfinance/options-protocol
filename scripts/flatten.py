@@ -28,9 +28,6 @@ PATHS = [
     "contracts/OptionToken.sol",
     "contracts/OptionMarket.sol",
     "contracts/OptionFactory.sol",
-    "contracts/OptionsToken.sol",
-    "contracts/OptionsMarketMaker.sol",
-    "contracts/OptionsFactory.sol",
 ]
 
 PREFIX = """
