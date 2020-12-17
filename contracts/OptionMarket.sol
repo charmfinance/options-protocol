@@ -67,12 +67,12 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     /**
      * @param _baseToken        Underlying ERC20 token. Represents ETH if equal to 0x0
      * @param _oracle           Oracle from which the settlement price is obtained
-     * @param _longTokens       Long options
-     * @param _shortTokens      Short options
+     * @param _longTokens       Options tokens representing long calls/puts
+     * @param _shortTokens      Options tokens representing short calls/puts
      * @param _strikePrices     Strike prices expressed in wei
-     * @param _alpha            Liquidity parameter for cost function expressed in wei
      * @param _expiryTime       Expiration time as a unix timestamp
-     * @param _isPut            Whether long token represents a call or a put
+     * @param _alpha            Liquidity parameter for cost function expressed in wei
+     * @param _isPut            Whether options are calls or puts
      * @param _tradingFee       Trading fee expressed in wei
      */
     function initialize(
