@@ -26,7 +26,6 @@ contract OptionFactory is CloneFactory, OptionSymbol, ReentrancyGuard {
     // used by `createMarket` to avoid stack too deep error
     address private oracle;
     uint256[] private strikePrices;
-    uint256 private alpha;
     uint256 private expiryTime;
     bool private isPut;
     uint256 private tradingFee;
@@ -44,7 +43,6 @@ contract OptionFactory is CloneFactory, OptionSymbol, ReentrancyGuard {
         address _oracle,
         uint256[] memory _strikePrices,
         uint256 _expiryTime,
-        uint256 _alpha,
         bool _isPut,
         uint256 _tradingFee
     ) external nonReentrant returns (address market) {
@@ -53,7 +51,6 @@ contract OptionFactory is CloneFactory, OptionSymbol, ReentrancyGuard {
         oracle = _oracle;
         strikePrices = _strikePrices;
         expiryTime = _expiryTime;
-        alpha = _alpha;
         isPut = _isPut;
         tradingFee = _tradingFee;
 
@@ -81,7 +78,6 @@ contract OptionFactory is CloneFactory, OptionSymbol, ReentrancyGuard {
             shortTokens,
             strikePrices,
             expiryTime,
-            alpha,
             isPut,
             tradingFee
         );

@@ -18,7 +18,7 @@ import "./OptionToken.sol";
 /**
  * Automated market maker that lets users buy and sell options from it
  */
-contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
+contract OptionLsLmsr is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     using Address for address;
     using SafeERC20 for IERC20;
     using UniERC20 for IERC20;
@@ -48,7 +48,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     OptionToken[] public shortTokens;
     uint256[] public strikePrices;
     uint256 public expiryTime;
-    uint256 public b;
+    uint256 public alpha;
     bool public isPut;
     uint256 public tradingFee;
 
@@ -71,6 +71,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
      * @param _shortTokens      Options tokens representing short calls/puts
      * @param _strikePrices     Strike prices expressed in wei
      * @param _expiryTime       Expiration time as a unix timestamp
+     * @param _alpha            Liquidity parameter for cost function expressed in wei
      * @param _isPut            Whether options are calls or puts
      * @param _tradingFee       Trading fee expressed in wei
      */
@@ -81,9 +82,10 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         address[] memory _shortTokens,
         uint256[] memory _strikePrices,
         uint256 _expiryTime,
+        uint256 _alpha,
         bool _isPut,
         uint256 _tradingFee
-    ) public payable initializer {
+    ) public initializer {
         __ReentrancyGuard_init();
         __Ownable_init();
 
@@ -98,12 +100,15 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
             require(_strikePrices[i] < _strikePrices[i + 1], "Strike prices must be increasing");
         }
 
+        require(_alpha > 0, "Alpha must be > 0");
+        require(_alpha < SCALE, "Alpha must be < 1");
         require(_tradingFee < SCALE, "Trading fee must be < 1");
 
         baseToken = IERC20(_baseToken);
         oracle = IOracle(_oracle);
         strikePrices = _strikePrices;
         expiryTime = _expiryTime;
+        alpha = _alpha;
         isPut = _isPut;
         tradingFee = _tradingFee;
 
@@ -134,7 +139,6 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         uint256 optionsOut,
         uint256 maxAmountIn
     ) external payable nonReentrant returns (uint256 amountIn) {
-        require(b > 0, "Cannot be called before b is set");
         require(!isExpired(), "Already expired");
         require(!isPaused, "This method has been paused");
         require(strikeIndex < numStrikes, "Index too large");
@@ -170,7 +174,6 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         uint256 optionsIn,
         uint256 minAmountOut
     ) external nonReentrant returns (uint256 amountOut) {
-        require(b > 0, "Cannot be called before b is set");
         require(!isExpired(), "Already expired");
         require(!isPaused, "This method has been paused");
         require(strikeIndex < numStrikes, "Index too large");
@@ -243,14 +246,15 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     }
 
     /**
-     * Calculates the LMSR cost function
+     * Calculates the LS-LMSR cost function (Othman et al., 2013)
      *
      *   C(q_1, ..., q_n) = b * log(exp(q_1 / b) + ... + exp(q_n / b))
      *
      * where
      *
      *   q_i = total supply of ith spread
-     *   b = liquidity parameter
+     *   b = alpha * (q_1 + ... + q_n)
+     *   alpha = LS-LMSR constant that determines liquidity sensitivity
      *
      * An equivalent expression for C is used to avoid overflow when
      * calculating exponentials
@@ -264,10 +268,6 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
      * Answer is multiplied by strike price for puts
      */
     function calcCost() public view returns (uint256) {
-        if (b == 0) {
-            return 0;
-        }
-
         // initally set s to total supply of shortTokens
         uint256 s;
         for (uint256 i = 0; i < numStrikes; i++) {
@@ -281,6 +281,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         uint256[] memory q = new uint256[](numStrikes + 1);
         q[0] = s;
         uint256 max = s;
+        uint256 sum = s;
 
         // set q[i] to be total supply of longTokens[:i] and shortTokens[i:]
         for (uint256 i = 0; i < numStrikes; i++) {
@@ -293,15 +294,22 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
             }
             q[i + 1] = s;
             max = Math.max(max, s);
+            sum = sum.add(s);
         }
 
+        // if no options bought yet
+        if (sum == 0) {
+            return 0;
+        }
+
+        uint256 b = sum.mul(alpha);
         int128 sumExp;
         for (uint256 i = 0; i < q.length; i++) {
             // max(q) - q_i
             uint256 diff = max.sub(q[i]);
 
             // (max(q) - q_i) / b
-            int128 div = ABDKMath64x64.divu(diff, b);
+            int128 div = ABDKMath64x64.divu(diff.mul(SCALE), b);
 
             // exp((q_i - max(q)) / b)
             int128 exp = ABDKMath64x64.exp(ABDKMath64x64.neg(div));
@@ -312,8 +320,8 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         int128 log = ABDKMath64x64.ln(sumExp);
 
         // b * log(sumExp) + max(q)
-        uint256 cost = ABDKMath64x64.mulu(log, b).add(max);
-        return isPut ? cost.mul(maxStrikePrice).div(SCALE) : cost;
+        uint256 cost = ABDKMath64x64.mulu(log, b).add(max.mul(SCALE));
+        return isPut ? cost.mul(maxStrikePrice).div(SCALE_SCALE) : cost.div(SCALE);
     }
 
     /**
@@ -362,21 +370,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         return block.timestamp >= expiryTime && block.timestamp < expiryTime + DISPUTE_PERIOD;
     }
 
-    function increaseB(uint256 _b) public payable onlyOwner returns (uint256 amountIn) {
-        require(_b > b, "New b must be higher");
-        uint256 costBefore = lastCost;
-        b = _b;
-        lastCost = calcCost();
-        amountIn = lastCost.sub(costBefore);
-        require(amountIn > 0, "Amount in must be > 0");
-
-        uint256 balanceBefore = baseToken.uniBalanceOf(address(this));
-        baseToken.uniTransferFromSenderToThis(amountIn);
-        uint256 balanceAfter = baseToken.uniBalanceOf(address(this));
-        require(baseToken.isETH() || balanceAfter.sub(balanceBefore) == amountIn, "Deflationary tokens not supported");
-    }
-
-    function skim() public onlyOwner returns (uint256 amount) {
+    function skim() public nonReentrant onlyOwner returns (uint256 amount) {
         amount = calcSkimAmount();
         if (amount > 0) {
             baseToken.uniTransfer(msg.sender, amount);
