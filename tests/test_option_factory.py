@@ -40,7 +40,6 @@ def test_option_factory(
         oracle,
         [300 * SCALE, 400 * SCALE, 500 * SCALE],  # strikes
         2000000000,  # expiry
-        SCALE // 10,  # alpha
         isPut,
         SCALE // 100,  # trading fee
     )
@@ -53,8 +52,8 @@ def test_option_factory(
     assert market.strikePrices(0) == 300 * SCALE
     assert market.strikePrices(1) == 400 * SCALE
     assert market.strikePrices(2) == 500 * SCALE
-    assert market.alpha() == SCALE // 10
     assert market.expiryTime() == 2000000000
+    assert market.b() == 0
 
     suffix = "P" if isPut else "C"
     suffix2 = "SP" if isPut else "SC"
