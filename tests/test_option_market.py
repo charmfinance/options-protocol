@@ -247,29 +247,82 @@ def test_increase_b(
 
     # only owner
     with reverts("Ownable: caller is not the owner"):
-        market.increaseB(100 * SCALE, {"from": alice, **valueDict})
+        market.increaseBAndBuy(
+            100 * SCALE,
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            1000 * SCALE,
+            {"from": alice, **valueDict},
+        )
 
     # not enough balance
     if isEth:
         with reverts("UniERC20: not enough value"):
-            market.increaseB(100 * SCALE, {"from": deployer, **valueDict})
+            market.increaseBAndBuy(
+                100 * SCALE,
+                [0, 0, 0, 0],
+                [0, 0, 0, 0],
+                1000 * SCALE,
+                {"from": deployer, **valueDict},
+            )
     else:
         with reverts("ERC20: transfer amount exceeds balance"):
-            market.increaseB(100 * SCALE, {"from": deployer, **valueDict})
+            market.increaseBAndBuy(
+                100 * SCALE,
+                [0, 0, 0, 0],
+                [0, 0, 0, 0],
+                1000 * SCALE,
+                {"from": deployer, **valueDict},
+            )
+
+    with reverts("Lengths do not match"):
+        market.increaseBAndBuy(
+            10 * SCALE,
+            [0, 0, 0],
+            [0, 0, 0, 0],
+            1000 * SCALE,
+            {"from": deployer, **valueDict},
+        )
+    with reverts("Lengths do not match"):
+        market.increaseBAndBuy(
+            10 * SCALE,
+            [0, 0, 0, 0],
+            [0, 0, 0],
+            1000 * SCALE,
+            {"from": deployer, **valueDict},
+        )
 
     # can increase b
-    tx = market.increaseB(10 * SCALE, {"from": deployer, **valueDict})
-    assert approx(tx.return_value) == lmsr([0, 0, 0, 0, 0], 10)
+    tx = market.increaseBAndBuy(
+        10 * SCALE,
+        [0, 1 * SCALE, 0, 0],
+        [0, 0, 0, 0],
+        1000 * SCALE,
+        {"from": deployer, **valueDict},
+    )
+    assert approx(tx.return_value) == lmsr([0, 0, 1, 1, 1], 10)
     assert approx(getBalance(deployer)) == 100 * SCALE - tx.return_value
 
     # can't decrease b
     with reverts("New b must be higher"):
-        market.increaseB(9 * SCALE, {"from": deployer, **valueDict})
+        market.increaseBAndBuy(
+            9 * SCALE,
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            1000 * SCALE,
+            {"from": deployer, **valueDict},
+        )
 
     # but can increase b
-    tx = market.increaseB(15 * SCALE, {"from": deployer, **valueDict})
-    assert approx(tx.return_value) == lmsr([0, 0, 0, 0, 0], 15) - lmsr(
-        [0, 0, 0, 0, 0], 10
+    tx = market.increaseBAndBuy(
+        15 * SCALE,
+        [0, 0, 2 * SCALE, 0],
+        [2 * SCALE, 0, 0, 0],
+        1000 * SCALE,
+        {"from": deployer, **valueDict},
+    )
+    assert approx(tx.return_value) == lmsr([2, 0, 1, 3, 3], 15) - lmsr(
+        [0, 0, 1, 1, 1], 10
     )
 
     # can trade now
@@ -314,8 +367,14 @@ def test_buy_and_sell_calls(
         baseToken.approve(market, 100 * SCALE, {"from": alice})
     valueDict = {"value": 50 * SCALE} if isEth else {}
 
-    # needs to call increaseB
-    market.increaseB(10 * SCALE, {"from": deployer, **valueDict})
+    # needs to call increaseBAndBuy
+    market.increaseBAndBuy(
+        10 * SCALE,
+        [0, 0, 0, 0],
+        [0, 0, 0, 0],
+        1000 * SCALE,
+        {"from": deployer, **valueDict},
+    )
 
     # index out of range
     with reverts("Index too large"):
@@ -574,8 +633,10 @@ def test_buy_and_sell_puts(a, OptionMarket, MockToken, MockOracle, OptionToken):
     baseToken.mint(alice, 10000 * SCALE, {"from": deployer})
     baseToken.approve(market, 10000 * SCALE, {"from": alice})
 
-    # needs to call increaseB
-    market.increaseB(10 * SCALE, {"from": deployer})
+    # needs to call increaseBAndBuy
+    market.increaseBAndBuy(
+        10 * SCALE, [0, 0, 0, 0], [0, 0, 0, 0], 100000 * SCALE, {"from": deployer}
+    )
 
     # index out of range
     with reverts("Index too large"):
@@ -749,8 +810,14 @@ def test_redeem_calls(
         baseToken.approve(market, 100 * SCALE, {"from": bob})
     valueDict = {"value": 50 * SCALE} if isEth else {}
 
-    # needs to call increaseB
-    market.increaseB(10 * SCALE, {"from": deployer, **valueDict})
+    # needs to call increaseBAndBuy
+    market.increaseBAndBuy(
+        10 * SCALE,
+        [0, 0, 0, 0],
+        [0, 0, 0, 0],
+        1000 * SCALE,
+        {"from": deployer, **valueDict},
+    )
 
     # buy 2 calls (strike=300)
     market.buy(CALL, 0, 2 * SCALE, 100 * SCALE, {"from": alice, **valueDict})
@@ -863,8 +930,10 @@ def test_redeem_puts(a, OptionMarket, MockToken, MockOracle, OptionToken, fast_f
     baseToken.mint(bob, 10000 * SCALE, {"from": deployer})
     baseToken.approve(market, 10000 * SCALE, {"from": bob})
 
-    # needs to call increaseB
-    market.increaseB(10 * SCALE, {"from": deployer})
+    # needs to call increaseBAndBuy
+    market.increaseBAndBuy(
+        10 * SCALE, [0, 0, 0, 0], [0, 0, 0, 0], 100000 * SCALE, {"from": deployer}
+    )
 
     # buy 2 puts (strike=500)
     market.buy(PUT, 2, 2 * SCALE, 10000 * SCALE, {"from": alice})
@@ -977,8 +1046,14 @@ def test_emergency_methods(
         baseToken.approve(market, 100 * SCALE, {"from": alice})
     valueDict = {"value": 50 * SCALE} if isEth else {}
 
-    # needs to call increaseB
-    market.increaseB(0.01 * SCALE, {"from": deployer, **valueDict})
+    # needs to call increaseBAndBuy
+    market.increaseBAndBuy(
+        0.01 * SCALE,
+        [0, 0, 0, 0],
+        [0, 0, 0, 0],
+        1000 * SCALE,
+        {"from": deployer, **valueDict},
+    )
 
     # pause and unpause
     with reverts("Ownable: caller is not the owner"):
@@ -1066,8 +1141,10 @@ def test_cannot_sell_when_amount_out_lower_than_fee(
         baseToken.approve(market, 100 * SCALE, {"from": alice})
     valueDict = {"value": 50 * SCALE} if isEth else {}
 
-    # needs to call increaseB
-    market.increaseB(1 * SCALE, {"from": deployer, **valueDict})
+    # needs to call increaseBAndBuy
+    market.increaseBAndBuy(
+        1 * SCALE, [0, 0, 0], [0, 0, 0], 1000 * SCALE, {"from": deployer, **valueDict}
+    )
 
     # buy 1 call
     market.buy(CALL, 2, 1 * SCALE, 100 * SCALE, {"from": alice, **valueDict})

@@ -362,13 +362,30 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         return block.timestamp >= expiryTime && block.timestamp < expiryTime + DISPUTE_PERIOD;
     }
 
-    function increaseB(uint256 _b) public payable onlyOwner returns (uint256 amountIn) {
+    function increaseBAndBuy(
+        uint256 _b,
+        uint256[] memory longOptionsOut,
+        uint256[] memory shortOptionsOut,
+        uint256 maxAmountIn
+    ) public payable onlyOwner returns (uint256 amountIn) {
         require(_b > b, "New b must be higher");
+        require(longOptionsOut.length == strikePrices.length, "Lengths do not match");
+        require(shortOptionsOut.length == strikePrices.length, "Lengths do not match");
+
         uint256 costBefore = lastCost;
         b = _b;
+        for (uint256 i = 0; i < strikePrices.length; i++) {
+            if (longOptionsOut[i] > 0) {
+                longTokens[i].mint(msg.sender, longOptionsOut[i]);
+            }
+            if (shortOptionsOut[i] > 0) {
+                shortTokens[i].mint(msg.sender, shortOptionsOut[i]);
+            }
+        }
         lastCost = calcCost();
         amountIn = lastCost.sub(costBefore);
         require(amountIn > 0, "Amount in must be > 0");
+        require(amountIn <= maxAmountIn, "Max slippage exceeded");
 
         uint256 balanceBefore = baseToken.uniBalanceOf(address(this));
         baseToken.uniTransferFromSenderToThis(amountIn);
