@@ -57,8 +57,6 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     bool public isPaused;
     bool public isSettled;
     uint256 public expiryPrice;
-    uint256 public costAtSettlement;
-    uint256 public payoffAtSettlement;
 
     // cache calcCost and calcPayoff to save gas
     uint256 public lastCost;
@@ -146,8 +144,11 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
 
         lastCost = calcCost();
         amountIn = lastCost.sub(costBefore);
-        amountIn = amountIn.add(calcFee(optionsOut, strikeIndex));
         require(amountIn > 0, "Amount in must be > 0");
+
+        uint256 fee = optionsOut.mul(tradingFee);
+        fee = isPut ? fee.mul(strikePrices[strikeIndex]).div(SCALE_SCALE) : fee.div(SCALE);
+        amountIn = amountIn.add(fee);
         require(amountIn <= maxAmountIn, "Max slippage exceeded");
 
         uint256 balanceBefore = baseToken.uniBalanceOf(address(this));
@@ -182,10 +183,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
 
         lastCost = calcCost();
         amountOut = costBefore.sub(lastCost);
-        uint256 fee = calcFee(optionsIn, strikeIndex);
-        require(amountOut > fee, "Amount out must be > 0");
-
-        amountOut = amountOut.sub(fee);
+        require(amountOut > 0, "Amount out must be > 0");
         require(amountOut >= minAmountOut, "Max slippage exceeded");
 
         baseToken.uniTransfer(msg.sender, amountOut);
@@ -209,9 +207,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         expiryPrice = oracle.getPrice();
         require(expiryPrice > 0, "Price from oracle must be > 0");
 
-        costAtSettlement = calcCost();
-        payoffAtSettlement = calcPayoff();
-        lastPayoff = payoffAtSettlement;
+        lastPayoff = calcPayoff();
         emit Settled(expiryPrice);
     }
 
@@ -236,7 +232,6 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         option.burn(msg.sender, balance);
         lastPayoff = calcPayoff();
         amount = payoffBefore.sub(lastPayoff);
-        amount = amount.mul(costAtSettlement).div(payoffAtSettlement);
 
         baseToken.uniTransfer(msg.sender, amount);
         emit Redeemed(msg.sender, isLongToken, strikeIndex, amount);
@@ -320,6 +315,9 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
      * Calculates amount of `baseToken` that needs to be paid out to all users
      */
     function calcPayoff() public view returns (uint256 payoff) {
+        if (expiryPrice == 0) {
+            return 0;
+        }
         for (uint256 i = 0; i < numStrikes; i++) {
             uint256 strikePrice = strikePrices[i];
             uint256 longSupply = longTokens[i].totalSupply();
@@ -339,19 +337,19 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
             payoff = payoff.add(shortSupply.mul(Math.min(expiryPrice, strikePrice)));
         }
 
-        // loses accuracy but otherwise might overflow in `redeem`
-        payoff = payoff.div(SCALE);
-    }
-
-    function calcFee(uint256 amount, uint256 strikeIndex) public view returns (uint256) {
-        uint256 fee = amount.mul(tradingFee);
-        return isPut ? fee.mul(strikePrices[strikeIndex]).div(SCALE_SCALE) : fee.div(SCALE);
+        if (isPut) {
+            payoff = payoff.div(SCALE);
+        } else {
+            payoff = payoff.div(expiryPrice);
+        }
     }
 
     function calcSkimAmount() public view returns (uint256) {
-        uint256 balanceBefore = baseToken.uniBalanceOf(address(this));
-        uint256 balanceAfter = isSettled ? calcPayoff() : calcCost();
-        return balanceBefore.sub(balanceAfter);
+        if (!isSettled) {
+            return 0;
+        }
+        uint256 balance = baseToken.uniBalanceOf(address(this));
+        return balance.sub(calcPayoff());
     }
 
     function isExpired() public view returns (bool) {
@@ -394,6 +392,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     }
 
     function skim() public onlyOwner returns (uint256 amount) {
+        require(isSettled, "Cannot be called before settlement");
         amount = calcSkimAmount();
         if (amount > 0) {
             baseToken.uniTransfer(msg.sender, amount);
