@@ -374,7 +374,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         uint256[] memory longOptionsOut,
         uint256[] memory shortOptionsOut,
         uint256 maxAmountIn
-    ) public payable onlyOwner returns (uint256 amountIn) {
+    ) external payable onlyOwner returns (uint256 amountIn) {
         require(_b > b, "New b must be higher");
         require(longOptionsOut.length == strikePrices.length, "Lengths do not match");
         require(shortOptionsOut.length == strikePrices.length, "Lengths do not match");
@@ -404,7 +404,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         }
     }
 
-    function skim() public onlyOwner returns (uint256 amount) {
+    function skim() external onlyOwner returns (uint256 amount) {
         require(isSettled, "Cannot be called before settlement");
         amount = calcSkimAmount();
         if (amount > 0) {
