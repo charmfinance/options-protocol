@@ -126,8 +126,8 @@ def test_initialize_errors(
             [300 * SCALE, 400 * SCALE, 500 * SCALE, 600 * SCALE],
             2000000000,  # expiry = 18 May 2033
             isPut,
-            SCALE,  # tradingFee = 100%
-            40 * SCALE,  # balanceLimit = 40
+            SCALE,  # trading fee = 100%
+            40 * SCALE,  # balance limit = 40
         )
 
     market = deployer.deploy(OptionMarket)
@@ -140,8 +140,8 @@ def test_initialize_errors(
             [300 * SCALE, 400 * SCALE, 500 * SCALE, 600 * SCALE],
             1500000000,  # expiry = 14 July 2017
             isPut,
-            1e16,  # tradingFee = 1%
-            40 * SCALE,  # balanceLimit = 40
+            1e16,  # trading fee = 1%
+            40 * SCALE,  # balance limit = 40
         )
 
     market = deployer.deploy(OptionMarket)
@@ -154,8 +154,8 @@ def test_initialize_errors(
             [300 * SCALE, 400 * SCALE, 500 * SCALE, 600 * SCALE],
             2000000000,  # expiry = 18 May 2033
             isPut,
-            1e16,  # tradingFee = 1%
-            40 * SCALE,  # balanceLimit = 40
+            1e16,  # trading fee = 1%
+            40 * SCALE,  # balance limit = 40
         )
 
     market = deployer.deploy(OptionMarket)
@@ -168,8 +168,8 @@ def test_initialize_errors(
             [300 * SCALE, 400 * SCALE, 500 * SCALE, 600 * SCALE],
             2000000000,  # expiry = 18 May 2033
             isPut,
-            1e16,  # tradingFee = 1%
-            40 * SCALE,  # balanceLimit = 40
+            1e16,  # trading fee = 1%
+            40 * SCALE,  # balance limit = 40
         )
 
     market = deployer.deploy(OptionMarket)
@@ -182,8 +182,8 @@ def test_initialize_errors(
             [],
             2000000000,  # expiry = 18 May 2033
             isPut,
-            1e16,  # tradingFee = 1%
-            40 * SCALE,  # balanceLimit = 40
+            1e16,  # trading fee = 1%
+            40 * SCALE,  # balance limit = 40
         )
 
     market = deployer.deploy(OptionMarket)
@@ -196,8 +196,8 @@ def test_initialize_errors(
             [0, 400 * SCALE, 500 * SCALE, 600 * SCALE],
             2000000000,  # expiry = 18 May 2033
             isPut,
-            1e16,  # tradingFee = 1%
-            40 * SCALE,  # balanceLimit = 40
+            1e16,  # trading fee = 1%
+            40 * SCALE,  # balance limit = 40
         )
 
     market = deployer.deploy(OptionMarket)
@@ -210,8 +210,8 @@ def test_initialize_errors(
             [300 * SCALE, 400 * SCALE, 500 * SCALE, 500 * SCALE],
             2000000000,  # expiry = 18 May 2033
             isPut,
-            1e16,  # tradingFee = 1%
-            40 * SCALE,  # balanceLimit = 40
+            1e16,  # trading fee = 1%
+            40 * SCALE,  # balance limit = 40
         )
 
 
@@ -248,7 +248,7 @@ def test_increase_b(
         [300 * SCALE, 400 * SCALE, 500 * SCALE, 600 * SCALE],
         2000000000,  # expiry = 18 May 2033
         False,  # call
-        1 * PERCENT,  # tradingFee = 1%
+        1 * PERCENT,  # trading fee = 1%
         balanceLimit,
     )
     for token in longTokens + shortTokens:
@@ -404,7 +404,7 @@ def test_buy_and_sell_calls(
         [300 * SCALE, 400 * SCALE, 500 * SCALE, 600 * SCALE],
         2000000000,  # expiry = 18 May 2033
         False,  # call
-        1 * PERCENT,  # tradingFee = 1%
+        1 * PERCENT,  # trading fee = 1%
         balanceLimit,
     )
     for token in longTokens + shortTokens:
@@ -667,7 +667,7 @@ def test_buy_and_sell_puts(
         [300 * SCALE, 400 * SCALE, 500 * SCALE, 600 * SCALE],
         2000000000,  # expiry = 18 May 2033
         True,  # put
-        1 * PERCENT,  # tradingFee = 1%
+        1 * PERCENT,  # trading fee = 1%
         balanceLimit,
     )
     for token in longTokens + shortTokens:
@@ -788,8 +788,8 @@ def test_settle(
         [300 * SCALE, 400 * SCALE, 500 * SCALE, 600 * SCALE],
         2000000000,  # expiry = 18 May 2033
         isPut,
-        1 * PERCENT,  # tradingFee = 1%
-        40000 * SCALE,  # balanceLimit = 40000
+        1 * PERCENT,  # trading fee = 1%
+        40000 * SCALE,  # balance limit = 40000
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
@@ -836,8 +836,8 @@ def test_redeem_calls(
         [300 * SCALE, 400 * SCALE, 500 * SCALE, 600 * SCALE],
         2000000000,  # expiry = 18 May 2033
         False,  # call
-        1 * PERCENT,  # tradingFee = 1%
-        40000 * SCALE,  # balanceLimit = 40000
+        1 * PERCENT,  # trading fee = 1%
+        40000 * SCALE,  # balance limit = 40000
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
@@ -962,8 +962,8 @@ def test_redeem_puts(a, OptionMarket, MockToken, MockOracle, OptionToken, fast_f
         [300 * SCALE, 400 * SCALE, 500 * SCALE, 600 * SCALE],
         2000000000,  # expiry = 18 May 2033
         True,  # put
-        1 * PERCENT,  # tradingFee = 1%
-        40000 * SCALE,  # balanceLimit = 40000
+        1 * PERCENT,  # trading fee = 1%
+        40000 * SCALE,  # balance limit = 40000
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
@@ -1080,8 +1080,8 @@ def test_emergency_methods(
         [300 * SCALE, 400 * SCALE, 500 * SCALE, 600 * SCALE],
         2000000000,  # expiry = 18 May 2033
         isPut,
-        1 * PERCENT,  # tradingFee = 1%
-        40000 * SCALE,  # balanceLimit = 40000
+        1 * PERCENT,  # trading fee = 1%
+        40000 * SCALE,  # balance limit = 40000
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
@@ -1149,3 +1149,75 @@ def test_emergency_methods(
 
     market.transferOwnership(alice, {"from": deployer})
     assert market.owner() == alice
+
+
+@pytest.mark.parametrize("isEth", [False, True])
+@pytest.mark.parametrize("balanceLimit", [0, 20 * SCALE])
+def test_set_balance_limit(
+    a,
+    OptionMarket,
+    MockToken,
+    MockOracle,
+    OptionToken,
+    fast_forward,
+    isEth,
+    balanceLimit,
+):
+
+    # setup args
+    deployer, alice = a[:2]
+    baseToken = ZERO_ADDRESS if isEth else deployer.deploy(MockToken)
+    oracle = deployer.deploy(MockOracle)
+    longTokens = [deployer.deploy(OptionToken) for _ in range(4)]
+    shortTokens = [deployer.deploy(OptionToken) for _ in range(4)]
+
+    # deploy and initialize
+    market = deployer.deploy(OptionMarket)
+    market.initialize(
+        baseToken,
+        oracle,
+        longTokens,
+        shortTokens,
+        [300 * SCALE, 400 * SCALE, 500 * SCALE, 600 * SCALE],
+        2000000000,  # expiry = 18 May 2033
+        False,
+        1 * PERCENT,  # trading fee = 1%
+        10 * SCALE,  # balance limit = 10
+    )
+    for token in longTokens + shortTokens:
+        token.initialize(market, "name", "symbol", 18)
+
+    # give users base tokens
+    if not isEth:
+        baseToken.mint(deployer, 100 * SCALE, {"from": deployer})
+        baseToken.approve(market, 100 * SCALE, {"from": deployer})
+        baseToken.mint(alice, 100 * SCALE, {"from": deployer})
+        baseToken.approve(market, 100 * SCALE, {"from": alice})
+    valueDict = {"value": 50 * SCALE} if isEth else {}
+
+    # balance limit too low
+    with reverts("Balance limit exceeded"):
+        market.increaseBAndBuy(
+            10 * SCALE,
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            100000 * SCALE,
+            {"from": deployer, **valueDict},
+        )
+
+    # only owner
+    with reverts("Ownable: caller is not the owner"):
+        market.setBalanceLimit(20 * SCALE, {"from": alice})
+
+    # increase limit
+    market.setBalanceLimit(balanceLimit, {"from": deployer})
+    assert market.balanceLimit() == balanceLimit
+
+    # now works
+    market.increaseBAndBuy(
+        10 * SCALE,
+        [0, 0, 0, 0],
+        [0, 0, 0, 0],
+        100000 * SCALE,
+        {"from": deployer, **valueDict},
+    )

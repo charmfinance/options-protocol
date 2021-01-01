@@ -412,6 +412,10 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         }
     }
 
+    function setBalanceLimit(uint256 _balanceLimit) external onlyOwner {
+        balanceLimit = _balanceLimit;
+    }
+
     // emergency use only. to be removed in future versions
     function pause() external onlyOwner {
         isPaused = true;
