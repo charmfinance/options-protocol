@@ -51,6 +51,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     uint256 public b;
     bool public isPut;
     uint256 public tradingFee;
+    uint256 public balanceLimit;
 
     uint256 public maxStrikePrice;
     uint256 public numStrikes;
@@ -71,6 +72,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
      * @param _expiryTime       Expiration time as a unix timestamp
      * @param _isPut            Whether options are calls or puts
      * @param _tradingFee       Trading fee expressed in wei
+     * @param _balanceLimit     Limit on balance in contract. Used for guarded launch. Set to 0 means no limit
      */
     function initialize(
         address _baseToken,
@@ -80,7 +82,8 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         uint256[] memory _strikePrices,
         uint256 _expiryTime,
         bool _isPut,
-        uint256 _tradingFee
+        uint256 _tradingFee,
+        uint256 _balanceLimit
     ) public payable initializer {
         __ReentrancyGuard_init();
         __Ownable_init();
@@ -104,6 +107,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         expiryTime = _expiryTime;
         isPut = _isPut;
         tradingFee = _tradingFee;
+        balanceLimit = _balanceLimit;
 
         for (uint256 i = 0; i < _longTokens.length; i++) {
             longTokens.push(OptionToken(_longTokens[i]));
@@ -155,6 +159,11 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         baseToken.uniTransferFromSenderToThis(amountIn);
         uint256 balanceAfter = baseToken.uniBalanceOf(address(this));
         require(baseToken.isETH() || balanceAfter.sub(balanceBefore) == amountIn, "Deflationary tokens not supported");
+
+        if (balanceLimit > 0) {
+            require(baseToken.uniBalanceOf(address(this)) <= balanceLimit, "Balance limit exceeded");
+        }
+
         emit Trade(msg.sender, true, isLongToken, strikeIndex, optionsOut, amountIn, option.totalSupply());
     }
 
@@ -389,6 +398,10 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         baseToken.uniTransferFromSenderToThis(amountIn);
         uint256 balanceAfter = baseToken.uniBalanceOf(address(this));
         require(baseToken.isETH() || balanceAfter.sub(balanceBefore) == amountIn, "Deflationary tokens not supported");
+
+        if (balanceLimit > 0) {
+            require(baseToken.uniBalanceOf(address(this)) <= balanceLimit, "Balance limit exceeded");
+        }
     }
 
     function skim() public onlyOwner returns (uint256 amount) {

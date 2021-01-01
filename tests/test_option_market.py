@@ -23,6 +23,7 @@ def lmsr(q, b):
 @pytest.mark.parametrize("isEth", [False, True])
 @pytest.mark.parametrize("isPut", [False, True])
 @pytest.mark.parametrize("tradingFee", [0, 10 * PERCENT, SCALE - 1])
+@pytest.mark.parametrize("balanceLimit", [0, 40 * SCALE])
 def test_initialize(
     a,
     OptionMarket,
@@ -32,6 +33,7 @@ def test_initialize(
     isEth,
     isPut,
     tradingFee,
+    balanceLimit,
 ):
 
     # setup args
@@ -52,6 +54,7 @@ def test_initialize(
         2000000000,  # expiry = 18 May 2033
         isPut,
         tradingFee,
+        balanceLimit,
     )
 
     # check variables all set
@@ -61,6 +64,7 @@ def test_initialize(
     assert market.b() == 0
     assert market.isPut() == isPut
     assert market.tradingFee() == tradingFee
+    assert market.balanceLimit() == balanceLimit
 
     assert market.maxStrikePrice() == 600 * SCALE
     assert market.numStrikes() == 4
@@ -94,7 +98,8 @@ def test_initialize(
             [300 * SCALE, 400 * SCALE, 500 * SCALE, 600 * SCALE],
             2000000000,  # expiry = 18 May 2033
             isPut,
-            1e16,  # tradingFee = 1%
+            tradingFee,
+            balanceLimit,
         )
 
 
@@ -122,6 +127,7 @@ def test_initialize_errors(
             2000000000,  # expiry = 18 May 2033
             isPut,
             SCALE,  # tradingFee = 100%
+            40 * SCALE,  # balanceLimit = 40
         )
 
     market = deployer.deploy(OptionMarket)
@@ -135,6 +141,7 @@ def test_initialize_errors(
             1500000000,  # expiry = 14 July 2017
             isPut,
             1e16,  # tradingFee = 1%
+            40 * SCALE,  # balanceLimit = 40
         )
 
     market = deployer.deploy(OptionMarket)
@@ -148,6 +155,7 @@ def test_initialize_errors(
             2000000000,  # expiry = 18 May 2033
             isPut,
             1e16,  # tradingFee = 1%
+            40 * SCALE,  # balanceLimit = 40
         )
 
     market = deployer.deploy(OptionMarket)
@@ -161,6 +169,7 @@ def test_initialize_errors(
             2000000000,  # expiry = 18 May 2033
             isPut,
             1e16,  # tradingFee = 1%
+            40 * SCALE,  # balanceLimit = 40
         )
 
     market = deployer.deploy(OptionMarket)
@@ -174,6 +183,7 @@ def test_initialize_errors(
             2000000000,  # expiry = 18 May 2033
             isPut,
             1e16,  # tradingFee = 1%
+            40 * SCALE,  # balanceLimit = 40
         )
 
     market = deployer.deploy(OptionMarket)
@@ -187,6 +197,7 @@ def test_initialize_errors(
             2000000000,  # expiry = 18 May 2033
             isPut,
             1e16,  # tradingFee = 1%
+            40 * SCALE,  # balanceLimit = 40
         )
 
     market = deployer.deploy(OptionMarket)
@@ -200,12 +211,21 @@ def test_initialize_errors(
             2000000000,  # expiry = 18 May 2033
             isPut,
             1e16,  # tradingFee = 1%
+            40 * SCALE,  # balanceLimit = 40
         )
 
 
 @pytest.mark.parametrize("isEth", [False, True])
+@pytest.mark.parametrize("balanceLimit", [0, 40 * SCALE])
 def test_increase_b(
-    a, OptionMarket, MockToken, MockOracle, OptionToken, fast_forward, isEth
+    a,
+    OptionMarket,
+    MockToken,
+    MockOracle,
+    OptionToken,
+    fast_forward,
+    isEth,
+    balanceLimit,
 ):
 
     # setup args
@@ -229,6 +249,7 @@ def test_increase_b(
         2000000000,  # expiry = 18 May 2033
         False,  # call
         1 * PERCENT,  # tradingFee = 1%
+        balanceLimit,
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
@@ -328,10 +349,39 @@ def test_increase_b(
     # can trade now
     market.buy(CALL, 3, SCALE, 100 * SCALE, {"from": alice, **valueDict})
 
+    # can't increase b beyond balance limit
+    if balanceLimit > 0:
+        with reverts("Balance limit exceeded"):
+            market.increaseBAndBuy(
+                25 * SCALE,
+                [0, 0, 0, 0],
+                [0, 0, 0, 0],
+                1000 * SCALE,
+                {"from": deployer, **valueDict},
+            )
+
+    # no balance limit
+    else:
+        market.increaseBAndBuy(
+            25 * SCALE,
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            1000 * SCALE,
+            {"from": deployer, **valueDict},
+        )
+
 
 @pytest.mark.parametrize("isEth", [False, True])
+@pytest.mark.parametrize("balanceLimit", [0, 40 * SCALE])
 def test_buy_and_sell_calls(
-    a, OptionMarket, MockToken, MockOracle, OptionToken, fast_forward, isEth
+    a,
+    OptionMarket,
+    MockToken,
+    MockOracle,
+    OptionToken,
+    fast_forward,
+    isEth,
+    balanceLimit,
 ):
 
     # setup args
@@ -355,6 +405,7 @@ def test_buy_and_sell_calls(
         2000000000,  # expiry = 18 May 2033
         False,  # call
         1 * PERCENT,  # tradingFee = 1%
+        balanceLimit,
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
@@ -573,6 +624,19 @@ def test_buy_and_sell_calls(
         "newSupply": 0,
     }
 
+    # can't buy beyond balance limit
+    if balanceLimit > 0:
+        with reverts("Balance limit exceeded"):
+            tx = market.buy(
+                COVER, 0, 40 * SCALE, 1000 * SCALE, {"from": alice, **valueDict}
+            )
+
+    # no balance limit
+    else:
+        tx = market.buy(
+            COVER, 0, 40 * SCALE, 1000 * SCALE, {"from": alice, **valueDict}
+        )
+
     # cannot buy or sell after expiry
     fast_forward(2000000000)
     with reverts("Already expired"):
@@ -581,7 +645,10 @@ def test_buy_and_sell_calls(
         market.sell(COVER, 2, 1 * SCALE, 0, {"from": alice})
 
 
-def test_buy_and_sell_puts(a, OptionMarket, MockToken, MockOracle, OptionToken):
+@pytest.mark.parametrize("balanceLimit", [0, 40000 * SCALE])
+def test_buy_and_sell_puts(
+    a, OptionMarket, MockToken, MockOracle, OptionToken, balanceLimit
+):
 
     # setup args
     deployer, alice = a[:2]
@@ -601,15 +668,16 @@ def test_buy_and_sell_puts(a, OptionMarket, MockToken, MockOracle, OptionToken):
         2000000000,  # expiry = 18 May 2033
         True,  # put
         1 * PERCENT,  # tradingFee = 1%
+        balanceLimit,
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
 
     # give users base tokens
-    baseToken.mint(deployer, 10000 * SCALE, {"from": deployer})
-    baseToken.approve(market, 10000 * SCALE, {"from": deployer})
-    baseToken.mint(alice, 10000 * SCALE, {"from": deployer})
-    baseToken.approve(market, 10000 * SCALE, {"from": alice})
+    baseToken.mint(deployer, 100000 * SCALE, {"from": deployer})
+    baseToken.approve(market, 100000 * SCALE, {"from": deployer})
+    baseToken.mint(alice, 100000 * SCALE, {"from": deployer})
+    baseToken.approve(market, 100000 * SCALE, {"from": alice})
 
     # needs to call increaseBAndBuy
     market.increaseBAndBuy(
@@ -624,7 +692,7 @@ def test_buy_and_sell_puts(a, OptionMarket, MockToken, MockOracle, OptionToken):
 
     # can't buy too much
     with reverts("ERC20: transfer amount exceeds balance"):
-        market.buy(PUT, 0, 100 * SCALE, 1000000 * SCALE, {"from": alice})
+        market.buy(PUT, 0, 1000 * SCALE, 1000000 * SCALE, {"from": alice})
 
     initial = 600 * lmsr([0, 0, 0, 0, 0], 10)
 
@@ -632,7 +700,7 @@ def test_buy_and_sell_puts(a, OptionMarket, MockToken, MockOracle, OptionToken):
     tx = market.buy(PUT, 0, 2 * SCALE, 10000 * SCALE, {"from": alice})
     cost = 600 * lmsr([2, 0, 0, 0, 0], 10) + 300 * 2 * PERCENT
     assert approx(tx.return_value) == cost - initial
-    assert approx(baseToken.balanceOf(alice)) == 10000 * SCALE - cost + initial
+    assert approx(baseToken.balanceOf(alice)) == 100000 * SCALE - cost + initial
     assert longTokens[0].balanceOf(alice) == 2 * SCALE
     assert tx.events["Trade"] == {
         "account": alice,
@@ -649,7 +717,7 @@ def test_buy_and_sell_puts(a, OptionMarket, MockToken, MockOracle, OptionToken):
     cost1 = 600 * lmsr([2, 0, 0, 0, 0], 10) + 300 * 2 * PERCENT
     cost2 = 600 * lmsr([2, 0, 0, 5, 5], 10) + 300 * 2 * PERCENT + 500 * 5 * PERCENT
     assert approx(tx.return_value) == cost2 - cost1
-    assert approx(baseToken.balanceOf(alice)) == 10000 * SCALE - cost2 + initial
+    assert approx(baseToken.balanceOf(alice)) == 100000 * SCALE - cost2 + initial
     assert longTokens[0].balanceOf(alice) == 2 * SCALE
     assert shortTokens[2].balanceOf(alice) == 5 * SCALE
     assert tx.events["Trade"] == {
@@ -673,7 +741,7 @@ def test_buy_and_sell_puts(a, OptionMarket, MockToken, MockOracle, OptionToken):
     cost1 = 600 * lmsr([2, 0, 0, 5, 5], 10) + 300 * 2 * PERCENT + 500 * 5 * PERCENT
     cost2 = 600 * lmsr([2, 0, 0, 3, 3], 10) + 300 * 2 * PERCENT + 500 * 5 * PERCENT
     assert approx(tx.return_value) == cost1 - cost2
-    assert approx(baseToken.balanceOf(alice)) == 10000 * SCALE - cost2 + initial
+    assert approx(baseToken.balanceOf(alice)) == 100000 * SCALE - cost2 + initial
     assert longTokens[0].balanceOf(alice) == 2 * SCALE
     assert shortTokens[2].balanceOf(alice) == 3 * SCALE
     assert tx.events["Trade"] == {
@@ -685,6 +753,15 @@ def test_buy_and_sell_puts(a, OptionMarket, MockToken, MockOracle, OptionToken):
         "cost": tx.return_value,
         "newSupply": 3 * SCALE,
     }
+
+    # can't buy beyond balance limit
+    if balanceLimit > 0:
+        with reverts("Balance limit exceeded"):
+            tx = market.buy(COVER, 0, 70 * SCALE, 100000 * SCALE, {"from": alice})
+
+    # no balance limit
+    else:
+        tx = market.buy(COVER, 0, 70 * SCALE, 100000 * SCALE, {"from": alice})
 
 
 @pytest.mark.parametrize("isEth", [False, True])
@@ -712,6 +789,7 @@ def test_settle(
         2000000000,  # expiry = 18 May 2033
         isPut,
         1 * PERCENT,  # tradingFee = 1%
+        40000 * SCALE,  # balanceLimit = 40000
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
@@ -759,6 +837,7 @@ def test_redeem_calls(
         2000000000,  # expiry = 18 May 2033
         False,  # call
         1 * PERCENT,  # tradingFee = 1%
+        40000 * SCALE,  # balanceLimit = 40000
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
@@ -884,6 +963,7 @@ def test_redeem_puts(a, OptionMarket, MockToken, MockOracle, OptionToken, fast_f
         2000000000,  # expiry = 18 May 2033
         True,  # put
         1 * PERCENT,  # tradingFee = 1%
+        40000 * SCALE,  # balanceLimit = 40000
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
@@ -1001,6 +1081,7 @@ def test_emergency_methods(
         2000000000,  # expiry = 18 May 2033
         isPut,
         1 * PERCENT,  # tradingFee = 1%
+        40000 * SCALE,  # balanceLimit = 40000
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
