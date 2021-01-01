@@ -376,12 +376,12 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         uint256 maxAmountIn
     ) external payable onlyOwner returns (uint256 amountIn) {
         require(_b > b, "New b must be higher");
-        require(longOptionsOut.length == strikePrices.length, "Lengths do not match");
-        require(shortOptionsOut.length == strikePrices.length, "Lengths do not match");
+        require(longOptionsOut.length == numStrikes, "Lengths do not match");
+        require(shortOptionsOut.length == numStrikes, "Lengths do not match");
 
         uint256 costBefore = lastCost;
         b = _b;
-        for (uint256 i = 0; i < strikePrices.length; i++) {
+        for (uint256 i = 0; i < numStrikes; i++) {
             if (longOptionsOut[i] > 0) {
                 longTokens[i].mint(msg.sender, longOptionsOut[i]);
             }
