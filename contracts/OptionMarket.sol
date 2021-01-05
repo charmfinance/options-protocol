@@ -51,7 +51,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     bool public isPut;
     uint256 public tradingFee;
     uint256 public balanceCap;
-    uint256 public disputePeriod = 1 hours;
+    uint256 public disputePeriod;
 
     uint256 public maxStrikePrice;
     uint256 public numStrikes;
@@ -73,6 +73,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
      * @param _isPut            Whether options are calls or puts
      * @param _tradingFee       Trading fee expressed in wei
      * @param _balanceCap       Limit on balance in contract. Used for guarded launch. Set to 0 means no limit
+     * @param _disputePeriod    How long after expiry the oracle price can be disputed by deployer
      */
     function initialize(
         address _baseToken,
@@ -83,7 +84,8 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         uint256 _expiryTime,
         bool _isPut,
         uint256 _tradingFee,
-        uint256 _balanceCap
+        uint256 _balanceCap,
+        uint256 _disputePeriod
     ) public payable initializer {
         __ReentrancyGuard_init();
         __Ownable_init();
@@ -108,6 +110,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         isPut = _isPut;
         tradingFee = _tradingFee;
         balanceCap = _balanceCap;
+        disputePeriod = _disputePeriod;
 
         maxStrikePrice = _strikePrices[_strikePrices.length - 1];
         numStrikes = _strikePrices.length;

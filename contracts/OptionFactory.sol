@@ -29,7 +29,8 @@ contract OptionFactory is CloneFactory, OptionSymbol, ReentrancyGuard {
     uint256 private expiryTime;
     bool private isPut;
     uint256 private tradingFee;
-    uint256 private balanceLimit;
+    uint256 private balanceCap;
+    uint256 private disputePeriod;
     IERC20 private underlyingToken;
     address private baseToken;
 
@@ -48,7 +49,8 @@ contract OptionFactory is CloneFactory, OptionSymbol, ReentrancyGuard {
         uint256 _expiryTime,
         bool _isPut,
         uint256 _tradingFee,
-        uint256 _balanceLimit
+        uint256 _balanceCap,
+        uint256 _disputePeriod
     ) external nonReentrant returns (address) {
         // set member variables to avoid stack too deep error
         // TODO: cleaner way to do this?
@@ -57,7 +59,8 @@ contract OptionFactory is CloneFactory, OptionSymbol, ReentrancyGuard {
         expiryTime = _expiryTime;
         isPut = _isPut;
         tradingFee = _tradingFee;
-        balanceLimit = _balanceLimit;
+        balanceCap = _balanceCap;
+        disputePeriod = _disputePeriod;
         underlyingToken = IERC20(_baseToken);
         baseToken = isPut ? _quoteToken : _baseToken;
 
@@ -74,7 +77,8 @@ contract OptionFactory is CloneFactory, OptionSymbol, ReentrancyGuard {
             expiryTime,
             isPut,
             tradingFee,
-            balanceLimit
+            balanceCap,
+            disputePeriod
         );
 
         // transfer ownership to sender

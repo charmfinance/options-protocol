@@ -23,7 +23,8 @@ def lmsr(q, b):
 @pytest.mark.parametrize("isEth", [False, True])
 @pytest.mark.parametrize("isPut", [False, True])
 @pytest.mark.parametrize("tradingFee", [0, 10 * PERCENT, SCALE - 1])
-@pytest.mark.parametrize("balanceLimit", [0, 40 * SCALE])
+@pytest.mark.parametrize("balanceCap", [0, 40 * SCALE])
+@pytest.mark.parametrize("disputePeriod", [0, 3600])
 def test_initialize(
     a,
     OptionMarket,
@@ -33,7 +34,8 @@ def test_initialize(
     isEth,
     isPut,
     tradingFee,
-    balanceLimit,
+    balanceCap,
+    disputePeriod,
 ):
 
     # setup args
@@ -54,7 +56,8 @@ def test_initialize(
         2000000000,  # expiry = 18 May 2033
         isPut,
         tradingFee,
-        balanceLimit,
+        balanceCap,
+        disputePeriod,
     )
 
     # check variables all set
@@ -64,7 +67,8 @@ def test_initialize(
     assert market.b() == 0
     assert market.isPut() == isPut
     assert market.tradingFee() == tradingFee
-    assert market.balanceLimit() == balanceLimit
+    assert market.balanceCap() == balanceCap
+    assert market.disputePeriod() == disputePeriod
 
     assert market.maxStrikePrice() == 600 * SCALE
     assert market.numStrikes() == 4
@@ -99,7 +103,8 @@ def test_initialize(
             2000000000,  # expiry = 18 May 2033
             isPut,
             tradingFee,
-            balanceLimit,
+            balanceCap,
+            disputePeriod,
         )
 
 
@@ -128,6 +133,7 @@ def test_initialize_errors(
             isPut,
             SCALE,  # trading fee = 100%
             40 * SCALE,  # balance limit = 40
+            3600,  # dispute period = 1 hour
         )
 
     market = deployer.deploy(OptionMarket)
@@ -142,6 +148,7 @@ def test_initialize_errors(
             isPut,
             1e16,  # trading fee = 1%
             40 * SCALE,  # balance limit = 40
+            3600,  # dispute period = 1 hour
         )
 
     market = deployer.deploy(OptionMarket)
@@ -156,6 +163,7 @@ def test_initialize_errors(
             isPut,
             1e16,  # trading fee = 1%
             40 * SCALE,  # balance limit = 40
+            3600,  # dispute period = 1 hour
         )
 
     market = deployer.deploy(OptionMarket)
@@ -170,6 +178,7 @@ def test_initialize_errors(
             isPut,
             1e16,  # trading fee = 1%
             40 * SCALE,  # balance limit = 40
+            3600,  # dispute period = 1 hour
         )
 
     market = deployer.deploy(OptionMarket)
@@ -184,6 +193,7 @@ def test_initialize_errors(
             isPut,
             1e16,  # trading fee = 1%
             40 * SCALE,  # balance limit = 40
+            3600,  # dispute period = 1 hour
         )
 
     market = deployer.deploy(OptionMarket)
@@ -198,6 +208,7 @@ def test_initialize_errors(
             isPut,
             1e16,  # trading fee = 1%
             40 * SCALE,  # balance limit = 40
+            3600,  # dispute period = 1 hour
         )
 
     market = deployer.deploy(OptionMarket)
@@ -212,11 +223,12 @@ def test_initialize_errors(
             isPut,
             1e16,  # trading fee = 1%
             40 * SCALE,  # balance limit = 40
+            3600,  # dispute period = 1 hour
         )
 
 
 @pytest.mark.parametrize("isEth", [False, True])
-@pytest.mark.parametrize("balanceLimit", [0, 40 * SCALE])
+@pytest.mark.parametrize("balanceCap", [0, 40 * SCALE])
 def test_increase_b(
     a,
     OptionMarket,
@@ -225,7 +237,7 @@ def test_increase_b(
     OptionToken,
     fast_forward,
     isEth,
-    balanceLimit,
+    balanceCap,
 ):
 
     # setup args
@@ -249,7 +261,8 @@ def test_increase_b(
         2000000000,  # expiry = 18 May 2033
         False,  # call
         1 * PERCENT,  # trading fee = 1%
-        balanceLimit,
+        balanceCap,
+        3600,  # dispute period = 1 hour
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
@@ -350,7 +363,7 @@ def test_increase_b(
     market.buy(CALL, 3, SCALE, 100 * SCALE, {"from": alice, **valueDict})
 
     # can't increase b beyond balance limit
-    if balanceLimit > 0:
+    if balanceCap > 0:
         with reverts("Balance limit exceeded"):
             market.increaseBAndBuy(
                 25 * SCALE,
@@ -372,7 +385,7 @@ def test_increase_b(
 
 
 @pytest.mark.parametrize("isEth", [False, True])
-@pytest.mark.parametrize("balanceLimit", [0, 40 * SCALE])
+@pytest.mark.parametrize("balanceCap", [0, 40 * SCALE])
 def test_buy_and_sell_calls(
     a,
     OptionMarket,
@@ -381,7 +394,7 @@ def test_buy_and_sell_calls(
     OptionToken,
     fast_forward,
     isEth,
-    balanceLimit,
+    balanceCap,
 ):
 
     # setup args
@@ -405,7 +418,8 @@ def test_buy_and_sell_calls(
         2000000000,  # expiry = 18 May 2033
         False,  # call
         1 * PERCENT,  # trading fee = 1%
-        balanceLimit,
+        balanceCap,
+        3600,  # dispute period = 1 hour
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
@@ -625,7 +639,7 @@ def test_buy_and_sell_calls(
     }
 
     # can't buy beyond balance limit
-    if balanceLimit > 0:
+    if balanceCap > 0:
         with reverts("Balance limit exceeded"):
             tx = market.buy(
                 COVER, 0, 40 * SCALE, 1000 * SCALE, {"from": alice, **valueDict}
@@ -645,9 +659,9 @@ def test_buy_and_sell_calls(
         market.sell(COVER, 2, 1 * SCALE, 0, {"from": alice})
 
 
-@pytest.mark.parametrize("balanceLimit", [0, 40000 * SCALE])
+@pytest.mark.parametrize("balanceCap", [0, 40000 * SCALE])
 def test_buy_and_sell_puts(
-    a, OptionMarket, MockToken, MockOracle, OptionToken, balanceLimit
+    a, OptionMarket, MockToken, MockOracle, OptionToken, balanceCap
 ):
 
     # setup args
@@ -668,7 +682,8 @@ def test_buy_and_sell_puts(
         2000000000,  # expiry = 18 May 2033
         True,  # put
         1 * PERCENT,  # trading fee = 1%
-        balanceLimit,
+        balanceCap,
+        3600,  # dispute period = 1 hour
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
@@ -755,7 +770,7 @@ def test_buy_and_sell_puts(
     }
 
     # can't buy beyond balance limit
-    if balanceLimit > 0:
+    if balanceCap > 0:
         with reverts("Balance limit exceeded"):
             tx = market.buy(COVER, 0, 70 * SCALE, 100000 * SCALE, {"from": alice})
 
@@ -790,6 +805,7 @@ def test_settle(
         isPut,
         1 * PERCENT,  # trading fee = 1%
         40000 * SCALE,  # balance limit = 40000
+        3600,  # dispute period = 1 hour
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
@@ -838,6 +854,7 @@ def test_redeem_calls(
         False,  # call
         1 * PERCENT,  # trading fee = 1%
         40000 * SCALE,  # balance limit = 40000
+        3600,  # dispute period = 1 hour
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
@@ -964,6 +981,7 @@ def test_redeem_puts(a, OptionMarket, MockToken, MockOracle, OptionToken, fast_f
         True,  # put
         1 * PERCENT,  # trading fee = 1%
         40000 * SCALE,  # balance limit = 40000
+        3600,  # dispute period = 1 hour
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
@@ -1082,6 +1100,7 @@ def test_emergency_methods(
         isPut,
         1 * PERCENT,  # trading fee = 1%
         40000 * SCALE,  # balance limit = 40000
+        3600,  # dispute period = 1 hour
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
@@ -1128,6 +1147,9 @@ def test_emergency_methods(
     market.setExpiryTime(2000000000 - 1, {"from": deployer})
     assert market.expiryTime() == 2000000000 - 1
 
+    market.setDisputePeriod(2400)
+    assert market.disputePeriod() == 2400
+
     # dispute expiry price
     fast_forward(2000000000)
     with reverts("Ownable: caller is not the owner"):
@@ -1139,7 +1161,7 @@ def test_emergency_methods(
     market.disputeExpiryPrice(666 * SCALE, {"from": deployer})
     assert market.expiryPrice() == 666 * SCALE
 
-    fast_forward(2000000000 + 3600)
+    fast_forward(2000000000 + 2400)
     with reverts("Not dispute period"):
         market.disputeExpiryPrice(777 * SCALE, {"from": deployer})
 
@@ -1152,7 +1174,7 @@ def test_emergency_methods(
 
 
 @pytest.mark.parametrize("isEth", [False, True])
-@pytest.mark.parametrize("balanceLimit", [0, 20 * SCALE])
+@pytest.mark.parametrize("balanceCap", [0, 20 * SCALE])
 def test_set_balance_limit(
     a,
     OptionMarket,
@@ -1161,7 +1183,7 @@ def test_set_balance_limit(
     OptionToken,
     fast_forward,
     isEth,
-    balanceLimit,
+    balanceCap,
 ):
 
     # setup args
@@ -1183,6 +1205,7 @@ def test_set_balance_limit(
         False,
         1 * PERCENT,  # trading fee = 1%
         10 * SCALE,  # balance limit = 10
+        3600,  # dispute period = 1 hour
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
@@ -1207,11 +1230,11 @@ def test_set_balance_limit(
 
     # only owner
     with reverts("Ownable: caller is not the owner"):
-        market.setBalanceLimit(20 * SCALE, {"from": alice})
+        market.setBalanceCap(20 * SCALE, {"from": alice})
 
     # increase limit
-    market.setBalanceLimit(balanceLimit, {"from": deployer})
-    assert market.balanceLimit() == balanceLimit
+    market.setBalanceCap(balanceCap, {"from": deployer})
+    assert market.balanceCap() == balanceCap
 
     # now works
     market.increaseBAndBuy(

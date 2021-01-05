@@ -43,6 +43,7 @@ def test_option_factory(
         isPut,
         SCALE // 100,  # trading fee
         40 * SCALE,  # balance limit
+        3600,  # dispute period
     )
 
     market = OptionMarket.at(tx.return_value)
@@ -54,7 +55,8 @@ def test_option_factory(
     assert market.strikePrices(1) == 400 * SCALE
     assert market.strikePrices(2) == 500 * SCALE
     assert market.expiryTime() == 2000000000
-    assert market.balanceLimit() == 40 * SCALE
+    assert market.balanceCap() == 40 * SCALE
+    assert market.disputePeriod() == 3600
     assert market.b() == 0
 
     suffix = "P" if isPut else "C"
