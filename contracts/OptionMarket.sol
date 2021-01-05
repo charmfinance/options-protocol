@@ -72,7 +72,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
      * @param _expiryTime       Expiration time as a unix timestamp
      * @param _isPut            Whether options are calls or puts
      * @param _tradingFee       Trading fee expressed in wei
-     * @param _balanceCap       Limit on balance in contract. Used for guarded launch. Set to 0 means no limit
+     * @param _balanceCap       Cap on total value locked in contract. Used for guarded launch. Set to 0 means no cap
      * @param _disputePeriod    How long after expiry the oracle price can be disputed by deployer
      */
     function initialize(
@@ -160,7 +160,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         uint256 balanceAfter = baseToken.uniBalanceOf(address(this));
         require(baseToken.isETH() || balanceAfter.sub(balanceBefore) == amountIn, "Deflationary tokens not supported");
 
-        require(balanceCap == 0 || baseToken.uniBalanceOf(address(this)) <= balanceCap, "Balance limit exceeded");
+        require(balanceCap == 0 || baseToken.uniBalanceOf(address(this)) <= balanceCap, "Balance cap exceeded");
         emit Trade(msg.sender, true, isLongToken, strikeIndex, optionsOut, amountIn, option.totalSupply());
     }
 
@@ -385,7 +385,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         uint256 balanceAfter = baseToken.uniBalanceOf(address(this));
         require(baseToken.isETH() || balanceAfter.sub(balanceBefore) == amountIn, "Deflationary tokens not supported");
 
-        require(balanceCap == 0 || baseToken.uniBalanceOf(address(this)) <= balanceCap, "Balance limit exceeded");
+        require(balanceCap == 0 || baseToken.uniBalanceOf(address(this)) <= balanceCap, "Balance cap exceeded");
     }
 
     function skim() external onlyOwner nonReentrant returns (uint256 amount) {
