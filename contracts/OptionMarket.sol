@@ -50,7 +50,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     uint256 public b;
     bool public isPut;
     uint256 public tradingFee;
-    uint256 public balanceLimit;
+    uint256 public balanceCap;
     uint256 public disputePeriod = 1 hours;
 
     uint256 public maxStrikePrice;
@@ -72,7 +72,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
      * @param _expiryTime       Expiration time as a unix timestamp
      * @param _isPut            Whether options are calls or puts
      * @param _tradingFee       Trading fee expressed in wei
-     * @param _balanceLimit     Limit on balance in contract. Used for guarded launch. Set to 0 means no limit
+     * @param _balanceCap       Limit on balance in contract. Used for guarded launch. Set to 0 means no limit
      */
     function initialize(
         address _baseToken,
@@ -83,7 +83,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         uint256 _expiryTime,
         bool _isPut,
         uint256 _tradingFee,
-        uint256 _balanceLimit
+        uint256 _balanceCap
     ) public payable initializer {
         __ReentrancyGuard_init();
         __Ownable_init();
@@ -107,7 +107,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         expiryTime = _expiryTime;
         isPut = _isPut;
         tradingFee = _tradingFee;
-        balanceLimit = _balanceLimit;
+        balanceCap = _balanceCap;
 
         maxStrikePrice = _strikePrices[_strikePrices.length - 1];
         numStrikes = _strikePrices.length;
@@ -157,7 +157,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         uint256 balanceAfter = baseToken.uniBalanceOf(address(this));
         require(baseToken.isETH() || balanceAfter.sub(balanceBefore) == amountIn, "Deflationary tokens not supported");
 
-        require(balanceLimit == 0 || baseToken.uniBalanceOf(address(this)) <= balanceLimit, "Balance limit exceeded");
+        require(balanceCap == 0 || baseToken.uniBalanceOf(address(this)) <= balanceCap, "Balance limit exceeded");
         emit Trade(msg.sender, true, isLongToken, strikeIndex, optionsOut, amountIn, option.totalSupply());
     }
 
@@ -382,7 +382,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         uint256 balanceAfter = baseToken.uniBalanceOf(address(this));
         require(baseToken.isETH() || balanceAfter.sub(balanceBefore) == amountIn, "Deflationary tokens not supported");
 
-        require(balanceLimit == 0 || baseToken.uniBalanceOf(address(this)) <= balanceLimit, "Balance limit exceeded");
+        require(balanceCap == 0 || baseToken.uniBalanceOf(address(this)) <= balanceCap, "Balance limit exceeded");
     }
 
     function skim() external onlyOwner nonReentrant returns (uint256 amount) {
@@ -393,8 +393,8 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         }
     }
 
-    function setBalanceLimit(uint256 _balanceLimit) external onlyOwner {
-        balanceLimit = _balanceLimit;
+    function setBalanceCap(uint256 _balanceCap) external onlyOwner {
+        balanceCap = _balanceCap;
     }
 
     // emergency use only. to be removed in future versions
