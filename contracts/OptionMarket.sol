@@ -68,10 +68,10 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
      * @param _oracle           Oracle from which the settlement price is obtained
      * @param _longTokens       Options tokens representing long calls/puts
      * @param _shortTokens      Options tokens representing short calls/puts
-     * @param _strikePrices     Strike prices expressed in wei
+     * @param _strikePrices     Strike prices expressed in wei. Must be in ascending order
      * @param _expiryTime       Expiration time as a unix timestamp
      * @param _isPut            Whether options are calls or puts
-     * @param _tradingFee       Trading fee expressed in wei
+     * @param _tradingFee       Trading fee as fraction of notional expressed in wei
      * @param _balanceCap       Cap on total value locked in contract. Used for guarded launch. Set to 0 means no cap
      * @param _disputePeriod    How long after expiry the oracle price can be disputed by deployer
      */
@@ -125,10 +125,6 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
 
     /**
      * Buy `optionsOut` quantity of options
-     *
-     * Revert if the resulting cost would be greater than `maxAmountIn`
-     *
-     * This method cannot be called after expiration
      */
     function buy(
         bool isLongToken,
@@ -166,10 +162,6 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
 
     /**
      * Sell `optionsIn` quantity of options
-     *
-     * Revert if the resulting cost would be greater than `minAmountOut`
-     *
-     * This method cannot be called after expiration
      */
     function sell(
         bool isLongToken,
@@ -197,13 +189,9 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     }
 
     /**
-     * Retrieves and stores the unerlying price from the oracle
+     * At expiration, retrieve and store the underlying price from the oracle
      *
-     * This method can be called by anyone after expiration and cannot be called
-     * more than once.
-     *
-     * After this method has been called, `redeem` can be called by users to
-     * trade in their options and receive their payouts
+     * This method can be called by anyone but cannot be called more than once.
      */
     function settle() public nonReentrant {
         require(isExpired(), "Cannot be called before expiry");
@@ -218,10 +206,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     }
 
     /**
-     * Called by a user to redeem all their options and receive payout
-     *
-     * This method can only be called after `settle` has been called and the
-     * settlement price has been set
+     * After expiration, exercise options by burning them and redeeming them for base tokens
      */
     function redeem(bool isLongToken, uint256 strikeIndex) external nonReentrant returns (uint256 amount) {
         require(isExpired(), "Cannot be called before expiry");
@@ -312,7 +297,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     }
 
     /**
-     * Calculates amount of `baseToken` that needs to be paid out to all users
+     * Calculates amount of base tokens that needs to be paid out to all users
      */
     function calcPayoff() public view returns (uint256 payoff) {
         if (expiryPrice == 0) {
@@ -339,7 +324,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         payoff = payoff.div(isPut ? SCALE : expiryPrice);
     }
 
-    function calcSkimAmount() public view returns (uint256) {
+    function calcFeesAccrued() public view returns (uint256) {
         if (!isSettled) {
             return 0;
         }
@@ -355,6 +340,12 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         return block.timestamp >= expiryTime && block.timestamp < expiryTime + disputePeriod;
     }
 
+    /**
+     * Called by owner to increase the LMSR parameter b by depositing base tokens.
+     * They can simultaneously buy options to keep prices in line
+     *
+     * Note that b uses same decimals as baseToken
+     */
     function increaseBAndBuy(
         uint256 _b,
         uint256[] memory longOptionsOut,
@@ -388,9 +379,12 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         require(balanceCap == 0 || baseToken.uniBalanceOf(address(this)) <= balanceCap, "Balance cap exceeded");
     }
 
-    function skim() external onlyOwner nonReentrant returns (uint256 amount) {
+    /**
+     * Called by owner to withdraw accrued trading fees
+     */
+    function collectFees() external onlyOwner nonReentrant returns (uint256 amount) {
         require(isSettled, "Cannot be called before settlement");
-        amount = calcSkimAmount();
+        amount = calcFeesAccrued();
         if (amount > 0) {
             baseToken.uniTransfer(msg.sender, amount);
         }

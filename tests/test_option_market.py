@@ -1058,14 +1058,14 @@ def test_redeem_calls(
         "amount": tx.return_value,
     }
 
-    skimmed = 8 * PERCENT + cost - (alicePayoff + bobPayoff) * SCALE / 444
-    assert approx(market.calcSkimAmount()) == skimmed
+    feesAccrued = 8 * PERCENT + cost - (alicePayoff + bobPayoff) * SCALE / 444
+    assert approx(market.calcFeesAccrued()) == feesAccrued
 
     balance1 = getBalance(deployer)
-    tx = market.skim({"from": deployer})
-    assert approx(tx.return_value) == skimmed
-    assert approx(getBalance(deployer) - balance1) == skimmed
-    assert market.calcSkimAmount() == 0
+    tx = market.collectFees({"from": deployer})
+    assert approx(tx.return_value) == feesAccrued
+    assert approx(getBalance(deployer) - balance1) == feesAccrued
+    assert market.calcFeesAccrued() == 0
 
 
 def test_redeem_puts(a, OptionMarket, MockToken, MockOracle, OptionToken, fast_forward):
@@ -1168,20 +1168,20 @@ def test_redeem_puts(a, OptionMarket, MockToken, MockOracle, OptionToken, fast_f
         "amount": tx.return_value,
     }
 
-    skimmed = (
+    feesAccrued = (
         2 * 500 * 1e4
         + 3 * 600 * 1e4
         + 3 * 400 * 1e4
         + cost
         - (alicePayoff + bobPayoff1 + bobPayoff2) * 1e6
     )
-    assert approx(market.calcSkimAmount()) == skimmed
+    assert approx(market.calcFeesAccrued()) == feesAccrued
 
     balance1 = baseToken.balanceOf(deployer)
-    tx = market.skim({"from": deployer})
-    assert approx(tx.return_value) == skimmed
-    assert approx(baseToken.balanceOf(deployer) - balance1) == skimmed
-    assert market.calcSkimAmount() == 0
+    tx = market.collectFees({"from": deployer})
+    assert approx(tx.return_value) == feesAccrued
+    assert approx(baseToken.balanceOf(deployer) - balance1) == feesAccrued
+    assert market.calcFeesAccrued() == 0
 
 
 @pytest.mark.parametrize("isEth", [False, True])
