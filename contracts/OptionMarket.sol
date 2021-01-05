@@ -40,7 +40,6 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
 
     uint256 public constant SCALE = 1e18;
     uint256 public constant SCALE_SCALE = 1e36;
-    uint256 public constant DISPUTE_PERIOD = 1 hours;
 
     IERC20 public baseToken;
     IOracle public oracle;
@@ -52,6 +51,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     bool public isPut;
     uint256 public tradingFee;
     uint256 public balanceLimit;
+    uint256 public disputePeriod = 1 hours;
 
     uint256 public maxStrikePrice;
     uint256 public numStrikes;
@@ -59,7 +59,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     bool public isSettled;
     uint256 public expiryPrice;
 
-    // cache calcCost and calcPayoff to save gas
+    // cache calcCost and calcPayoff between trades/redeems to save gas
     uint256 public lastCost;
     uint256 public lastPayoff;
 
@@ -109,16 +109,13 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         tradingFee = _tradingFee;
         balanceLimit = _balanceLimit;
 
-        for (uint256 i = 0; i < _longTokens.length; i++) {
-            longTokens.push(OptionToken(_longTokens[i]));
-        }
-
-        for (uint256 i = 0; i < _shortTokens.length; i++) {
-            shortTokens.push(OptionToken(_shortTokens[i]));
-        }
-
         maxStrikePrice = _strikePrices[_strikePrices.length - 1];
         numStrikes = _strikePrices.length;
+
+        for (uint256 i = 0; i < numStrikes; i++) {
+            longTokens.push(OptionToken(_longTokens[i]));
+            shortTokens.push(OptionToken(_shortTokens[i]));
+        }
 
         require(!isExpired(), "Already expired");
     }
@@ -160,10 +157,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         uint256 balanceAfter = baseToken.uniBalanceOf(address(this));
         require(baseToken.isETH() || balanceAfter.sub(balanceBefore) == amountIn, "Deflationary tokens not supported");
 
-        if (balanceLimit > 0) {
-            require(baseToken.uniBalanceOf(address(this)) <= balanceLimit, "Balance limit exceeded");
-        }
-
+        require(balanceLimit == 0 || baseToken.uniBalanceOf(address(this)) <= balanceLimit, "Balance limit exceeded");
         emit Trade(msg.sender, true, isLongToken, strikeIndex, optionsOut, amountIn, option.totalSupply());
     }
 
@@ -272,37 +266,31 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
             return 0;
         }
 
-        // initally set s to total supply of shortTokens
-        uint256 s;
+        OptionToken[] storage leftTokens = isPut ? shortTokens : longTokens;
+        OptionToken[] storage rightTokens = isPut ? longTokens : shortTokens;
+
+        // initally set runningSum to total supply of shortTokens
+        uint256 runningSum;
         for (uint256 i = 0; i < numStrikes; i++) {
-            if (isPut) {
-                s = s.add(longTokens[i].totalSupply());
-            } else {
-                s = s.add(shortTokens[i].totalSupply());
-            }
+            runningSum = runningSum.add(rightTokens[i].totalSupply());
         }
 
-        uint256[] memory q = new uint256[](numStrikes + 1);
-        q[0] = s;
-        uint256 max = s;
+        uint256[] memory quantities = new uint256[](numStrikes + 1);
+        quantities[0] = runningSum;
+        uint256 maxQuantity = runningSum;
 
-        // set q[i] to be total supply of longTokens[:i] and shortTokens[i:]
+        // set quantities[i] to be total supply of longTokens[:i] and shortTokens[i:]
         for (uint256 i = 0; i < numStrikes; i++) {
-            if (isPut) {
-                s = s.add(shortTokens[i].totalSupply());
-                s = s.sub(longTokens[i].totalSupply());
-            } else {
-                s = s.add(longTokens[i].totalSupply());
-                s = s.sub(shortTokens[i].totalSupply());
-            }
-            q[i + 1] = s;
-            max = Math.max(max, s);
+            runningSum = runningSum.add(leftTokens[i].totalSupply());
+            runningSum = runningSum.sub(rightTokens[i].totalSupply());
+            quantities[i + 1] = runningSum;
+            maxQuantity = Math.max(maxQuantity, runningSum);
         }
 
         int128 sumExp;
-        for (uint256 i = 0; i < q.length; i++) {
+        for (uint256 i = 0; i < quantities.length; i++) {
             // max(q) - q_i
-            uint256 diff = max.sub(q[i]);
+            uint256 diff = maxQuantity.sub(quantities[i]);
 
             // (max(q) - q_i) / b
             int128 div = ABDKMath64x64.divu(diff, b);
@@ -316,7 +304,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         int128 log = ABDKMath64x64.ln(sumExp);
 
         // b * log(sumExp) + max(q)
-        uint256 cost = ABDKMath64x64.mulu(log, b).add(max);
+        uint256 cost = ABDKMath64x64.mulu(log, b).add(maxQuantity);
         return isPut ? cost.mul(maxStrikePrice).div(SCALE) : cost;
     }
 
@@ -327,30 +315,25 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         if (expiryPrice == 0) {
             return 0;
         }
+
         for (uint256 i = 0; i < numStrikes; i++) {
             uint256 strikePrice = strikePrices[i];
             uint256 longSupply = longTokens[i].totalSupply();
             uint256 shortSupply = shortTokens[i].totalSupply();
 
-            uint256 diff;
             if (isPut && expiryPrice < strikePrice) {
                 // put payoff = max(K - S, 0)
-                diff = strikePrice.sub(expiryPrice);
+                payoff = payoff.add(longSupply.mul(strikePrice.sub(expiryPrice)));
             } else if (!isPut && expiryPrice > strikePrice) {
                 // call payoff = max(S - K, 0)
-                diff = expiryPrice.sub(strikePrice);
+                payoff = payoff.add(longSupply.mul(expiryPrice.sub(strikePrice)));
             }
-            payoff = payoff.add(longSupply.mul(diff));
 
             // short payoff = min(S, K)
             payoff = payoff.add(shortSupply.mul(Math.min(expiryPrice, strikePrice)));
         }
 
-        if (isPut) {
-            payoff = payoff.div(SCALE);
-        } else {
-            payoff = payoff.div(expiryPrice);
-        }
+        payoff = payoff.div(isPut ? SCALE : expiryPrice);
     }
 
     function calcSkimAmount() public view returns (uint256) {
@@ -366,7 +349,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     }
 
     function isDisputePeriod() public view returns (bool) {
-        return block.timestamp >= expiryTime && block.timestamp < expiryTime + DISPUTE_PERIOD;
+        return block.timestamp >= expiryTime && block.timestamp < expiryTime + disputePeriod;
     }
 
     function increaseBAndBuy(
@@ -399,9 +382,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         uint256 balanceAfter = baseToken.uniBalanceOf(address(this));
         require(baseToken.isETH() || balanceAfter.sub(balanceBefore) == amountIn, "Deflationary tokens not supported");
 
-        if (balanceLimit > 0) {
-            require(baseToken.uniBalanceOf(address(this)) <= balanceLimit, "Balance limit exceeded");
-        }
+        require(balanceLimit == 0 || baseToken.uniBalanceOf(address(this)) <= balanceLimit, "Balance limit exceeded");
     }
 
     function skim() external onlyOwner nonReentrant returns (uint256 amount) {
@@ -434,6 +415,11 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     // emergency use only. to be removed in future versions
     function setExpiryTime(uint256 _expiryTime) external onlyOwner {
         expiryTime = _expiryTime;
+    }
+
+    // emergency use only. to be removed in future versions
+    function setDisputePeriod(uint256 _disputePeriod) external onlyOwner {
+        disputePeriod = _disputePeriod;
     }
 
     // emergency use only. to be removed in future versions
