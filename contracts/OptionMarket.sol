@@ -53,7 +53,6 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     uint256 public balanceCap;
     uint256 public disputePeriod;
 
-    uint256 public maxStrikePrice;
     uint256 public numStrikes;
     bool public isPaused;
     bool public isSettled;
@@ -112,9 +111,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         balanceCap = _balanceCap;
         disputePeriod = _disputePeriod;
 
-        maxStrikePrice = _strikePrices[_strikePrices.length - 1];
         numStrikes = _strikePrices.length;
-
         for (uint256 i = 0; i < numStrikes; i++) {
             longTokens.push(OptionToken(_longTokens[i]));
             shortTokens.push(OptionToken(_shortTokens[i]));
@@ -254,13 +251,14 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
             return 0;
         }
 
-        OptionToken[] storage leftTokens = isPut ? shortTokens : longTokens;
-        OptionToken[] storage rightTokens = isPut ? longTokens : shortTokens;
-
         // initally set runningSum to total supply of shortTokens
         uint256 runningSum;
         for (uint256 i = 0; i < numStrikes; i++) {
-            runningSum = runningSum.add(rightTokens[i].totalSupply());
+            if (isPut) {
+                runningSum = runningSum.add(longTokens[i].totalSupply().mul(strikePrices[i]).div(SCALE));
+            } else {
+                runningSum = runningSum.add(shortTokens[i].totalSupply());
+            }
         }
 
         uint256[] memory quantities = new uint256[](numStrikes + 1);
@@ -269,8 +267,13 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
 
         // set quantities[i] to be total supply of longTokens[:i] and shortTokens[i:]
         for (uint256 i = 0; i < numStrikes; i++) {
-            runningSum = runningSum.add(leftTokens[i].totalSupply());
-            runningSum = runningSum.sub(rightTokens[i].totalSupply());
+            if (isPut) {
+                runningSum = runningSum.add(shortTokens[i].totalSupply().mul(strikePrices[i]).div(SCALE));
+                runningSum = runningSum.sub(longTokens[i].totalSupply().mul(strikePrices[i]).div(SCALE));
+            } else {
+                runningSum = runningSum.add(longTokens[i].totalSupply());
+                runningSum = runningSum.sub(shortTokens[i].totalSupply());
+            }
             quantities[i + 1] = runningSum;
             maxQuantity = Math.max(maxQuantity, runningSum);
         }
@@ -292,8 +295,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         int128 log = ABDKMath64x64.ln(sumExp);
 
         // b * log(sumExp) + max(q)
-        uint256 cost = ABDKMath64x64.mulu(log, b).add(maxQuantity);
-        return isPut ? cost.mul(maxStrikePrice).div(SCALE) : cost;
+        return ABDKMath64x64.mulu(log, b).add(maxQuantity);
     }
 
     /**
