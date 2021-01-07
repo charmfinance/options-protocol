@@ -255,21 +255,21 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     }
 
     function currentCumulativeCost() public view returns (uint256) {
-        return calcCumulativeCost(calcQuantities(longSupplies(), shortSupplies()));
+        return calcCumulativeCost(calcQuantities(getLongSupplies(), getShortSupplies()));
     }
 
     function currentCumulativePayoff() public view returns (uint256) {
-        return calcCumulativePayoff(longSupplies(), shortSupplies());
+        return calcCumulativePayoff(getLongSupplies(), getShortSupplies());
     }
 
-    function longSupplies() public view returns (uint256[] memory totalSupplies) {
+    function getLongSupplies() public view returns (uint256[] memory totalSupplies) {
         totalSupplies = new uint256[](numStrikes);
         for (uint256 i = 0; i < numStrikes; i++) {
             totalSupplies[i] = longTokens[i].totalSupply();
         }
     }
 
-    function shortSupplies() public view returns (uint256[] memory totalSupplies) {
+    function getShortSupplies() public view returns (uint256[] memory totalSupplies) {
         totalSupplies = new uint256[](numStrikes);
         for (uint256 i = 0; i < numStrikes; i++) {
             totalSupplies[i] = shortTokens[i].totalSupply();
@@ -483,11 +483,11 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         uint256 strikeIndex,
         uint256 optionsOut
     ) public view returns (uint256 cost, uint256 fee) {
-        uint256[] memory _longSupplies = longSupplies();
-        uint256[] memory _shortSupplies = shortSupplies();
-        uint256[] memory supplies = isLongToken ? _longSupplies : _shortSupplies;
+        uint256[] memory longSupplies = getLongSupplies();
+        uint256[] memory shortSupplies = getShortSupplies();
+        uint256[] memory supplies = isLongToken ? longSupplies : shortSupplies;
         supplies[strikeIndex] = supplies[strikeIndex].add(optionsOut);
-        cost = calcCumulativeCost(calcQuantities(_longSupplies, _shortSupplies)).sub(lastCost);
+        cost = calcCumulativeCost(calcQuantities(longSupplies, shortSupplies)).sub(lastCost);
 
         fee = optionsOut.mul(tradingFee);
         fee = isPut ? fee.mul(strikePrices[strikeIndex]).div(SCALE_SCALE) : fee.div(SCALE);
@@ -503,11 +503,11 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         uint256 strikeIndex,
         uint256 optionsIn
     ) external view returns (uint256 cost, uint256) {
-        uint256[] memory _longSupplies = longSupplies();
-        uint256[] memory _shortSupplies = shortSupplies();
-        uint256[] memory supplies = isLongToken ? _longSupplies : _shortSupplies;
+        uint256[] memory longSupplies = getLongSupplies();
+        uint256[] memory shortSupplies = getShortSupplies();
+        uint256[] memory supplies = isLongToken ? longSupplies : shortSupplies;
         supplies[strikeIndex] = supplies[strikeIndex].sub(optionsIn);
-        cost = lastCost.sub(calcCumulativeCost(calcQuantities(_longSupplies, _shortSupplies)));
+        cost = lastCost.sub(calcCumulativeCost(calcQuantities(longSupplies, shortSupplies)));
     }
 
     /**
@@ -520,15 +520,15 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         view
         returns (uint256 cost, uint256)
     {
-        uint256[] memory _longSupplies = longSupplies();
-        uint256[] memory _shortSupplies = shortSupplies();
-        uint256[] memory supplies = isLongToken ? _longSupplies : _shortSupplies;
+        uint256[] memory longSupplies = getLongSupplies();
+        uint256[] memory shortSupplies = getShortSupplies();
+        uint256[] memory supplies = isLongToken ? longSupplies : shortSupplies;
 
         OptionToken option = isLongToken ? longTokens[strikeIndex] : shortTokens[strikeIndex];
         uint256 balance = option.balanceOf(msg.sender);
 
         supplies[strikeIndex] = supplies[strikeIndex].sub(balance);
-        cost = lastPayoff.sub(calcCumulativePayoff(_longSupplies, _shortSupplies));
+        cost = lastPayoff.sub(calcCumulativePayoff(longSupplies, shortSupplies));
     }
 
     // emergency use only. to be removed in future versions
