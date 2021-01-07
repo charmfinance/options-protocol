@@ -567,8 +567,14 @@ def test_buy_and_sell_calls(
     initial = SCALE * lmsr([0, 0, 0, 0, 0], 10)
 
     # buy 2 calls
-    tx = market.buy(CALL, 0, 2 * SCALE, 100 * SCALE, {"from": alice, **valueDict})
+    cost = SCALE * lmsr([0, 2, 2, 2, 2], 10)
+    assert approx(market.calcBuyAmountAndFee(CALL, 0, 2 * SCALE)) == (
+        cost - initial,
+        2 * PERCENT,
+    )
+
     cost = SCALE * lmsr([0, 2, 2, 2, 2], 10) + 2 * PERCENT
+    tx = market.buy(CALL, 0, 2 * SCALE, 100 * SCALE, {"from": alice, **valueDict})
     assert approx(tx.return_value) == cost - initial
     assert approx(getBalance(alice)) == 100 * SCALE - cost + initial
     assert longTokens[0].balanceOf(alice) == 2 * SCALE
@@ -583,9 +589,16 @@ def test_buy_and_sell_calls(
     }
 
     # buy 3 calls
-    tx = market.buy(CALL, 2, 3 * SCALE, 100 * SCALE, {"from": alice, **valueDict})
+    cost1 = SCALE * lmsr([0, 2, 2, 2, 2], 10)
+    cost2 = SCALE * lmsr([0, 2, 2, 5, 5], 10)
+    assert approx(market.calcBuyAmountAndFee(CALL, 2, 3 * SCALE)) == (
+        cost2 - cost1,
+        3 * PERCENT,
+    )
+
     cost1 = SCALE * lmsr([0, 2, 2, 2, 2], 10) + 2 * PERCENT
     cost2 = SCALE * lmsr([0, 2, 2, 5, 5], 10) + 5 * PERCENT
+    tx = market.buy(CALL, 2, 3 * SCALE, 100 * SCALE, {"from": alice, **valueDict})
     assert approx(tx.return_value) == cost2 - cost1
     assert approx(getBalance(alice)) == 100 * SCALE - cost2 + initial
     assert longTokens[0].balanceOf(alice) == 2 * SCALE
@@ -601,9 +614,16 @@ def test_buy_and_sell_calls(
     }
 
     # buy 5 covers
-    tx = market.buy(COVER, 3, 5 * SCALE, 100 * SCALE, {"from": alice, **valueDict})
+    cost1 = SCALE * lmsr([0, 2, 2, 5, 5], 10)
+    cost2 = SCALE * lmsr([5, 7, 7, 10, 5], 10)
+    assert approx(market.calcBuyAmountAndFee(COVER, 3, 5 * SCALE)) == (
+        cost2 - cost1,
+        5 * PERCENT,
+    )
+
     cost1 = SCALE * lmsr([0, 2, 2, 5, 5], 10) + 5 * PERCENT
     cost2 = SCALE * lmsr([5, 7, 7, 10, 5], 10) + 10 * PERCENT
+    tx = market.buy(COVER, 3, 5 * SCALE, 100 * SCALE, {"from": alice, **valueDict})
     assert approx(tx.return_value) == cost2 - cost1
     assert approx(getBalance(alice)) == 100 * SCALE - cost2 + initial
     assert longTokens[0].balanceOf(alice) == 2 * SCALE
@@ -620,9 +640,16 @@ def test_buy_and_sell_calls(
     }
 
     # buy 6 covers
-    tx = market.buy(COVER, 0, 6 * SCALE, 100 * SCALE, {"from": alice, **valueDict})
+    cost1 = SCALE * lmsr([5, 7, 7, 10, 5], 10)
+    cost2 = SCALE * lmsr([11, 7, 7, 10, 5], 10)
+    assert approx(market.calcBuyAmountAndFee(COVER, 0, 6 * SCALE)) == (
+        cost2 - cost1,
+        6 * PERCENT,
+    )
+
     cost1 = SCALE * lmsr([5, 7, 7, 10, 5], 10) + 10 * PERCENT
     cost2 = SCALE * lmsr([11, 7, 7, 10, 5], 10) + 16 * PERCENT
+    tx = market.buy(COVER, 0, 6 * SCALE, 100 * SCALE, {"from": alice, **valueDict})
     assert approx(tx.return_value) == cost2 - cost1
     assert approx(getBalance(alice)) == 100 * SCALE - cost2 + initial
     assert longTokens[0].balanceOf(alice) == 2 * SCALE
@@ -648,9 +675,16 @@ def test_buy_and_sell_calls(
         market.sell(COVER, 1, 1 * SCALE, 0, {"from": alice})
 
     # sell 2 covers
-    tx = market.sell(COVER, 0, 2 * SCALE, 0, {"from": alice})
+    cost1 = SCALE * lmsr([11, 7, 7, 10, 5], 10)
+    cost2 = SCALE * lmsr([9, 7, 7, 10, 5], 10)
+    assert approx(market.calcSellAmountAndFee(COVER, 0, 2 * SCALE)) == (
+        cost1 - cost2,
+        0,
+    )
+
     cost1 = SCALE * lmsr([11, 7, 7, 10, 5], 10) + 16 * PERCENT
     cost2 = SCALE * lmsr([9, 7, 7, 10, 5], 10) + 16 * PERCENT
+    tx = market.sell(COVER, 0, 2 * SCALE, 0, {"from": alice})
     assert approx(tx.return_value) == cost1 - cost2
     assert approx(getBalance(alice)) == 100 * SCALE - cost2 + initial
     assert longTokens[0].balanceOf(alice) == 2 * SCALE
@@ -668,9 +702,13 @@ def test_buy_and_sell_calls(
     }
 
     # sell 2 calls
-    tx = market.sell(CALL, 0, 2 * SCALE, 0, {"from": alice})
+    cost1 = SCALE * lmsr([9, 7, 7, 10, 5], 10)
+    cost2 = SCALE * lmsr([9, 5, 5, 8, 3], 10)
+    assert approx(market.calcSellAmountAndFee(CALL, 0, 2 * SCALE)) == (cost1 - cost2, 0)
+
     cost1 = SCALE * lmsr([9, 7, 7, 10, 5], 10) + 16 * PERCENT
     cost2 = SCALE * lmsr([9, 5, 5, 8, 3], 10) + 16 * PERCENT
+    tx = market.sell(CALL, 0, 2 * SCALE, 0, {"from": alice})
     assert approx(tx.return_value) == cost1 - cost2
     assert approx(getBalance(alice)) == 100 * SCALE - cost2 + initial
     assert longTokens[0].balanceOf(alice) == 0
@@ -688,9 +726,13 @@ def test_buy_and_sell_calls(
     }
 
     # sell 3 calls
-    tx = market.sell(CALL, 2, 3 * SCALE, 0, {"from": alice})
+    cost1 = SCALE * lmsr([9, 5, 5, 8, 3], 10)
+    cost2 = SCALE * lmsr([9, 5, 5, 5, 0], 10)
+    assert approx(market.calcSellAmountAndFee(CALL, 2, 3 * SCALE)) == (cost1 - cost2, 0)
+
     cost1 = SCALE * lmsr([9, 5, 5, 8, 3], 10) + 16 * PERCENT
     cost2 = SCALE * lmsr([9, 5, 5, 5, 0], 10) + 16 * PERCENT
+    tx = market.sell(CALL, 2, 3 * SCALE, 0, {"from": alice})
     assert approx(tx.return_value) == cost1 - cost2
     assert approx(getBalance(alice)) == 100 * SCALE - cost2 + initial
     assert longTokens[0].balanceOf(alice) == 0
@@ -708,9 +750,16 @@ def test_buy_and_sell_calls(
     }
 
     # sell 5 covers
-    tx = market.sell(COVER, 3, 5 * SCALE, 0, {"from": alice})
+    cost1 = SCALE * lmsr([9, 5, 5, 5, 0], 10)
+    cost2 = SCALE * lmsr([4, 0, 0, 0, 0], 10)
+    assert approx(market.calcSellAmountAndFee(COVER, 3, 5 * SCALE)) == (
+        cost1 - cost2,
+        0,
+    )
+
     cost1 = SCALE * lmsr([9, 5, 5, 5, 0], 10) + 16 * PERCENT
     cost2 = SCALE * lmsr([4, 0, 0, 0, 0], 10) + 16 * PERCENT
+    tx = market.sell(COVER, 3, 5 * SCALE, 0, {"from": alice})
     assert approx(tx.return_value) == cost1 - cost2
     assert approx(getBalance(alice)) == 100 * SCALE - cost2 + initial
     assert longTokens[0].balanceOf(alice) == 0
@@ -728,9 +777,16 @@ def test_buy_and_sell_calls(
     }
 
     # sell 4 covers
-    tx = market.sell(COVER, 0, 4 * SCALE, 0, {"from": alice})
+    cost1 = SCALE * lmsr([4, 0, 0, 0, 0], 10)
+    cost2 = SCALE * lmsr([0, 0, 0, 0, 0], 10)
+    assert approx(market.calcSellAmountAndFee(COVER, 0, 4 * SCALE)) == (
+        cost1 - cost2,
+        0,
+    )
+
     cost1 = SCALE * lmsr([4, 0, 0, 0, 0], 10) + 16 * PERCENT
     cost2 = SCALE * lmsr([0, 0, 0, 0, 0], 10) + 16 * PERCENT
+    tx = market.sell(COVER, 0, 4 * SCALE, 0, {"from": alice})
     assert approx(tx.return_value) == cost1 - cost2
     assert approx(getBalance(alice)) == 100 * SCALE - cost2 + initial
     assert longTokens[0].balanceOf(alice) == 0
@@ -822,8 +878,14 @@ def test_buy_and_sell_puts(
     initial = 1e6 * lmsr([0, 0, 0, 0, 0], 1000)
 
     # buy 2 puts
-    tx = market.buy(PUT, 0, 2 * 1e6, 10000 * 1e6, {"from": alice})
+    cost = lmsr([2 * 300, 0, 0, 0, 0], 1000) * 1e6
+    assert approx(market.calcBuyAmountAndFee(PUT, 0, 2 * 1e6)) == (
+        cost - initial,
+        300 * 2 * 1e4,
+    )
+
     cost = lmsr([2 * 300, 0, 0, 0, 0], 1000) * 1e6 + 300 * 2 * 1e4
+    tx = market.buy(PUT, 0, 2 * 1e6, 10000 * 1e6, {"from": alice})
     assert approx(tx.return_value, rel=1e-5) == cost - initial
     assert approx(baseToken.balanceOf(alice), rel=1e-5) == 100000 * 1e6 - cost + initial
     assert longTokens[0].balanceOf(alice) == 2 * 1e6
@@ -838,13 +900,20 @@ def test_buy_and_sell_puts(
     }
 
     # buy 5 covers
-    tx = market.buy(COVER, 2, 5 * 1e6, 10000 * 1e6, {"from": alice})
+    cost1 = lmsr([2 * 300, 0, 0, 0, 0], 1000) * 1e6
+    cost2 = lmsr([2 * 300, 0, 0, 5 * 500, 5 * 500], 1000) * 1e6
+    assert approx(market.calcBuyAmountAndFee(COVER, 2, 5 * 1e6)) == (
+        cost2 - cost1,
+        500 * 5 * 1e4,
+    )
+
     cost1 = lmsr([2 * 300, 0, 0, 0, 0], 1000) * 1e6 + 300 * 2 * 1e4
     cost2 = (
         lmsr([2 * 300, 0, 0, 5 * 500, 5 * 500], 1000) * 1e6
         + 300 * 2 * 1e4
         + 500 * 5 * 1e4
     )
+    tx = market.buy(COVER, 2, 5 * 1e6, 10000 * 1e6, {"from": alice})
     assert approx(tx.return_value) == cost2 - cost1
     assert approx(baseToken.balanceOf(alice)) == 100000 * 1e6 - cost2 + initial
     assert longTokens[0].balanceOf(alice) == 2 * 1e6
@@ -866,7 +935,10 @@ def test_buy_and_sell_puts(
         market.sell(COVER, 1, 1 * 1e6, 0, {"from": alice})
 
     # sell 2 covers
-    tx = market.sell(COVER, 2, 2 * 1e6, 0, {"from": alice})
+    cost1 = lmsr([2 * 300, 0, 0, 5 * 500, 5 * 500], 1000) * 1e6
+    cost2 = lmsr([2 * 300, 0, 0, 3 * 500, 3 * 500], 1000) * 1e6
+    assert approx(market.calcSellAmountAndFee(COVER, 2, 2 * 1e6)) == (cost1 - cost2, 0)
+
     cost1 = (
         lmsr([2 * 300, 0, 0, 5 * 500, 5 * 500], 1000) * 1e6
         + 300 * 2 * 1e4
@@ -877,6 +949,7 @@ def test_buy_and_sell_puts(
         + 300 * 2 * 1e4
         + 500 * 5 * 1e4
     )
+    tx = market.sell(COVER, 2, 2 * 1e6, 0, {"from": alice})
     assert approx(tx.return_value) == cost1 - cost2
     assert approx(baseToken.balanceOf(alice)) == 100000 * 1e6 - cost2 + initial
     assert longTokens[0].balanceOf(alice) == 2 * 1e6
@@ -1020,7 +1093,7 @@ def test_redeem_calls(
         market.redeem(CALL, 0, {"from": alice})
 
     cost = SCALE * lmsr([3, 5, 2, 2, 3], 10)
-    assert approx(market.calcCost()) == cost
+    assert approx(market.currentCumulativeCost()) == cost
 
     fast_forward(2000000000 + 3600)
 
@@ -1029,6 +1102,11 @@ def test_redeem_calls(
 
     balance = getBalance(market)
     aliceBalance = getBalance(alice)
+    assert approx(market.calcRedeemAmountAndFee(CALL, 0, {"from": alice})) == (
+        alicePayoff * SCALE / 444,
+        0,
+    )
+
     tx = market.redeem(CALL, 0, {"from": alice})
     assert approx(tx.return_value) == alicePayoff * SCALE / 444
     assert approx(balance - getBalance(market)) == alicePayoff * SCALE / 444
@@ -1047,6 +1125,8 @@ def test_redeem_calls(
 
     balance = getBalance(market)
     bobBalance = getBalance(bob)
+    assert approx(market.calcRedeemAmountAndFee(CALL, 3, {"from": bob})) == (0, 0)
+
     tx = market.redeem(CALL, 3, {"from": bob})
     assert approx(tx.return_value) == 0
     assert approx(balance - getBalance(market)) == 0
@@ -1060,6 +1140,11 @@ def test_redeem_calls(
 
     balance = getBalance(market)
     bobBalance = getBalance(bob)
+    assert approx(market.calcRedeemAmountAndFee(COVER, 1, {"from": bob})) == (
+        bobPayoff * SCALE / 444,
+        0,
+    )
+
     tx = market.redeem(COVER, 1, {"from": bob})
     assert approx(tx.return_value) == bobPayoff * SCALE / 444
     assert approx(balance - getBalance(market)) == bobPayoff * SCALE / 444
@@ -1143,7 +1228,7 @@ def test_redeem_puts(a, OptionMarket, MockToken, MockOracle, OptionToken, fast_f
         )
         * 1e6
     )
-    assert approx(market.calcCost()) == cost
+    assert approx(market.currentCumulativeCost()) == cost
 
     fast_forward(2000000000 + 3600)
     market.settle({"from": alice})
@@ -1154,6 +1239,11 @@ def test_redeem_puts(a, OptionMarket, MockToken, MockOracle, OptionToken, fast_f
 
     balance = baseToken.balanceOf(market)
     aliceBalance = baseToken.balanceOf(alice)
+    assert approx(market.calcRedeemAmountAndFee(PUT, 2, {"from": alice})) == (
+        alicePayoff * 1e6,
+        0,
+    )
+
     tx = market.redeem(PUT, 2, {"from": alice})
     assert approx(tx.return_value) == alicePayoff * 1e6
     assert approx(balance - baseToken.balanceOf(market)) == alicePayoff * 1e6
@@ -1167,6 +1257,11 @@ def test_redeem_puts(a, OptionMarket, MockToken, MockOracle, OptionToken, fast_f
 
     balance = baseToken.balanceOf(market)
     bobBalance = baseToken.balanceOf(bob)
+    assert approx(market.calcRedeemAmountAndFee(COVER, 1, {"from": bob})) == (
+        bobPayoff1 * 1e6,
+        0,
+    )
+
     tx = market.redeem(COVER, 1, {"from": bob})
     assert approx(tx.return_value) == bobPayoff1 * 1e6
     assert approx(balance - baseToken.balanceOf(market)) == bobPayoff1 * 1e6
@@ -1180,6 +1275,11 @@ def test_redeem_puts(a, OptionMarket, MockToken, MockOracle, OptionToken, fast_f
 
     balance = baseToken.balanceOf(market)
     bobBalance = baseToken.balanceOf(bob)
+    assert approx(market.calcRedeemAmountAndFee(PUT, 3, {"from": bob})) == (
+        bobPayoff2 * 1e6,
+        0,
+    )
+
     tx = market.redeem(PUT, 3, {"from": bob})
     assert approx(tx.return_value) == bobPayoff2 * 1e6
     assert approx(balance - baseToken.balanceOf(market)) == bobPayoff2 * 1e6

@@ -58,7 +58,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     bool public isSettled;
     uint256 public expiryPrice;
 
-    // cache calcCost and calcPayoff between trades/redeems to save gas
+    // cache currentCumulativeCost and currentCumulativePayoff between trades/redeems to save gas
     uint256 public lastCost;
     uint256 public lastPayoff;
 
@@ -135,25 +135,29 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         require(strikeIndex < numStrikes, "Index too large");
         require(optionsOut > 0, "optionsOut must be > 0");
 
+        // mint options for sender
         uint256 costBefore = lastCost;
         OptionToken option = isLongToken ? longTokens[strikeIndex] : shortTokens[strikeIndex];
         option.mint(msg.sender, optionsOut);
 
-        lastCost = calcCost();
+        // calculate amount to be paid
+        lastCost = currentCumulativeCost();
         amountIn = lastCost.sub(costBefore);
         require(amountIn > 0, "Amount in must be > 0");
 
+        // calculate trading fee
         uint256 fee = optionsOut.mul(tradingFee);
         fee = isPut ? fee.mul(strikePrices[strikeIndex]).div(SCALE_SCALE) : fee.div(SCALE);
         amountIn = amountIn.add(fee);
         require(amountIn <= maxAmountIn, "Max slippage exceeded");
 
+        // transfer base tokens from sender
         uint256 balanceBefore = baseToken.uniBalanceOf(address(this));
         baseToken.uniTransferFromSenderToThis(amountIn);
         uint256 balanceAfter = baseToken.uniBalanceOf(address(this));
         require(baseToken.isETH() || balanceAfter.sub(balanceBefore) == amountIn, "Deflationary tokens not supported");
-
         require(balanceCap == 0 || baseToken.uniBalanceOf(address(this)) <= balanceCap, "Balance cap exceeded");
+
         emit Trade(msg.sender, true, isLongToken, strikeIndex, optionsOut, amountIn, option.totalSupply());
     }
 
@@ -172,15 +176,18 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         require(strikeIndex < numStrikes, "Index too large");
         require(optionsIn > 0, "optionsIn must be > 0");
 
+        // burn sender's options
         uint256 costBefore = lastCost;
         OptionToken option = isLongToken ? longTokens[strikeIndex] : shortTokens[strikeIndex];
         option.burn(msg.sender, optionsIn);
 
-        lastCost = calcCost();
+        // calculate amount to be returned to sender
+        lastCost = currentCumulativeCost();
         amountOut = costBefore.sub(lastCost);
         require(amountOut > 0, "Amount out must be > 0");
         require(amountOut >= minAmountOut, "Max slippage exceeded");
 
+        // transfer base tokens to sender
         baseToken.uniTransfer(msg.sender, amountOut);
         emit Trade(msg.sender, false, isLongToken, strikeIndex, optionsIn, amountOut, option.totalSupply());
     }
@@ -198,7 +205,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         expiryPrice = oracle.getPrice();
         require(expiryPrice > 0, "Price from oracle must be > 0");
 
-        lastPayoff = calcPayoff();
+        lastPayoff = currentCumulativePayoff();
         emit Settled(expiryPrice);
     }
 
@@ -216,13 +223,87 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         uint256 balance = option.balanceOf(msg.sender);
         require(balance > 0, "Balance must be > 0");
 
+        // burn sender's options
         uint256 payoffBefore = lastPayoff;
         option.burn(msg.sender, balance);
-        lastPayoff = calcPayoff();
+
+        // calculate amount to be returned to sender
+        lastPayoff = currentCumulativePayoff();
         amount = payoffBefore.sub(lastPayoff);
 
+        // transfer base tokens to sender
         baseToken.uniTransfer(msg.sender, amount);
         emit Redeemed(msg.sender, isLongToken, strikeIndex, amount);
+    }
+
+    function calcFeesAccrued() public view returns (uint256) {
+        if (!isSettled) {
+            return 0;
+        }
+        uint256 balance = baseToken.uniBalanceOf(address(this));
+        return balance.sub(currentCumulativePayoff());
+    }
+
+    function isExpired() public view returns (bool) {
+        return block.timestamp >= expiryTime;
+    }
+
+    function isDisputePeriod() public view returns (bool) {
+        return block.timestamp >= expiryTime && block.timestamp < expiryTime + disputePeriod;
+    }
+
+    function currentCumulativeCost() public view returns (uint256) {
+        return calcCumulativeCost(calcQuantities(longSupplies(), shortSupplies()));
+    }
+
+    function currentCumulativePayoff() public view returns (uint256) {
+        return calcCumulativePayoff(longSupplies(), shortSupplies());
+    }
+
+    function longSupplies() public view returns (uint256[] memory totalSupplies) {
+        totalSupplies = new uint256[](numStrikes);
+        for (uint256 i = 0; i < numStrikes; i++) {
+            totalSupplies[i] = longTokens[i].totalSupply();
+        }
+    }
+
+    function shortSupplies() public view returns (uint256[] memory totalSupplies) {
+        totalSupplies = new uint256[](numStrikes);
+        for (uint256 i = 0; i < numStrikes; i++) {
+            totalSupplies[i] = shortTokens[i].totalSupply();
+        }
+    }
+
+    function calcQuantities(uint256[] memory longSupplies, uint256[] memory shortSupplies)
+        public
+        view
+        returns (uint256[] memory quantities)
+    {
+        // initally set runningSum to total supply of shortSupplies
+        uint256 runningSum;
+        for (uint256 i = 0; i < numStrikes; i++) {
+            if (isPut) {
+                runningSum = runningSum.add(longSupplies[i].mul(strikePrices[i]).div(SCALE));
+            } else {
+                runningSum = runningSum.add(shortSupplies[i]);
+            }
+        }
+
+        quantities = new uint256[](numStrikes + 1);
+        quantities[0] = runningSum;
+
+        // set quantities[i] to be total supply of longSupplies[:i] and shortSupplies[i:]
+        for (uint256 i = 0; i < numStrikes; i++) {
+            if (isPut) {
+                runningSum = runningSum.add(shortSupplies[i].mul(strikePrices[i]).div(SCALE));
+                runningSum = runningSum.sub(longSupplies[i].mul(strikePrices[i]).div(SCALE));
+            } else {
+                runningSum = runningSum.add(longSupplies[i]);
+                runningSum = runningSum.sub(shortSupplies[i]);
+            }
+            quantities[i + 1] = runningSum;
+        }
+        return quantities;
     }
 
     /**
@@ -246,36 +327,16 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
      *
      * Answer is multiplied by strike price for puts
      */
-    function calcCost() public view returns (uint256) {
+    function calcCumulativeCost(uint256[] memory quantities) public view returns (uint256) {
+        require(quantities.length == numStrikes + 1, "Lengths do not match");
+
         if (b == 0) {
             return 0;
         }
 
-        // initally set runningSum to total supply of shortTokens
-        uint256 runningSum;
-        for (uint256 i = 0; i < numStrikes; i++) {
-            if (isPut) {
-                runningSum = runningSum.add(longTokens[i].totalSupply().mul(strikePrices[i]).div(SCALE));
-            } else {
-                runningSum = runningSum.add(shortTokens[i].totalSupply());
-            }
-        }
-
-        uint256[] memory quantities = new uint256[](numStrikes + 1);
-        quantities[0] = runningSum;
-        uint256 maxQuantity = runningSum;
-
-        // set quantities[i] to be total supply of longTokens[:i] and shortTokens[i:]
-        for (uint256 i = 0; i < numStrikes; i++) {
-            if (isPut) {
-                runningSum = runningSum.add(shortTokens[i].totalSupply().mul(strikePrices[i]).div(SCALE));
-                runningSum = runningSum.sub(longTokens[i].totalSupply().mul(strikePrices[i]).div(SCALE));
-            } else {
-                runningSum = runningSum.add(longTokens[i].totalSupply());
-                runningSum = runningSum.sub(shortTokens[i].totalSupply());
-            }
-            quantities[i + 1] = runningSum;
-            maxQuantity = Math.max(maxQuantity, runningSum);
+        uint256 maxQuantity = quantities[0];
+        for (uint256 i = 1; i < quantities.length; i++) {
+            maxQuantity = Math.max(maxQuantity, quantities[i]);
         }
 
         int128 sumExp;
@@ -301,45 +362,34 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     /**
      * Calculates amount of base tokens that needs to be paid out to all users
      */
-    function calcPayoff() public view returns (uint256 payoff) {
+    function calcCumulativePayoff(uint256[] memory longSupplies, uint256[] memory shortSupplies)
+        public
+        view
+        returns (uint256 payoff)
+    {
+        require(longSupplies.length == numStrikes, "Lengths do not match");
+        require(shortSupplies.length == numStrikes, "Lengths do not match");
+
         if (expiryPrice == 0) {
             return 0;
         }
 
         for (uint256 i = 0; i < numStrikes; i++) {
             uint256 strikePrice = strikePrices[i];
-            uint256 longSupply = longTokens[i].totalSupply();
-            uint256 shortSupply = shortTokens[i].totalSupply();
 
             if (isPut && expiryPrice < strikePrice) {
                 // put payoff = max(K - S, 0)
-                payoff = payoff.add(longSupply.mul(strikePrice.sub(expiryPrice)));
+                payoff = payoff.add(longSupplies[i].mul(strikePrice.sub(expiryPrice)));
             } else if (!isPut && expiryPrice > strikePrice) {
                 // call payoff = max(S - K, 0)
-                payoff = payoff.add(longSupply.mul(expiryPrice.sub(strikePrice)));
+                payoff = payoff.add(longSupplies[i].mul(expiryPrice.sub(strikePrice)));
             }
 
             // short payoff = min(S, K)
-            payoff = payoff.add(shortSupply.mul(Math.min(expiryPrice, strikePrice)));
+            payoff = payoff.add(shortSupplies[i].mul(Math.min(expiryPrice, strikePrice)));
         }
 
         payoff = payoff.div(isPut ? SCALE : expiryPrice);
-    }
-
-    function calcFeesAccrued() public view returns (uint256) {
-        if (!isSettled) {
-            return 0;
-        }
-        uint256 balance = baseToken.uniBalanceOf(address(this));
-        return balance.sub(calcPayoff());
-    }
-
-    function isExpired() public view returns (bool) {
-        return block.timestamp >= expiryTime;
-    }
-
-    function isDisputePeriod() public view returns (bool) {
-        return block.timestamp >= expiryTime && block.timestamp < expiryTime + disputePeriod;
     }
 
     /**
@@ -368,7 +418,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
                 shortTokens[i].mint(msg.sender, shortOptionsOut[i]);
             }
         }
-        lastCost = calcCost();
+        lastCost = currentCumulativeCost();
         amountIn = lastCost.sub(costBefore);
         require(amountIn > 0, "Amount in must be > 0");
         require(amountIn <= maxAmountIn, "Max slippage exceeded");
@@ -394,6 +444,62 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
 
     function setBalanceCap(uint256 _balanceCap) external onlyOwner {
         balanceCap = _balanceCap;
+    }
+
+    /**
+     * Convenience method to calculate cost of a buy trade
+     */
+    function calcBuyAmountAndFee(
+        bool isLongToken,
+        uint256 strikeIndex,
+        uint256 optionsOut
+    ) external view returns (uint256 cost, uint256 fee) {
+        uint256[] memory _longSupplies = longSupplies();
+        uint256[] memory _shortSupplies = shortSupplies();
+        uint256[] memory supplies = isLongToken ? _longSupplies : _shortSupplies;
+        supplies[strikeIndex] = supplies[strikeIndex].add(optionsOut);
+        cost = calcCumulativeCost(calcQuantities(_longSupplies, _shortSupplies)).sub(lastCost);
+
+        fee = optionsOut.mul(tradingFee);
+        fee = isPut ? fee.mul(strikePrices[strikeIndex]).div(SCALE_SCALE) : fee.div(SCALE);
+    }
+
+    /**
+     * Convenience method to calculate amount returned from a sell trade
+     *
+     * Sell fee is 0, but still return it in case it's set in the future
+     */
+    function calcSellAmountAndFee(
+        bool isLongToken,
+        uint256 strikeIndex,
+        uint256 optionsIn
+    ) external view returns (uint256 cost, uint256) {
+        uint256[] memory _longSupplies = longSupplies();
+        uint256[] memory _shortSupplies = shortSupplies();
+        uint256[] memory supplies = isLongToken ? _longSupplies : _shortSupplies;
+        supplies[strikeIndex] = supplies[strikeIndex].sub(optionsIn);
+        cost = lastCost.sub(calcCumulativeCost(calcQuantities(_longSupplies, _shortSupplies)));
+    }
+
+    /**
+     * Convenience method to calculate amount returned from redeeming options after settlement
+     *
+     * Settlement fee is 0, but still return it in case it's set in the future
+     */
+    function calcRedeemAmountAndFee(bool isLongToken, uint256 strikeIndex)
+        external
+        view
+        returns (uint256 cost, uint256)
+    {
+        uint256[] memory _longSupplies = longSupplies();
+        uint256[] memory _shortSupplies = shortSupplies();
+        uint256[] memory supplies = isLongToken ? _longSupplies : _shortSupplies;
+
+        OptionToken option = isLongToken ? longTokens[strikeIndex] : shortTokens[strikeIndex];
+        uint256 balance = option.balanceOf(msg.sender);
+
+        supplies[strikeIndex] = supplies[strikeIndex].sub(balance);
+        cost = lastPayoff.sub(calcCumulativePayoff(_longSupplies, _shortSupplies));
     }
 
     // emergency use only. to be removed in future versions
