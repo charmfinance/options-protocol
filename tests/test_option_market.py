@@ -278,135 +278,60 @@ def test_increase_b(
 
     # only owner
     with reverts("Ownable: caller is not the owner"):
-        market.increaseBAndBuy(
+        market.increaseB(
             100 * SCALE,
-            [0, 0, 0, 0],
-            [0, 0, 0, 0],
-            1000 * SCALE,
             {"from": alice, **valueDict},
         )
 
     # not enough balance
     if isEth:
         with reverts("UniERC20: not enough value"):
-            market.increaseBAndBuy(
+            market.increaseB(
                 100 * SCALE,
-                [0, 0, 0, 0],
-                [0, 0, 0, 0],
-                1000 * SCALE,
                 {"from": deployer, **valueDict},
             )
     else:
         with reverts("ERC20: transfer amount exceeds balance"):
-            market.increaseBAndBuy(
+            market.increaseB(
                 100 * SCALE,
-                [0, 0, 0, 0],
-                [0, 0, 0, 0],
-                1000 * SCALE,
                 {"from": deployer, **valueDict},
             )
 
-    with reverts("Lengths do not match"):
-        market.increaseBAndBuy(
-            10 * SCALE,
-            [0, 0, 0],
-            [0, 0, 0, 0],
-            1000 * SCALE,
-            {"from": deployer, **valueDict},
-        )
-    with reverts("Lengths do not match"):
-        market.increaseBAndBuy(
-            10 * SCALE,
-            [0, 0, 0, 0],
-            [0, 0, 0],
-            1000 * SCALE,
-            {"from": deployer, **valueDict},
-        )
-
     # can increase b
-    tx = market.increaseBAndBuy(
+    tx = market.increaseB(
         10 * SCALE,
-        [0, 1 * SCALE, 0, 0],
-        [0, 0, 0, 0],
-        1000 * SCALE,
         {"from": deployer, **valueDict},
     )
-    assert approx(tx.return_value) == SCALE * lmsr([0, 0, 1, 1, 1], 10)
+    assert approx(tx.return_value) == SCALE * lmsr([0, 0, 0, 0, 0], 10)
     assert approx(getBalance(deployer)) == 100 * SCALE - tx.return_value
-    assert tx.events["Trade"] == {
-        "account": deployer,
-        "isBuy": True,
-        "isLongToken": True,
-        "strikeIndex": 1,
-        "size": 1 * SCALE,
-        "cost": tx.events["Trade"]["cost"],
-        "newSupply": 1 * SCALE,
-    }
-    assert approx(tx.events["Trade"]["cost"]) == SCALE * (
-        lmsr([0, 0, 1, 1, 1], 10) - lmsr([0, 0, 0, 0, 0], 10)
-    )
-
+    assert approx(tx.return_value) == SCALE * lmsr([0, 0, 0, 0, 0], 10)
     assert tx.events["UpdatedB"] == {
         "b": 10 * SCALE,
-        "cost": tx.events["UpdatedB"]["cost"],
+        "cost": tx.return_value,
     }
-    assert approx(tx.events["UpdatedB"]["cost"]) == SCALE * lmsr([0, 0, 0, 0, 0], 10)
 
     # can't decrease b
     with reverts("New b must be higher"):
-        market.increaseBAndBuy(
+        market.increaseB(
             9 * SCALE,
-            [0, 0, 0, 0],
-            [0, 0, 0, 0],
-            1000 * SCALE,
             {"from": deployer, **valueDict},
         )
 
     # but can increase b
-    tx = market.increaseBAndBuy(
+    tx = market.increaseB(
         15 * SCALE,
-        [0, 0, 2 * SCALE, 0],
-        [2 * SCALE, 0, 0, 0],
-        1000 * SCALE,
         {"from": deployer, **valueDict},
     )
-    assert approx(tx.return_value) == SCALE * lmsr([2, 0, 1, 3, 3], 15) - SCALE * lmsr(
-        [0, 0, 1, 1, 1], 10
+    assert approx(tx.return_value) == SCALE * lmsr([0, 0, 0, 0, 0], 15) - SCALE * lmsr(
+        [0, 0, 0, 0, 0], 10
     )
-    assert tx.events["Trade"] == [
-        {
-            "account": deployer,
-            "isBuy": True,
-            "isLongToken": False,
-            "strikeIndex": 0,
-            "size": 2 * SCALE,
-            "cost": tx.events["Trade"][0]["cost"],
-            "newSupply": 2 * SCALE,
-        },
-        {
-            "account": deployer,
-            "isBuy": True,
-            "isLongToken": True,
-            "strikeIndex": 2,
-            "size": 2 * SCALE,
-            "cost": tx.events["Trade"][1]["cost"],
-            "newSupply": 2 * SCALE,
-        },
-    ]
-    assert approx(tx.events["Trade"][0]["cost"]) == SCALE * (
-        lmsr([2, 0, 1, 1, 1], 15) - lmsr([0, 0, 1, 1, 1], 15)
+    assert approx(tx.return_value) == SCALE * (
+        lmsr([0, 0, 0, 0, 0], 15) - lmsr([0, 0, 0, 0, 0], 10)
     )
-    assert approx(tx.events["Trade"][1]["cost"]) == SCALE * (
-        lmsr([2, 0, 1, 3, 3], 15) - lmsr([2, 0, 1, 1, 1], 15)
-    )
-
     assert tx.events["UpdatedB"] == {
         "b": 15 * SCALE,
-        "cost": tx.events["UpdatedB"]["cost"],
+        "cost": tx.return_value,
     }
-    assert approx(tx.events["UpdatedB"]["cost"]) == SCALE * (
-        lmsr([0, 0, 1, 1, 1], 15) - lmsr([0, 0, 1, 1, 1], 10)
-    )
 
     # can trade now
     market.buy(CALL, 3, SCALE, 100 * SCALE, {"from": alice, **valueDict})
@@ -414,21 +339,15 @@ def test_increase_b(
     # can't increase b beyond balance cap
     if balanceCap > 0:
         with reverts("Balance cap exceeded"):
-            market.increaseBAndBuy(
+            market.increaseB(
                 25 * SCALE,
-                [0, 0, 0, 0],
-                [0, 0, 0, 0],
-                1000 * SCALE,
                 {"from": deployer, **valueDict},
             )
 
     # no balance cap
     else:
-        market.increaseBAndBuy(
+        market.increaseB(
             25 * SCALE,
-            [0, 0, 0, 0],
-            [0, 0, 0, 0],
-            1000 * SCALE,
             {"from": deployer, **valueDict},
         )
 
@@ -477,102 +396,42 @@ def test_increase_b_puts(
 
     # not enough balance
     with reverts("ERC20: transfer amount exceeds balance"):
-        market.increaseBAndBuy(
+        market.increaseB(
             70000 * 1e6,
-            [0, 0, 0, 0],
-            [0, 0, 0, 0],
-            200000 * 1e6,
             {"from": deployer},
         )
 
     # can increase b
-    tx = market.increaseBAndBuy(
+    tx = market.increaseB(
         10 * 1e6,
-        [0, 0, 1 * 1e6, 0],
-        [0, 0, 0, 0],
-        100000 * 1e6,
         {"from": deployer},
     )
-    assert approx(tx.return_value) == lmsr([0, 0, 500, 500, 500], 10) * 1e6
+    assert approx(tx.return_value) == lmsr([0, 0, 0, 0, 0], 10) * 1e6
     assert approx(baseToken.balanceOf(deployer)) == 100000 * 1e6 - tx.return_value
-    assert tx.events["Trade"] == {
-        "account": deployer,
-        "isBuy": True,
-        "isLongToken": True,
-        "strikeIndex": 2,
-        "size": 1 * 1e6,
-        "cost": tx.events["Trade"]["cost"],
-        "newSupply": 1 * 1e6,
-    }
-    assert approx(tx.events["Trade"]["cost"]) == 1e6 * (
-        lmsr([0, 0, 500, 500, 500], 10) - lmsr([0, 0, 0, 0, 0], 10)
-    )
-
     assert tx.events["UpdatedB"] == {
         "b": 10 * 1e6,
-        "cost": tx.events["UpdatedB"]["cost"],
+        "cost": tx.return_value,
     }
-    assert approx(tx.events["UpdatedB"]["cost"]) == lmsr([0, 0, 0, 0, 0], 10) * 1e6
 
     # can't decrease b
     with reverts("New b must be higher"):
-        market.increaseBAndBuy(
+        market.increaseB(
             9 * 1e6,
-            [0, 0, 0, 0],
-            [0, 0, 0, 0],
-            100000 * 1e6,
             {"from": deployer},
         )
 
     # but can increase b
-    tx = market.increaseBAndBuy(
+    tx = market.increaseB(
         15 * 1e6,
-        [0, 2 * 1e6, 0, 0],
-        [0, 0, 0, 2 * 1e6],
-        100000 * 1e6,
         {"from": deployer},
     )
-    assert (
-        approx(tx.return_value)
-        == lmsr([2 * 600, 0, 500, 500 + 2 * 400, 500 + 2 * 400], 15) * 1e6
-        - lmsr([0, 0, 500, 500, 500], 10) * 1e6
+    assert approx(tx.return_value) == 1e6 * lmsr([0, 0, 0, 0, 0], 15) - 1e6 * lmsr(
+        [0, 0, 0, 0, 0], 10
     )
-    assert tx.events["Trade"] == [
-        {
-            "account": deployer,
-            "isBuy": True,
-            "isLongToken": True,
-            "strikeIndex": 1,
-            "size": 2 * 1e6,
-            "cost": tx.events["Trade"][0]["cost"],
-            "newSupply": 2 * 1e6,
-        },
-        {
-            "account": deployer,
-            "isBuy": True,
-            "isLongToken": False,
-            "strikeIndex": 3,
-            "size": 2 * 1e6,
-            "cost": tx.events["Trade"][1]["cost"],
-            "newSupply": 2 * 1e6,
-        },
-    ]
-    assert approx(tx.events["Trade"][0]["cost"]) == 1e6 * (
-        lmsr([0, 0, 500, 500 + 2 * 400, 500 + 2 * 400], 15)
-        - lmsr([0, 0, 500, 500, 500], 15)
-    )
-    assert approx(tx.events["Trade"][1]["cost"], rel=1e-3) == 1e6 * (
-        lmsr([2 * 600, 0, 500, 500 + 2 * 400, 500 + 2 * 400], 15)
-        - lmsr([0, 0, 500, 500 + 2 * 400, 500 + 2 * 400], 15)
-    )
-
     assert tx.events["UpdatedB"] == {
         "b": 15 * 1e6,
-        "cost": tx.events["UpdatedB"]["cost"],
+        "cost": tx.return_value,
     }
-    assert approx(tx.events["UpdatedB"]["cost"]) == 1e6 * (
-        lmsr([0, 0, 500, 500, 500], 15) - lmsr([0, 0, 500, 500, 500], 10)
-    )
 
     # can trade now
     market.buy(PUT, 1, 1e6, 10000 * 1e6, {"from": alice})
@@ -580,21 +439,15 @@ def test_increase_b_puts(
     # can't increase b beyond balance cap
     if balanceCap > 0:
         with reverts("Balance cap exceeded"):
-            market.increaseBAndBuy(
+            market.increaseB(
                 40000 * 1e6,
-                [0, 0, 0, 0],
-                [0, 0, 0, 0],
-                100000 * 1e6,
                 {"from": deployer},
             )
 
     # no balance cap
     else:
-        market.increaseBAndBuy(
+        market.increaseB(
             40000 * 1e6,
-            [0, 0, 0, 0],
-            [0, 0, 0, 0],
-            100000 * 1e6,
             {"from": deployer},
         )
 
@@ -647,12 +500,9 @@ def test_buy_and_sell_calls(
         baseToken.approve(market, 100 * SCALE, {"from": alice})
     valueDict = {"value": 50 * SCALE} if isEth else {}
 
-    # needs to call increaseBAndBuy
-    market.increaseBAndBuy(
+    # needs to call increaseB
+    market.increaseB(
         10 * SCALE,
-        [0, 0, 0, 0],
-        [0, 0, 0, 0],
-        1000 * SCALE,
         {"from": deployer, **valueDict},
     )
 
@@ -966,10 +816,8 @@ def test_buy_and_sell_puts(
     baseToken.mint(alice, 100000 * 1e6, {"from": deployer})
     baseToken.approve(market, 100000 * 1e6, {"from": alice})
 
-    # needs to call increaseBAndBuy
-    market.increaseBAndBuy(
-        1000 * 1e6, [0, 0, 0, 0], [0, 0, 0, 0], 100000 * 1e6, {"from": deployer}
-    )
+    # needs to call increaseB
+    market.increaseB(1000 * 1e6, {"from": deployer})
 
     # index out of range
     with reverts("Index too large"):
@@ -1170,12 +1018,9 @@ def test_redeem_calls(
         baseToken.approve(market, 100 * SCALE, {"from": bob})
     valueDict = {"value": 50 * SCALE} if isEth else {}
 
-    # needs to call increaseBAndBuy
-    market.increaseBAndBuy(
+    # needs to call increaseB
+    market.increaseB(
         10 * SCALE,
-        [0, 0, 0, 0],
-        [0, 0, 0, 0],
-        1000 * SCALE,
         {"from": deployer, **valueDict},
     )
 
@@ -1308,10 +1153,8 @@ def test_redeem_puts(a, OptionMarket, MockToken, MockOracle, OptionToken, fast_f
     baseToken.mint(bob, 10000 * 1e6, {"from": deployer})
     baseToken.approve(market, 10000 * 1e6, {"from": bob})
 
-    # needs to call increaseBAndBuy
-    market.increaseBAndBuy(
-        1000 * 1e6, [0, 0, 0, 0], [0, 0, 0, 0], 100000 * 1e6, {"from": deployer}
-    )
+    # needs to call increaseB
+    market.increaseB(1000 * 1e6, {"from": deployer})
 
     # buy 2 puts (strike=500)
     market.buy(PUT, 2, 2 * 1e6, 10000 * 1e6, {"from": alice})
@@ -1454,12 +1297,9 @@ def test_emergency_methods(
         baseToken.approve(market, 100 * SCALE, {"from": alice})
     valueDict = {"value": 50 * SCALE} if isEth else {}
 
-    # needs to call increaseBAndBuy
-    market.increaseBAndBuy(
+    # needs to call increaseB
+    market.increaseB(
         0.01 * SCALE,
-        [0, 0, 0, 0],
-        [0, 0, 0, 0],
-        1000 * SCALE,
         {"from": deployer, **valueDict},
     )
 
@@ -1561,11 +1401,8 @@ def test_set_balance_limit(
 
     # balance cap too low
     with reverts("Balance cap exceeded"):
-        market.increaseBAndBuy(
+        market.increaseB(
             10 * SCALE,
-            [0, 0, 0, 0],
-            [0, 0, 0, 0],
-            100000 * SCALE,
             {"from": deployer, **valueDict},
         )
 
@@ -1578,10 +1415,7 @@ def test_set_balance_limit(
     assert market.balanceCap() == balanceCap
 
     # now works
-    market.increaseBAndBuy(
+    market.increaseB(
         10 * SCALE,
-        [0, 0, 0, 0],
-        [0, 0, 0, 0],
-        100000 * SCALE,
         {"from": deployer, **valueDict},
     )

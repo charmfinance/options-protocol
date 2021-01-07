@@ -61,6 +61,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     uint256 public expiryPrice;
 
     // cache currentCumulativeCost and currentCumulativePayoff between trades/redeems to save gas
+    // initial cost is 0, and initial payoff is set in settle()
     uint256 public lastCost;
     uint256 public lastPayoff;
 
@@ -159,7 +160,6 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         uint256 balanceAfter = baseToken.uniBalanceOf(address(this));
         require(baseToken.isETH() || balanceAfter.sub(balanceBefore) == amountIn, "Deflationary tokens not supported");
         require(balanceCap == 0 || baseToken.uniBalanceOf(address(this)) <= balanceCap, "Balance cap exceeded");
-
         emit Trade(msg.sender, true, isLongToken, strikeIndex, optionsOut, amountIn, option.totalSupply());
     }
 
@@ -207,6 +207,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         expiryPrice = oracle.getPrice();
         require(expiryPrice > 0, "Price from oracle must be > 0");
 
+        // set initial cached value of currentCumulativePayoff()
         lastPayoff = currentCumulativePayoff();
         emit Settled(expiryPrice);
     }
@@ -221,6 +222,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         require(!isPaused, "This method has been paused");
         require(strikeIndex < numStrikes, "Index too large");
 
+        // get sender's options balance
         OptionToken option = isLongToken ? longTokens[strikeIndex] : shortTokens[strikeIndex];
         uint256 balance = option.balanceOf(msg.sender);
         require(balance > 0, "Balance must be > 0");
@@ -326,8 +328,6 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
      * where
      *
      *   m = max(q_1, ..., q_n)
-     *
-     * Answer is multiplied by strike price for puts
      */
     function calcCumulativeCost(uint256[] memory quantities) public view returns (uint256) {
         require(quantities.length == numStrikes + 1, "Lengths do not match");
@@ -395,69 +395,27 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     }
 
     /**
-     * Called by owner to increase the LMSR parameter b by depositing base tokens.
-     * They can simultaneously buy options to keep prices in line
+     * Called by owner to increase the LMSR parameter `b` by depositing base tokens.
      *
-     * Note that b uses same decimals as baseToken
+     * `b` uses same decimals as baseToken
      */
-    function increaseBAndBuy(
-        uint256 _b,
-        uint256[] memory longOptionsOut,
-        uint256[] memory shortOptionsOut,
-        uint256 maxAmountIn
-    ) external payable onlyOwner nonReentrant returns (uint256 totalAmountIn) {
+    function increaseB(uint256 _b) external payable onlyOwner nonReentrant returns (uint256 amountIn) {
         require(_b > b, "New b must be higher");
-        require(longOptionsOut.length == numStrikes, "Lengths do not match");
-        require(shortOptionsOut.length == numStrikes, "Lengths do not match");
 
+        // increase b and calculate amount to be paid by owner
         uint256 costBefore = lastCost;
         b = _b;
         lastCost = currentCumulativeCost();
-        emit UpdatedB(b, lastCost.sub(costBefore));
+        amountIn = lastCost.sub(costBefore);
+        require(amountIn > 0, "Amount in must be > 0");
 
-        for (uint256 i = 0; i < numStrikes; i++) {
-            if (longOptionsOut[i] > 0) {
-                uint256 _costBefore = lastCost;
-                longTokens[i].mint(msg.sender, longOptionsOut[i]);
-                lastCost = currentCumulativeCost();
-                emit Trade(
-                    msg.sender,
-                    true,
-                    true,
-                    i,
-                    longOptionsOut[i],
-                    lastCost.sub(_costBefore),
-                    longTokens[i].totalSupply()
-                );
-            }
-            if (shortOptionsOut[i] > 0) {
-                uint256 _costBefore = lastCost;
-                shortTokens[i].mint(msg.sender, shortOptionsOut[i]);
-                lastCost = currentCumulativeCost();
-                emit Trade(
-                    msg.sender,
-                    true,
-                    false,
-                    i,
-                    shortOptionsOut[i],
-                    lastCost.sub(_costBefore),
-                    shortTokens[i].totalSupply()
-                );
-            }
-        }
-        totalAmountIn = lastCost.sub(costBefore);
-        require(totalAmountIn > 0, "Amount in must be > 0");
-        require(totalAmountIn <= maxAmountIn, "Max slippage exceeded");
-
+        // transfer amount from owner
         uint256 balanceBefore = baseToken.uniBalanceOf(address(this));
-        baseToken.uniTransferFromSenderToThis(totalAmountIn);
+        baseToken.uniTransferFromSenderToThis(amountIn);
         uint256 balanceAfter = baseToken.uniBalanceOf(address(this));
-        require(
-            baseToken.isETH() || balanceAfter.sub(balanceBefore) == totalAmountIn,
-            "Deflationary tokens not supported"
-        );
-
+        require(baseToken.isETH() || balanceAfter.sub(balanceBefore) == amountIn, "Deflationary tokens not supported");
         require(balanceCap == 0 || baseToken.uniBalanceOf(address(this)) <= balanceCap, "Balance cap exceeded");
+        emit UpdatedB(b, lastCost.sub(costBefore));
     }
 
     /**
