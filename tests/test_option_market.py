@@ -1310,11 +1310,17 @@ def test_emergency_methods(
 
     with reverts("This method has been paused"):
         market.buy(CALL, 0, 1 * PERCENT, 100 * SCALE, {"from": alice, **valueDict})
+    with reverts("This method has been paused"):
+        market.sell(CALL, 0, 1 * PERCENT, 0, {"from": alice})
+
+    # can call paused methods from deployer
+    market.buy(COVER, 0, 2 * PERCENT, 100 * SCALE, {"from": deployer, **valueDict})
+    market.sell(COVER, 0, 1 * PERCENT, 0, {"from": deployer})
 
     with reverts("Ownable: caller is not the owner"):
         market.unpause({"from": alice})
     market.unpause({"from": deployer})
-    market.buy(CALL, 0, 1 * PERCENT, 100 * SCALE, {"from": alice, **valueDict})
+    market.buy(COVER, 0, 1 * PERCENT, 100 * SCALE, {"from": alice, **valueDict})
 
     # change oracle and expiry
     with reverts("Ownable: caller is not the owner"):
@@ -1345,6 +1351,16 @@ def test_emergency_methods(
     fast_forward(2000000000 + 2400)
     with reverts("Not dispute period"):
         market.disputeExpiryPrice(777 * SCALE, {"from": deployer})
+
+    market.pause({"from": deployer})
+    with reverts("This method has been paused"):
+        market.redeem(CALL, 0, {"from": alice})
+
+    # can call paused methods from deployer
+    market.redeem(COVER, 0, {"from": deployer})
+
+    market.unpause({"from": deployer})
+    market.redeem(COVER, 0, {"from": alice})
 
     # change owner
     with reverts("Ownable: caller is not the owner"):

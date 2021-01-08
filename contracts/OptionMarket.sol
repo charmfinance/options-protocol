@@ -134,7 +134,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     ) external payable nonReentrant returns (uint256 amountIn) {
         require(b > 0, "Cannot be called before b is set");
         require(!isExpired(), "Already expired");
-        require(!isPaused, "This method has been paused");
+        require(msg.sender == owner() || !isPaused, "This method has been paused");
         require(strikeIndex < numStrikes, "Index too large");
         require(optionsOut > 0, "optionsOut must be > 0");
 
@@ -174,7 +174,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     ) external nonReentrant returns (uint256 amountOut) {
         require(b > 0, "Cannot be called before b is set");
         require(!isExpired(), "Already expired");
-        require(!isPaused, "This method has been paused");
+        require(msg.sender == owner() || !isPaused, "This method has been paused");
         require(strikeIndex < numStrikes, "Index too large");
         require(optionsIn > 0, "optionsIn must be > 0");
 
@@ -219,7 +219,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         require(isExpired(), "Cannot be called before expiry");
         require(isSettled, "Cannot be called before settlement");
         require(!isDisputePeriod(), "Cannot be called during dispute period");
-        require(!isPaused, "This method has been paused");
+        require(msg.sender == owner() || !isPaused, "This method has been paused");
         require(strikeIndex < numStrikes, "Index too large");
 
         // get sender's options balance
