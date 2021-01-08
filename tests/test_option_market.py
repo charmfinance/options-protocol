@@ -1046,6 +1046,9 @@ def test_redeem_calls(
     cost = SCALE * lmsr([3, 5, 2, 2, 3], 10)
     assert approx(market.currentCumulativeCost()) == cost
 
+    with reverts("Cannot be called during dispute period"):
+        market.collectFees({"from": deployer})
+
     fast_forward(2000000000 + 3600)
 
     alicePayoff = 2 * (444 - 300)
@@ -1347,6 +1350,8 @@ def test_emergency_methods(
     market.settle({"from": alice})
     market.disputeExpiryPrice(666 * SCALE, {"from": deployer})
     assert market.expiryPrice() == 666 * SCALE
+    assert market.isSettled()
+    assert market.lastPayoff() == market.currentCumulativePayoff()
 
     fast_forward(2000000000 + 2400)
     with reverts("Not dispute period"):

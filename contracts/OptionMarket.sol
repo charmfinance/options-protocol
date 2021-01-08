@@ -423,6 +423,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
      */
     function collectFees() external onlyOwner nonReentrant returns (uint256 amount) {
         require(isSettled, "Cannot be called before settlement");
+        require(!isDisputePeriod(), "Cannot be called during dispute period");
         amount = calcFeesAccrued();
         if (amount > 0) {
             baseToken.uniTransfer(msg.sender, amount);
@@ -518,6 +519,12 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     function disputeExpiryPrice(uint256 _expiryPrice) external onlyOwner {
         require(isDisputePeriod(), "Not dispute period");
         require(isSettled, "Cannot be called before settlement");
+
         expiryPrice = _expiryPrice;
+        require(expiryPrice > 0, "Price from oracle must be > 0");
+
+        // set initial cached value of currentCumulativePayoff()
+        lastPayoff = currentCumulativePayoff();
+        emit Settled(expiryPrice);
     }
 }
