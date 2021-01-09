@@ -257,24 +257,22 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     }
 
     function currentCumulativeCost() public view returns (uint256) {
-        return calcCumulativeCost(calcQuantities(getLongSupplies(), getShortSupplies()));
+        (uint256[] memory longSupplies, uint256[] memory shortSupplies) = getTotalSupplies();
+        return calcCumulativeCost(calcQuantities(longSupplies, shortSupplies));
     }
 
     function currentCumulativePayoff() public view returns (uint256) {
-        return calcCumulativePayoff(getLongSupplies(), getShortSupplies());
+        (uint256[] memory longSupplies, uint256[] memory shortSupplies) = getTotalSupplies();
+        return calcCumulativePayoff(longSupplies, shortSupplies);
     }
 
-    function getLongSupplies() public view returns (uint256[] memory totalSupplies) {
-        totalSupplies = new uint256[](numStrikes);
-        for (uint256 i = 0; i < numStrikes; i++) {
-            totalSupplies[i] = longTokens[i].totalSupply();
-        }
-    }
-
-    function getShortSupplies() public view returns (uint256[] memory totalSupplies) {
-        totalSupplies = new uint256[](numStrikes);
-        for (uint256 i = 0; i < numStrikes; i++) {
-            totalSupplies[i] = shortTokens[i].totalSupply();
+    function getTotalSupplies() public view returns (uint256[] memory longSupplies, uint256[] memory shortSupplies) {
+        uint256 _numStrikes = numStrikes; // save gas
+        longSupplies = new uint256[](_numStrikes);
+        shortSupplies = new uint256[](_numStrikes);
+        for (uint256 i = 0; i < _numStrikes; i++) {
+            longSupplies[i] = longTokens[i].totalSupply();
+            shortSupplies[i] = shortTokens[i].totalSupply();
         }
     }
 
@@ -283,28 +281,34 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         view
         returns (uint256[] memory quantities)
     {
-        // initally set runningSum to total supply of shortSupplies
-        uint256 runningSum;
-        for (uint256 i = 0; i < numStrikes; i++) {
-            if (isPut) {
-                runningSum = runningSum.add(longSupplies[i].mul(strikePrices[i]).div(SCALE));
-            } else {
-                runningSum = runningSum.add(shortSupplies[i]);
+        uint256 _numStrikes = numStrikes; // save gas
+        require(longSupplies.length == _numStrikes, "Lengths do not match");
+        require(shortSupplies.length == _numStrikes, "Lengths do not match");
+
+        // this mutates the method arguments, but is more gas efficient
+        if (isPut) {
+            for (uint256 i = 0; i < _numStrikes; i++) {
+                uint256 _strikePrice = strikePrices[i];
+                longSupplies[i] = longSupplies[i].mul(_strikePrice).div(SCALE);
+                shortSupplies[i] = shortSupplies[i].mul(_strikePrice).div(SCALE);
             }
         }
 
-        quantities = new uint256[](numStrikes + 1);
+        uint256[] memory leftSupplies = isPut ? shortSupplies : longSupplies;
+        uint256[] memory rightSupplies = isPut ? longSupplies : shortSupplies;
+
+        // initally set runningSum to total supply of shortSupplies
+        uint256 runningSum;
+        for (uint256 i = 0; i < _numStrikes; i++) {
+            runningSum = runningSum.add(rightSupplies[i]);
+        }
+
+        quantities = new uint256[](_numStrikes + 1);
         quantities[0] = runningSum;
 
         // set quantities[i] to be total supply of longSupplies[:i] and shortSupplies[i:]
-        for (uint256 i = 0; i < numStrikes; i++) {
-            if (isPut) {
-                runningSum = runningSum.add(shortSupplies[i].mul(strikePrices[i]).div(SCALE));
-                runningSum = runningSum.sub(longSupplies[i].mul(strikePrices[i]).div(SCALE));
-            } else {
-                runningSum = runningSum.add(longSupplies[i]);
-                runningSum = runningSum.sub(shortSupplies[i]);
-            }
+        for (uint256 i = 0; i < _numStrikes; i++) {
+            runningSum = runningSum.add(leftSupplies[i]).sub(rightSupplies[i]);
             quantities[i + 1] = runningSum;
         }
         return quantities;
@@ -332,7 +336,8 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     function calcCumulativeCost(uint256[] memory quantities) public view returns (uint256) {
         require(quantities.length == numStrikes + 1, "Lengths do not match");
 
-        if (b == 0) {
+        uint256 _b = b; // save gas
+        if (_b == 0) {
             return 0;
         }
 
@@ -347,7 +352,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
             uint256 diff = maxQuantity.sub(quantities[i]);
 
             // (max(q) - q_i) / b
-            int128 div = ABDKMath64x64.divu(diff, b);
+            int128 div = ABDKMath64x64.divu(diff, _b);
 
             // exp((q_i - max(q)) / b)
             int128 exp = ABDKMath64x64.exp(ABDKMath64x64.neg(div));
@@ -358,7 +363,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         int128 log = ABDKMath64x64.ln(sumExp);
 
         // b * log(sumExp) + max(q)
-        return ABDKMath64x64.mulu(log, b).add(maxQuantity);
+        return ABDKMath64x64.mulu(log, _b).add(maxQuantity);
     }
 
     /**
@@ -369,29 +374,32 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         view
         returns (uint256 payoff)
     {
-        require(longSupplies.length == numStrikes, "Lengths do not match");
-        require(shortSupplies.length == numStrikes, "Lengths do not match");
+        uint256 _numStrikes = numStrikes; // save gas
+        uint256 _expiryPrice = expiryPrice; // save gas
 
-        if (expiryPrice == 0) {
+        require(longSupplies.length == _numStrikes, "Lengths do not match");
+        require(shortSupplies.length == _numStrikes, "Lengths do not match");
+
+        if (_expiryPrice == 0) {
             return 0;
         }
 
-        for (uint256 i = 0; i < numStrikes; i++) {
+        for (uint256 i = 0; i < _numStrikes; i++) {
             uint256 strikePrice = strikePrices[i];
 
-            if (isPut && expiryPrice < strikePrice) {
+            if (isPut && _expiryPrice < strikePrice) {
                 // put payoff = max(K - S, 0)
-                payoff = payoff.add(longSupplies[i].mul(strikePrice.sub(expiryPrice)));
-            } else if (!isPut && expiryPrice > strikePrice) {
+                payoff = payoff.add(longSupplies[i].mul(strikePrice.sub(_expiryPrice)));
+            } else if (!isPut && _expiryPrice > strikePrice) {
                 // call payoff = max(S - K, 0)
-                payoff = payoff.add(longSupplies[i].mul(expiryPrice.sub(strikePrice)));
+                payoff = payoff.add(longSupplies[i].mul(_expiryPrice.sub(strikePrice)));
             }
 
             // short payoff = min(S, K)
-            payoff = payoff.add(shortSupplies[i].mul(Math.min(expiryPrice, strikePrice)));
+            payoff = payoff.add(shortSupplies[i].mul(Math.min(_expiryPrice, strikePrice)));
         }
 
-        payoff = payoff.div(isPut ? SCALE : expiryPrice);
+        payoff = payoff.div(isPut ? SCALE : _expiryPrice);
     }
 
     /**
@@ -442,8 +450,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         uint256 strikeIndex,
         uint256 optionsOut
     ) public view returns (uint256 cost, uint256 fee) {
-        uint256[] memory longSupplies = getLongSupplies();
-        uint256[] memory shortSupplies = getShortSupplies();
+        (uint256[] memory longSupplies, uint256[] memory shortSupplies) = getTotalSupplies();
         uint256[] memory supplies = isLongToken ? longSupplies : shortSupplies;
         supplies[strikeIndex] = supplies[strikeIndex].add(optionsOut);
         cost = calcCumulativeCost(calcQuantities(longSupplies, shortSupplies)).sub(lastCost);
@@ -462,8 +469,7 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         uint256 strikeIndex,
         uint256 optionsIn
     ) external view returns (uint256 cost, uint256) {
-        uint256[] memory longSupplies = getLongSupplies();
-        uint256[] memory shortSupplies = getShortSupplies();
+        (uint256[] memory longSupplies, uint256[] memory shortSupplies) = getTotalSupplies();
         uint256[] memory supplies = isLongToken ? longSupplies : shortSupplies;
         supplies[strikeIndex] = supplies[strikeIndex].sub(optionsIn);
         cost = lastCost.sub(calcCumulativeCost(calcQuantities(longSupplies, shortSupplies)));
@@ -479,10 +485,8 @@ contract OptionMarket is ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
         view
         returns (uint256 cost, uint256)
     {
-        uint256[] memory longSupplies = getLongSupplies();
-        uint256[] memory shortSupplies = getShortSupplies();
+        (uint256[] memory longSupplies, uint256[] memory shortSupplies) = getTotalSupplies();
         uint256[] memory supplies = isLongToken ? longSupplies : shortSupplies;
-
         OptionToken option = isLongToken ? longTokens[strikeIndex] : shortTokens[strikeIndex];
         uint256 balance = option.balanceOf(msg.sender);
 
