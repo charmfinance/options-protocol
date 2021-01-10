@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: BSD-4-Clause
 /*
- * ABDK Math 64.64 Smart Contract Library.  Copyright © 2019 by ABDK Consulting.
+ * ABDK Math 64.64 Smart Contract Library.  Copyright (c) 2019 by ABDK Consulting.
  * Author: Mikhail Vladimirov <mikhail.vladimirov@gmail.com>
  */
 pragma solidity ^0.5.0 || ^0.6.0 || ^0.7.0;
