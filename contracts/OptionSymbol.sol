@@ -35,7 +35,7 @@ contract OptionSymbol {
         return
             string(
                 abi.encodePacked(
-                    "LP",
+                    "LP ",
                     underlying,
                     " ",
                     _uintTo2Chars(day),
