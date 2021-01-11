@@ -63,12 +63,10 @@ def test_initialize(
     assert market.baseToken() == baseToken
     assert market.oracle() == oracle
     assert market.expiryTime() == 2000000000
-    assert market.b() == 0
     assert market.isPut() == isPut
     assert market.tradingFee() == tradingFee
     assert market.balanceCap() == balanceCap
     assert market.disputePeriod() == disputePeriod
-    assert market.numStrikes() == 4
 
     # check token arrays
     for i in range(4):
@@ -225,8 +223,9 @@ def test_initialize_errors(
 
 
 @pytest.mark.parametrize("isEth", [False, True])
-@pytest.mark.parametrize("balanceCap", [0, 40 * SCALE])
-def test_increase_b(
+@pytest.mark.parametrize("balanceCap", [0, 40])
+@pytest.mark.parametrize("baseDecimals", [6, 18])
+def test_calls(
     a,
     OptionMarket,
     MockToken,
@@ -235,14 +234,24 @@ def test_increase_b(
     fast_forward,
     isEth,
     balanceCap,
+    baseDecimals,
 ):
 
     # setup args
-    deployer, alice = a[:2]
-    baseToken = ZERO_ADDRESS if isEth else deployer.deploy(MockToken)
+    deployer, alice, bob = a[:3]
     oracle = deployer.deploy(MockOracle)
+    oracle.setPrice(555 * SCALE)
     longTokens = [deployer.deploy(OptionToken) for _ in range(4)]
     shortTokens = [deployer.deploy(OptionToken) for _ in range(4)]
+
+    if isEth:
+        scale = 1e18
+        baseToken = ZERO_ADDRESS
+    else:
+        scale = 10 ** baseDecimals
+        baseToken = deployer.deploy(MockToken)
+        baseToken.setDecimals(baseDecimals)
+    percent = scale // 100
 
     def getBalance(wallet):
         return wallet.balance() if isEth else baseToken.balanceOf(wallet)
@@ -258,540 +267,372 @@ def test_increase_b(
         2000000000,  # expiry = 18 May 2033
         False,  # call
         1 * PERCENT,  # trading fee = 1%
-        balanceCap,
+        balanceCap * scale,
         3600,  # dispute period = 1 hour
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
 
-    # give deployer and user base tokens
+    # give users base tokens
     if not isEth:
-        baseToken.mint(deployer, 100 * SCALE, {"from": deployer})
-        baseToken.approve(market, 100 * SCALE, {"from": deployer})
-        baseToken.mint(alice, 100 * SCALE, {"from": deployer})
-        baseToken.approve(market, 100 * SCALE, {"from": alice})
-    valueDict = {"value": 50 * SCALE} if isEth else {}
+        for user in [deployer, alice, bob]:
+            baseToken.mint(user, 100 * scale, {"from": deployer})
+            baseToken.approve(market, 100 * scale, {"from": user})
+    valueDict = {"value": 50 * scale} if isEth else {}
 
     # can't trade before setting b
-    with reverts("Cannot be called before b is set"):
-        market.buy(CALL, 4, SCALE, 100 * SCALE, {"from": alice, **valueDict})
+    with reverts("No liquidity"):
+        market.buy(CALL, 4, scale, 100 * scale, {"from": alice, **valueDict})
 
-    # only owner
-    with reverts("Ownable: caller is not the owner"):
-        market.increaseB(
-            100 * SCALE,
+    # not enough balance to deposit
+    if isEth:
+        with reverts("UniERC20: not enough value"):
+            market.deposit(
+                100 * scale,
+                1000 * scale,
+                {"from": alice, **valueDict},
+            )
+    else:
+        with reverts("ERC20: transfer amount exceeds balance"):
+            market.deposit(
+                100 * scale,
+                1000 * scale,
+                {"from": alice, **valueDict},
+            )
+
+    # try to deposit
+    with reverts("Max slippage exceeded"):
+        market.deposit(
+            10 * scale,
+            12 * scale,
             {"from": alice, **valueDict},
         )
 
-    # not enough balance
-    if isEth:
-        with reverts("UniERC20: not enough value"):
-            market.increaseB(
-                100 * SCALE,
-                {"from": deployer, **valueDict},
-            )
-    else:
-        with reverts("ERC20: transfer amount exceeds balance"):
-            market.increaseB(
-                100 * SCALE,
-                {"from": deployer, **valueDict},
-            )
-
-    # can increase b
-    tx = market.increaseB(
-        10 * SCALE,
-        {"from": deployer, **valueDict},
+    # alice deposits
+    tx = market.deposit(
+        10 * scale,
+        100 * scale,
+        {"from": alice, **valueDict},
     )
-    assert approx(tx.return_value) == SCALE * lmsr([0, 0, 0, 0, 0], 10)
-    assert approx(getBalance(deployer)) == 100 * SCALE - tx.return_value
-    assert approx(tx.return_value) == SCALE * lmsr([0, 0, 0, 0, 0], 10)
-    assert tx.events["UpdatedB"] == {
-        "b": 10 * SCALE,
-        "cost": tx.return_value,
+    cost = scale * lmsr([0, 0, 0, 0, 0], 10)
+    assert approx(tx.return_value) == cost
+    assert approx(getBalance(alice)) == 100 * scale - tx.return_value
+    assert approx(getBalance(market)) == cost
+    assert tx.events["Deposit"] == {
+        "account": alice,
+        "sharesOut": 10 * scale,
+        "amountIn": tx.return_value,
+        "newB": 10 * scale,
     }
-
-    # can't decrease b
-    with reverts("New b must be higher"):
-        market.increaseB(
-            9 * SCALE,
-            {"from": deployer, **valueDict},
-        )
-
-    # but can increase b
-    tx = market.increaseB(
-        15 * SCALE,
-        {"from": deployer, **valueDict},
-    )
-    assert approx(tx.return_value) == SCALE * lmsr([0, 0, 0, 0, 0], 15) - SCALE * lmsr(
-        [0, 0, 0, 0, 0], 10
-    )
-    assert approx(tx.return_value) == SCALE * (
-        lmsr([0, 0, 0, 0, 0], 15) - lmsr([0, 0, 0, 0, 0], 10)
-    )
-    assert tx.events["UpdatedB"] == {
-        "b": 15 * SCALE,
-        "cost": tx.return_value,
-    }
-
-    # can trade now
-    market.buy(CALL, 3, SCALE, 100 * SCALE, {"from": alice, **valueDict})
-
-    # can't increase b beyond balance cap
-    if balanceCap > 0:
-        with reverts("Balance cap exceeded"):
-            market.increaseB(
-                25 * SCALE,
-                {"from": deployer, **valueDict},
-            )
-
-    # no balance cap
-    else:
-        market.increaseB(
-            25 * SCALE,
-            {"from": deployer, **valueDict},
-        )
-
-
-@pytest.mark.parametrize("balanceCap", [0, 5000 * 1e6])
-def test_increase_b_puts(
-    a,
-    OptionMarket,
-    MockToken,
-    MockOracle,
-    OptionToken,
-    fast_forward,
-    balanceCap,
-):
-
-    # setup args
-    deployer, alice = a[:2]
-    baseToken = deployer.deploy(MockToken)
-    baseToken.setDecimals(6)
-    oracle = deployer.deploy(MockOracle)
-    longTokens = [deployer.deploy(OptionToken) for _ in range(4)]
-    shortTokens = [deployer.deploy(OptionToken) for _ in range(4)]
-
-    # deploy and initialize
-    market = deployer.deploy(OptionMarket)
-    market.initialize(
-        baseToken,
-        oracle,
-        longTokens,
-        shortTokens,
-        [300 * SCALE, 400 * SCALE, 500 * SCALE, 600 * SCALE],
-        2000000000,  # expiry = 18 May 2033
-        True,  # put
-        1 * PERCENT,  # trading fee = 1%
-        balanceCap,
-        3600,  # dispute period = 1 hour
-    )
-    for token in longTokens + shortTokens:
-        token.initialize(market, "name", "symbol", 18)
-
-    # give deployer and user base tokens
-    baseToken.mint(deployer, 100000 * 1e6, {"from": deployer})
-    baseToken.approve(market, 100000 * 1e6, {"from": deployer})
-    baseToken.mint(alice, 100000 * 1e6, {"from": deployer})
-    baseToken.approve(market, 100000 * 1e6, {"from": alice})
-
-    # not enough balance
-    with reverts("ERC20: transfer amount exceeds balance"):
-        market.increaseB(
-            70000 * 1e6,
-            {"from": deployer},
-        )
-
-    # can increase b
-    tx = market.increaseB(
-        10 * 1e6,
-        {"from": deployer},
-    )
-    assert approx(tx.return_value) == lmsr([0, 0, 0, 0, 0], 10) * 1e6
-    assert approx(baseToken.balanceOf(deployer)) == 100000 * 1e6 - tx.return_value
-    assert tx.events["UpdatedB"] == {
-        "b": 10 * 1e6,
-        "cost": tx.return_value,
-    }
-
-    # can't decrease b
-    with reverts("New b must be higher"):
-        market.increaseB(
-            9 * 1e6,
-            {"from": deployer},
-        )
-
-    # but can increase b
-    tx = market.increaseB(
-        15 * 1e6,
-        {"from": deployer},
-    )
-    assert approx(tx.return_value) == 1e6 * lmsr([0, 0, 0, 0, 0], 15) - 1e6 * lmsr(
-        [0, 0, 0, 0, 0], 10
-    )
-    assert tx.events["UpdatedB"] == {
-        "b": 15 * 1e6,
-        "cost": tx.return_value,
-    }
-
-    # can trade now
-    market.buy(PUT, 1, 1e6, 10000 * 1e6, {"from": alice})
-
-    # can't increase b beyond balance cap
-    if balanceCap > 0:
-        with reverts("Balance cap exceeded"):
-            market.increaseB(
-                40000 * 1e6,
-                {"from": deployer},
-            )
-
-    # no balance cap
-    else:
-        market.increaseB(
-            40000 * 1e6,
-            {"from": deployer},
-        )
-
-
-@pytest.mark.parametrize("isEth", [False, True])
-@pytest.mark.parametrize("balanceCap", [0, 40 * SCALE])
-def test_buy_and_sell_calls(
-    a,
-    OptionMarket,
-    MockToken,
-    MockOracle,
-    OptionToken,
-    fast_forward,
-    isEth,
-    balanceCap,
-):
-
-    # setup args
-    deployer, alice = a[:2]
-    baseToken = ZERO_ADDRESS if isEth else deployer.deploy(MockToken)
-    oracle = deployer.deploy(MockOracle)
-    longTokens = [deployer.deploy(OptionToken) for _ in range(4)]
-    shortTokens = [deployer.deploy(OptionToken) for _ in range(4)]
-
-    def getBalance(wallet):
-        return wallet.balance() if isEth else baseToken.balanceOf(wallet)
-
-    # deploy and initialize
-    market = deployer.deploy(OptionMarket)
-    market.initialize(
-        baseToken,
-        oracle,
-        longTokens,
-        shortTokens,
-        [300 * SCALE, 400 * SCALE, 500 * SCALE, 600 * SCALE],
-        2000000000,  # expiry = 18 May 2033
-        False,  # call
-        1 * PERCENT,  # trading fee = 1%
-        balanceCap,
-        3600,  # dispute period = 1 hour
-    )
-    for token in longTokens + shortTokens:
-        token.initialize(market, "name", "symbol", 18)
-
-    # give users base tokens
-    if not isEth:
-        baseToken.mint(deployer, 100 * SCALE, {"from": deployer})
-        baseToken.approve(market, 100 * SCALE, {"from": deployer})
-        baseToken.mint(alice, 100 * SCALE, {"from": deployer})
-        baseToken.approve(market, 100 * SCALE, {"from": alice})
-    valueDict = {"value": 50 * SCALE} if isEth else {}
-
-    # needs to call increaseB
-    market.increaseB(
-        10 * SCALE,
-        {"from": deployer, **valueDict},
-    )
 
     # index out of range
     with reverts("Index too large"):
-        market.buy(CALL, 4, SCALE, 100 * SCALE, {"from": alice, **valueDict})
+        market.buy(CALL, 4, scale, 100 * scale, {"from": alice, **valueDict})
     with reverts("Index too large"):
-        market.buy(COVER, 4, SCALE, 100 * SCALE, {"from": alice, **valueDict})
+        market.buy(COVER, 4, scale, 100 * scale, {"from": alice, **valueDict})
 
     # can't buy too much
     if isEth:
         with reverts("UniERC20: not enough value"):
-            market.buy(CALL, 0, 120 * SCALE, 10000 * SCALE, {"from": alice})
+            market.buy(CALL, 0, 120 * scale, 10000 * scale, {"from": alice})
     else:
         with reverts("ERC20: transfer amount exceeds balance"):
-            tx = market.buy(CALL, 0, 120 * SCALE, 10000 * SCALE, {"from": alice})
+            tx = market.buy(CALL, 0, 120 * scale, 10000 * scale, {"from": alice})
 
-    initial = SCALE * lmsr([0, 0, 0, 0, 0], 10)
+    # try to buy
+    with reverts("Max slippage exceeded"):
+        market.buy(CALL, 0, 2 * scale, 1.6 * scale, {"from": alice, **valueDict})
 
     # buy 2 calls
-    cost = SCALE * lmsr([0, 2, 2, 2, 2], 10)
-    assert approx(market.calcBuyAmountAndFee(CALL, 0, 2 * SCALE)) == (
-        cost - initial,
-        2 * PERCENT,
-    )
-
-    cost = SCALE * lmsr([0, 2, 2, 2, 2], 10) + 2 * PERCENT
-    tx = market.buy(CALL, 0, 2 * SCALE, 100 * SCALE, {"from": alice, **valueDict})
-    assert approx(tx.return_value) == cost - initial
-    assert approx(getBalance(alice)) == 100 * SCALE - cost + initial
-    assert longTokens[0].balanceOf(alice) == 2 * SCALE
-    assert tx.events["Trade"] == {
+    balance = getBalance(alice)
+    tx = market.buy(CALL, 0, 2 * scale, 100 * scale, {"from": alice, **valueDict})
+    cost1 = scale * lmsr([0, 0, 0, 0, 0], 10)
+    cost2 = scale * lmsr([0, 2, 2, 2, 2], 10) + 2 * percent
+    assert approx(tx.return_value) == cost2 - cost1
+    assert approx(balance - getBalance(alice)) == cost2 - cost1
+    assert approx(getBalance(market)) == cost2
+    assert longTokens[0].balanceOf(alice) == 2 * scale
+    assert tx.events["Buy"] == {
         "account": alice,
-        "isBuy": True,
         "isLongToken": True,
         "strikeIndex": 0,
-        "size": 2 * SCALE,
-        "cost": tx.return_value,
-        "newSupply": 2 * SCALE,
+        "optionsOut": 2 * scale,
+        "amountIn": tx.return_value,
+        "newSupply": 2 * scale,
     }
 
-    # buy 3 calls
-    cost1 = SCALE * lmsr([0, 2, 2, 2, 2], 10)
-    cost2 = SCALE * lmsr([0, 2, 2, 5, 5], 10)
-    assert approx(market.calcBuyAmountAndFee(CALL, 2, 3 * SCALE)) == (
-        cost2 - cost1,
-        3 * PERCENT,
+    # bob deposits
+    balance = getBalance(bob)
+    tx = market.deposit(
+        5 * scale,
+        100 * scale,
+        {"from": bob, **valueDict},
     )
-
-    cost1 = SCALE * lmsr([0, 2, 2, 2, 2], 10) + 2 * PERCENT
-    cost2 = SCALE * lmsr([0, 2, 2, 5, 5], 10) + 5 * PERCENT
-    tx = market.buy(CALL, 2, 3 * SCALE, 100 * SCALE, {"from": alice, **valueDict})
+    cost1 = scale * lmsr([0, 2, 2, 2, 2], 10) + 2 * percent
+    cost2 = scale * lmsr([0, 2, 2, 2, 2], 15) + 3 * percent
     assert approx(tx.return_value) == cost2 - cost1
-    assert approx(getBalance(alice)) == 100 * SCALE - cost2 + initial
-    assert longTokens[0].balanceOf(alice) == 2 * SCALE
-    assert longTokens[2].balanceOf(alice) == 3 * SCALE
-    assert tx.events["Trade"] == {
-        "account": alice,
-        "isBuy": True,
+    assert approx(balance - getBalance(bob)) == cost2 - cost1
+    assert approx(getBalance(market)) == cost2
+    assert tx.events["Deposit"] == {
+        "account": bob,
+        "sharesOut": 5 * scale,
+        "amountIn": tx.return_value,
+        "newB": 15 * scale,
+    }
+
+    # bob buys 3 calls
+    balance = getBalance(bob)
+    tx = market.buy(CALL, 2, 3 * scale, 100 * scale, {"from": bob, **valueDict})
+    cost1 = scale * lmsr([0, 2, 2, 2, 2], 15) + 3 * percent
+    cost2 = scale * lmsr([0, 2, 2, 5, 5], 15) + 6 * percent
+    assert approx(tx.return_value) == cost2 - cost1
+    assert approx(balance - getBalance(bob)) == cost2 - cost1
+    assert approx(getBalance(market)) == cost2
+    assert longTokens[0].balanceOf(alice) == 2 * scale
+    assert longTokens[2].balanceOf(bob) == 3 * scale
+    assert tx.events["Buy"] == {
+        "account": bob,
         "isLongToken": True,
         "strikeIndex": 2,
-        "size": 3 * SCALE,
-        "cost": tx.return_value,
-        "newSupply": 3 * SCALE,
-    }
-
-    # buy 5 covers
-    cost1 = SCALE * lmsr([0, 2, 2, 5, 5], 10)
-    cost2 = SCALE * lmsr([5, 7, 7, 10, 5], 10)
-    assert approx(market.calcBuyAmountAndFee(COVER, 3, 5 * SCALE)) == (
-        cost2 - cost1,
-        5 * PERCENT,
-    )
-
-    cost1 = SCALE * lmsr([0, 2, 2, 5, 5], 10) + 5 * PERCENT
-    cost2 = SCALE * lmsr([5, 7, 7, 10, 5], 10) + 10 * PERCENT
-    tx = market.buy(COVER, 3, 5 * SCALE, 100 * SCALE, {"from": alice, **valueDict})
-    assert approx(tx.return_value) == cost2 - cost1
-    assert approx(getBalance(alice)) == 100 * SCALE - cost2 + initial
-    assert longTokens[0].balanceOf(alice) == 2 * SCALE
-    assert longTokens[2].balanceOf(alice) == 3 * SCALE
-    assert shortTokens[3].balanceOf(alice) == 5 * SCALE
-    assert tx.events["Trade"] == {
-        "account": alice,
-        "isBuy": True,
-        "isLongToken": False,
-        "strikeIndex": 3,
-        "size": 5 * SCALE,
-        "cost": tx.return_value,
-        "newSupply": 5 * SCALE,
+        "optionsOut": 3 * scale,
+        "amountIn": tx.return_value,
+        "newSupply": 3 * scale,
     }
 
     # buy 6 covers
-    cost1 = SCALE * lmsr([5, 7, 7, 10, 5], 10)
-    cost2 = SCALE * lmsr([11, 7, 7, 10, 5], 10)
-    assert approx(market.calcBuyAmountAndFee(COVER, 0, 6 * SCALE)) == (
-        cost2 - cost1,
-        6 * PERCENT,
-    )
-
-    cost1 = SCALE * lmsr([5, 7, 7, 10, 5], 10) + 10 * PERCENT
-    cost2 = SCALE * lmsr([11, 7, 7, 10, 5], 10) + 16 * PERCENT
-    tx = market.buy(COVER, 0, 6 * SCALE, 100 * SCALE, {"from": alice, **valueDict})
+    balance = getBalance(alice)
+    tx = market.buy(COVER, 3, 6 * scale, 100 * scale, {"from": alice, **valueDict})
+    cost1 = scale * lmsr([0, 2, 2, 5, 5], 15) + 6 * percent
+    cost2 = scale * lmsr([6, 8, 8, 11, 5], 15) + 12 * percent
     assert approx(tx.return_value) == cost2 - cost1
-    assert approx(getBalance(alice)) == 100 * SCALE - cost2 + initial
-    assert longTokens[0].balanceOf(alice) == 2 * SCALE
-    assert longTokens[2].balanceOf(alice) == 3 * SCALE
-    assert shortTokens[0].balanceOf(alice) == 6 * SCALE
-    assert shortTokens[3].balanceOf(alice) == 5 * SCALE
-    assert tx.events["Trade"] == {
+    assert approx(balance - getBalance(alice)) == cost2 - cost1
+    assert approx(getBalance(market)) == cost2
+    assert longTokens[0].balanceOf(alice) == 2 * scale
+    assert longTokens[2].balanceOf(bob) == 3 * scale
+    assert shortTokens[3].balanceOf(alice) == 6 * scale
+    assert tx.events["Buy"] == {
         "account": alice,
-        "isBuy": True,
         "isLongToken": False,
-        "strikeIndex": 0,
-        "size": 6 * SCALE,
-        "cost": tx.return_value,
-        "newSupply": 6 * SCALE,
+        "strikeIndex": 3,
+        "optionsOut": 6 * scale,
+        "amountIn": tx.return_value,
+        "newSupply": 6 * scale,
     }
 
     # can't sell more than you have
     with reverts("ERC20: burn amount exceeds balance"):
-        market.sell(CALL, 0, 3 * SCALE, 0, {"from": alice})
+        market.sell(CALL, 0, 3 * scale, 0, {"from": alice})
     with reverts("ERC20: burn amount exceeds balance"):
-        market.sell(COVER, 0, 7 * SCALE, 0, {"from": alice})
+        market.sell(COVER, 0, 7 * scale, 0, {"from": alice})
     with reverts("ERC20: burn amount exceeds balance"):
-        market.sell(COVER, 1, 1 * SCALE, 0, {"from": alice})
+        market.sell(COVER, 1, 1 * scale, 0, {"from": alice})
+    with reverts("ERC20: burn amount exceeds balance"):
+        market.sell(CALL, 0, 1 * scale, 0, {"from": bob})
 
-    # sell 2 covers
-    cost1 = SCALE * lmsr([11, 7, 7, 10, 5], 10)
-    cost2 = SCALE * lmsr([9, 7, 7, 10, 5], 10)
-    assert approx(market.calcSellAmountAndFee(COVER, 0, 2 * SCALE)) == (
-        cost1 - cost2,
-        0,
-    )
-
-    cost1 = SCALE * lmsr([11, 7, 7, 10, 5], 10) + 16 * PERCENT
-    cost2 = SCALE * lmsr([9, 7, 7, 10, 5], 10) + 16 * PERCENT
-    tx = market.sell(COVER, 0, 2 * SCALE, 0, {"from": alice})
+    # sell 1 calls
+    balance = getBalance(alice)
+    tx = market.sell(CALL, 0, 1 * scale, 0, {"from": alice})
+    cost1 = scale * lmsr([6, 8, 8, 11, 5], 15) + 12 * percent
+    cost2 = scale * lmsr([6, 7, 7, 10, 4], 15) + 12 * percent
     assert approx(tx.return_value) == cost1 - cost2
-    assert approx(getBalance(alice)) == 100 * SCALE - cost2 + initial
-    assert longTokens[0].balanceOf(alice) == 2 * SCALE
-    assert longTokens[2].balanceOf(alice) == 3 * SCALE
-    assert shortTokens[0].balanceOf(alice) == 4 * SCALE
-    assert shortTokens[3].balanceOf(alice) == 5 * SCALE
-    assert tx.events["Trade"] == {
+    assert approx(getBalance(alice) - balance) == cost1 - cost2
+    assert longTokens[0].balanceOf(alice) == 1 * scale
+    assert longTokens[2].balanceOf(bob) == 3 * scale
+    assert shortTokens[3].balanceOf(alice) == 6 * scale
+    assert tx.events["Sell"] == {
         "account": alice,
-        "isBuy": False,
-        "isLongToken": False,
-        "strikeIndex": 0,
-        "size": 2 * SCALE,
-        "cost": tx.return_value,
-        "newSupply": 4 * SCALE,
-    }
-
-    # sell 2 calls
-    cost1 = SCALE * lmsr([9, 7, 7, 10, 5], 10)
-    cost2 = SCALE * lmsr([9, 5, 5, 8, 3], 10)
-    assert approx(market.calcSellAmountAndFee(CALL, 0, 2 * SCALE)) == (cost1 - cost2, 0)
-
-    cost1 = SCALE * lmsr([9, 7, 7, 10, 5], 10) + 16 * PERCENT
-    cost2 = SCALE * lmsr([9, 5, 5, 8, 3], 10) + 16 * PERCENT
-    tx = market.sell(CALL, 0, 2 * SCALE, 0, {"from": alice})
-    assert approx(tx.return_value) == cost1 - cost2
-    assert approx(getBalance(alice)) == 100 * SCALE - cost2 + initial
-    assert longTokens[0].balanceOf(alice) == 0
-    assert longTokens[2].balanceOf(alice) == 3 * SCALE
-    assert shortTokens[0].balanceOf(alice) == 4 * SCALE
-    assert shortTokens[3].balanceOf(alice) == 5 * SCALE
-    assert tx.events["Trade"] == {
-        "account": alice,
-        "isBuy": False,
         "isLongToken": True,
         "strikeIndex": 0,
-        "size": 2 * SCALE,
-        "cost": tx.return_value,
-        "newSupply": 0,
-    }
-
-    # sell 3 calls
-    cost1 = SCALE * lmsr([9, 5, 5, 8, 3], 10)
-    cost2 = SCALE * lmsr([9, 5, 5, 5, 0], 10)
-    assert approx(market.calcSellAmountAndFee(CALL, 2, 3 * SCALE)) == (cost1 - cost2, 0)
-
-    cost1 = SCALE * lmsr([9, 5, 5, 8, 3], 10) + 16 * PERCENT
-    cost2 = SCALE * lmsr([9, 5, 5, 5, 0], 10) + 16 * PERCENT
-    tx = market.sell(CALL, 2, 3 * SCALE, 0, {"from": alice})
-    assert approx(tx.return_value) == cost1 - cost2
-    assert approx(getBalance(alice)) == 100 * SCALE - cost2 + initial
-    assert longTokens[0].balanceOf(alice) == 0
-    assert longTokens[2].balanceOf(alice) == 0
-    assert shortTokens[0].balanceOf(alice) == 4 * SCALE
-    assert shortTokens[3].balanceOf(alice) == 5 * SCALE
-    assert tx.events["Trade"] == {
-        "account": alice,
-        "isBuy": False,
-        "isLongToken": True,
-        "strikeIndex": 2,
-        "size": 3 * SCALE,
-        "cost": tx.return_value,
-        "newSupply": 0,
+        "optionsIn": 1 * scale,
+        "amountOut": tx.return_value,
+        "newSupply": 1 * scale,
     }
 
     # sell 5 covers
-    cost1 = SCALE * lmsr([9, 5, 5, 5, 0], 10)
-    cost2 = SCALE * lmsr([4, 0, 0, 0, 0], 10)
-    assert approx(market.calcSellAmountAndFee(COVER, 3, 5 * SCALE)) == (
-        cost1 - cost2,
-        0,
-    )
-
-    cost1 = SCALE * lmsr([9, 5, 5, 5, 0], 10) + 16 * PERCENT
-    cost2 = SCALE * lmsr([4, 0, 0, 0, 0], 10) + 16 * PERCENT
-    tx = market.sell(COVER, 3, 5 * SCALE, 0, {"from": alice})
+    balance = getBalance(alice)
+    tx = market.sell(COVER, 3, 5 * scale, 0, {"from": alice})
+    cost1 = scale * lmsr([6, 7, 7, 10, 4], 15) + 12 * percent
+    cost2 = scale * lmsr([1, 2, 2, 5, 4], 15) + 12 * percent
     assert approx(tx.return_value) == cost1 - cost2
-    assert approx(getBalance(alice)) == 100 * SCALE - cost2 + initial
-    assert longTokens[0].balanceOf(alice) == 0
-    assert longTokens[2].balanceOf(alice) == 0
-    assert shortTokens[0].balanceOf(alice) == 4 * SCALE
-    assert shortTokens[3].balanceOf(alice) == 0
-    assert tx.events["Trade"] == {
+    assert approx(getBalance(alice) - balance) == cost1 - cost2
+    assert longTokens[0].balanceOf(alice) == 1 * scale
+    assert longTokens[2].balanceOf(bob) == 3 * scale
+    assert shortTokens[3].balanceOf(alice) == 1 * scale
+    assert tx.events["Sell"] == {
         "account": alice,
-        "isBuy": False,
         "isLongToken": False,
         "strikeIndex": 3,
-        "size": 5 * SCALE,
-        "cost": tx.return_value,
-        "newSupply": 0,
+        "optionsIn": 5 * scale,
+        "amountOut": tx.return_value,
+        "newSupply": 1 * scale,
     }
 
-    # sell 4 covers
-    cost1 = SCALE * lmsr([4, 0, 0, 0, 0], 10)
-    cost2 = SCALE * lmsr([0, 0, 0, 0, 0], 10)
-    assert approx(market.calcSellAmountAndFee(COVER, 0, 4 * SCALE)) == (
-        cost1 - cost2,
-        0,
-    )
+    # try to withdraw
+    with reverts("Max slippage exceeded"):
+        market.withdraw(3 * scale, 5 * scale, {"from": alice})
+    with reverts("ERC20: burn amount exceeds balance"):
+        market.withdraw(11 * scale, 0 * scale, {"from": alice})
 
-    cost1 = SCALE * lmsr([4, 0, 0, 0, 0], 10) + 16 * PERCENT
-    cost2 = SCALE * lmsr([0, 0, 0, 0, 0], 10) + 16 * PERCENT
-    tx = market.sell(COVER, 0, 4 * SCALE, 0, {"from": alice})
+    # alice withdraws
+    balance = getBalance(alice)
+    tx = market.withdraw(3 * scale, 0, {"from": alice})
+    cost1 = scale * lmsr([1, 2, 2, 5, 4], 15) + 12 * percent
+    cost2 = scale * lmsr([1, 2, 2, 5, 4], 12) + 9.6 * percent
     assert approx(tx.return_value) == cost1 - cost2
-    assert approx(getBalance(alice)) == 100 * SCALE - cost2 + initial
-    assert longTokens[0].balanceOf(alice) == 0
-    assert longTokens[2].balanceOf(alice) == 0
-    assert shortTokens[0].balanceOf(alice) == 0
-    assert shortTokens[3].balanceOf(alice) == 0
-    assert tx.events["Trade"] == {
+    assert approx(getBalance(alice) - balance) == cost1 - cost2
+    assert tx.events["Withdraw"] == {
         "account": alice,
-        "isBuy": False,
-        "isLongToken": False,
-        "strikeIndex": 0,
-        "size": 4 * SCALE,
-        "cost": tx.return_value,
-        "newSupply": 0,
+        "sharesIn": 3 * scale,
+        "amountOut": tx.return_value,
+        "newB": 12 * scale,
     }
 
-    # can't buy beyond balance cap
+    # can't deposit beyond balance cap
     if balanceCap > 0:
         with reverts("Balance cap exceeded"):
-            tx = market.buy(
-                COVER, 0, 40 * SCALE, 1000 * SCALE, {"from": alice, **valueDict}
+            market.deposit(
+                25 * scale,
+                100 * scale,
+                {"from": alice, **valueDict},
             )
 
     # no balance cap
     else:
-        tx = market.buy(
-            COVER, 0, 40 * SCALE, 1000 * SCALE, {"from": alice, **valueDict}
+        market.deposit(
+            25 * scale,
+            100 * scale,
+            {"from": alice, **valueDict},
+        )
+        market.withdraw(
+            25 * scale,
+            0 * scale,
+            {"from": alice},
         )
 
-    # cannot buy or sell after expiry
+    # can't settle before expiry
+    with reverts("Cannot be called before expiry"):
+        market.settle({"from": alice})
+
+    # settle
     fast_forward(2000000000)
-    with reverts("Already expired"):
-        market.buy(CALL, 1, 1 * SCALE, 100 * SCALE, {"from": alice})
-    with reverts("Already expired"):
-        market.sell(COVER, 2, 1 * SCALE, 0, {"from": alice})
+    assert market.expiryPrice() == 0
+    tx = market.settle({"from": alice})
+    assert market.expiryPrice() == 555 * SCALE
+    assert tx.events["Settle"] == {
+        "expiryPrice": 555 * SCALE,
+    }
+
+    # can't settle more than once
+    with reverts("Already settled"):
+        market.settle({"from": alice})
+
+    # still dispute period
+    with reverts("Dispute period"):
+        market.sell(CALL, 0, 1 * scale, 0, {"from": alice})
+
+    fast_forward(2000000000 + 3600)
+
+    alicePayoff1 = 1 * (555 - 300)
+    alicePayoff2 = 1 * 555
+    bobPayoff = 3 * (555 - 500)
+
+    cost = scale * lmsr([1, 2, 2, 5, 4], 12) + 9.6 * percent
+    lpPayoff = cost - (alicePayoff1 + alicePayoff2 + bobPayoff) * scale / 555
+
+    marketBalance = getBalance(market)
+    aliceBalance = getBalance(alice)
+    tx = market.sell(CALL, 0, 1 * scale, 0, {"from": alice})
+    assert approx(tx.return_value) == alicePayoff1 * scale / 555
+    assert approx(marketBalance - getBalance(market)) == alicePayoff1 * scale / 555
+    assert approx(getBalance(alice) - aliceBalance) == alicePayoff1 * scale / 555
+    assert tx.events["Redeem"] == {
+        "account": alice,
+        "isLongToken": CALL,
+        "strikeIndex": 0,
+        "amount": tx.return_value,
+    }
+
+    marketBalance = getBalance(market)
+    aliceBalance = getBalance(alice)
+    tx = market.sell(COVER, 3, 1 * scale, 0, {"from": alice})
+    assert approx(tx.return_value) == alicePayoff2 * scale / 555
+    assert approx(marketBalance - getBalance(market)) == alicePayoff2 * scale / 555
+    assert approx(getBalance(alice) - aliceBalance) == alicePayoff2 * scale / 555
+    assert tx.events["Redeem"] == {
+        "account": alice,
+        "isLongToken": COVER,
+        "strikeIndex": 3,
+        "amount": tx.return_value,
+    }
+
+    # bob withdraws
+    balance = getBalance(bob)
+    tx = market.withdraw(5 * scale, 0, {"from": bob})
+    assert approx(tx.return_value) == lpPayoff * 5.0 / 12.0
+    assert approx(getBalance(bob) - balance) == lpPayoff * 5.0 / 12.0
+    assert tx.events["Withdraw"] == {
+        "account": bob,
+        "sharesIn": 5 * scale,
+        "amountOut": tx.return_value,
+        "newB": 7 * scale,
+    }
+
+    marketBalance = getBalance(market)
+    bobBalance = getBalance(bob)
+    tx = market.sell(CALL, 2, 3 * scale, 0, {"from": bob})
+    assert approx(tx.return_value) == bobPayoff * scale / 555
+    assert approx(marketBalance - getBalance(market)) == bobPayoff * scale / 555
+    assert approx(getBalance(bob) - bobBalance) == bobPayoff * scale / 555
+    assert tx.events["Redeem"] == {
+        "account": bob,
+        "isLongToken": CALL,
+        "strikeIndex": 2,
+        "amount": tx.return_value,
+    }
+
+    # alice withdraws
+    balance = getBalance(alice)
+    tx = market.withdraw(7 * scale, 0, {"from": alice})
+    assert approx(tx.return_value) == lpPayoff * 7.0 / 12.0
+    assert approx(getBalance(alice) - balance) == lpPayoff * 7.0 / 12.0
+    assert tx.events["Withdraw"] == {
+        "account": alice,
+        "sharesIn": 7 * scale,
+        "amountOut": tx.return_value,
+        "newB": 0 * scale,
+    }
+
+    # no tvl left
+    assert getBalance(market) == 0
 
 
-@pytest.mark.parametrize("balanceCap", [0, 40000 * 1e6])
-def test_buy_and_sell_puts(
-    a, OptionMarket, MockToken, MockOracle, OptionToken, balanceCap
+@pytest.mark.parametrize("balanceCap", [0, 40000])
+@pytest.mark.parametrize("baseDecimals", [6, 18])
+def test_puts(
+    a,
+    OptionMarket,
+    MockToken,
+    MockOracle,
+    OptionToken,
+    fast_forward,
+    balanceCap,
+    baseDecimals,
 ):
 
     # setup args
-    deployer, alice = a[:2]
-    baseToken = deployer.deploy(MockToken)
-    baseToken.setDecimals(6)
+    deployer, alice, bob = a[:3]
     oracle = deployer.deploy(MockOracle)
+    oracle.setPrice(444 * SCALE)
     longTokens = [deployer.deploy(OptionToken) for _ in range(4)]
     shortTokens = [deployer.deploy(OptionToken) for _ in range(4)]
+
+    scale = 10 ** baseDecimals
+    baseToken = deployer.deploy(MockToken)
+    baseToken.setDecimals(baseDecimals)
+    percent = scale // 100
+
+    def getBalance(wallet):
+        return baseToken.balanceOf(wallet)
 
     # deploy and initialize
     market = deployer.deploy(OptionMarket)
@@ -804,459 +645,362 @@ def test_buy_and_sell_puts(
         2000000000,  # expiry = 18 May 2033
         True,  # put
         1 * PERCENT,  # trading fee = 1%
-        balanceCap,
+        balanceCap * scale,
         3600,  # dispute period = 1 hour
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
 
     # give users base tokens
-    baseToken.mint(deployer, 100000 * 1e6, {"from": deployer})
-    baseToken.approve(market, 100000 * 1e6, {"from": deployer})
-    baseToken.mint(alice, 100000 * 1e6, {"from": deployer})
-    baseToken.approve(market, 100000 * 1e6, {"from": alice})
+    for user in [deployer, alice, bob]:
+        baseToken.mint(user, 100000 * scale, {"from": deployer})
+        baseToken.approve(market, 100000 * scale, {"from": user})
 
-    # needs to call increaseB
-    market.increaseB(1000 * 1e6, {"from": deployer})
+    # not enough balance to deposit
+    with reverts("ERC20: transfer amount exceeds balance"):
+        market.deposit(
+            80000 * scale,
+            1000000 * scale,
+            {"from": alice},
+        )
 
-    # index out of range
-    with reverts("Index too large"):
-        tx = market.buy(PUT, 4, 1e6, 100 * 1e6, {"from": alice})
-    with reverts("Index too large"):
-        tx = market.buy(COVER, 4, 1e6, 100 * 1e6, {"from": alice})
+    # try to deposit
+    with reverts("Max slippage exceeded"):
+        market.deposit(
+            10 * scale,
+            12 * scale,
+            {"from": alice},
+        )
+
+    # alice deposits
+    tx = market.deposit(
+        1000 * scale,
+        10000 * scale,
+        {"from": alice},
+    )
+    cost = scale * lmsr([0, 0, 0, 0, 0], 1000)
+    assert approx(tx.return_value) == cost
+    assert approx(getBalance(alice)) == 100000 * scale - tx.return_value
+    assert approx(getBalance(market)) == cost
+    assert tx.events["Deposit"] == {
+        "account": alice,
+        "sharesOut": 1000 * scale,
+        "amountIn": tx.return_value,
+        "newB": 1000 * scale,
+    }
 
     # can't buy too much
     with reverts("ERC20: transfer amount exceeds balance"):
-        market.buy(PUT, 0, 1000 * 1e6, 1000000 * 1e6, {"from": alice})
+        tx = market.buy(CALL, 0, 1000 * scale, 1000000 * scale, {"from": alice})
 
-    initial = 1e6 * lmsr([0, 0, 0, 0, 0], 1000)
+    # try to buy
+    with reverts("Max slippage exceeded"):
+        market.buy(CALL, 0, 1000 * scale, 1500 * scale, {"from": alice})
 
-    # buy 2 puts
-    cost = lmsr([2 * 300, 0, 0, 0, 0], 1000) * 1e6
-    assert approx(market.calcBuyAmountAndFee(PUT, 0, 2 * 1e6)) == (
-        cost - initial,
-        300 * 2 * 1e4,
-    )
-
-    cost = lmsr([2 * 300, 0, 0, 0, 0], 1000) * 1e6 + 300 * 2 * 1e4
-    tx = market.buy(PUT, 0, 2 * 1e6, 10000 * 1e6, {"from": alice})
-    assert approx(tx.return_value, rel=1e-5) == cost - initial
-    assert approx(baseToken.balanceOf(alice), rel=1e-5) == 100000 * 1e6 - cost + initial
-    assert longTokens[0].balanceOf(alice) == 2 * 1e6
-    assert tx.events["Trade"] == {
+    # buy 2 calls
+    balance = getBalance(alice)
+    tx = market.buy(PUT, 0, 2 * scale, 10000 * scale, {"from": alice})
+    cost1 = scale * lmsr([0, 0, 0, 0, 0], 1000)
+    cost2 = scale * lmsr([2 * 300, 0, 0, 0, 0], 1000) + 2 * 300 * percent
+    assert approx(tx.return_value) == cost2 - cost1
+    assert approx(balance - getBalance(alice)) == cost2 - cost1
+    assert approx(getBalance(market)) == cost2
+    assert longTokens[0].balanceOf(alice) == 2 * scale
+    assert tx.events["Buy"] == {
         "account": alice,
-        "isBuy": True,
         "isLongToken": True,
         "strikeIndex": 0,
-        "size": 2 * 1e6,
-        "cost": tx.return_value,
-        "newSupply": 2 * 1e6,
+        "optionsOut": 2 * scale,
+        "amountIn": tx.return_value,
+        "newSupply": 2 * scale,
     }
 
-    # buy 5 covers
-    cost1 = lmsr([2 * 300, 0, 0, 0, 0], 1000) * 1e6
-    cost2 = lmsr([2 * 300, 0, 0, 5 * 500, 5 * 500], 1000) * 1e6
-    assert approx(market.calcBuyAmountAndFee(COVER, 2, 5 * 1e6)) == (
-        cost2 - cost1,
-        500 * 5 * 1e4,
+    # bob deposits
+    balance = getBalance(bob)
+    tx = market.deposit(
+        500 * scale,
+        1000 * scale,
+        {"from": bob},
     )
-
-    cost1 = lmsr([2 * 300, 0, 0, 0, 0], 1000) * 1e6 + 300 * 2 * 1e4
-    cost2 = (
-        lmsr([2 * 300, 0, 0, 5 * 500, 5 * 500], 1000) * 1e6
-        + 300 * 2 * 1e4
-        + 500 * 5 * 1e4
-    )
-    tx = market.buy(COVER, 2, 5 * 1e6, 10000 * 1e6, {"from": alice})
+    cost1 = scale * lmsr([2 * 300, 0, 0, 0, 0], 1000) + 2 * 300 * percent
+    cost2 = scale * lmsr([2 * 300, 0, 0, 0, 0], 1500) + 3 * 300 * percent
     assert approx(tx.return_value) == cost2 - cost1
-    assert approx(baseToken.balanceOf(alice)) == 100000 * 1e6 - cost2 + initial
-    assert longTokens[0].balanceOf(alice) == 2 * 1e6
-    assert shortTokens[2].balanceOf(alice) == 5 * 1e6
-    assert tx.events["Trade"] == {
-        "account": alice,
-        "isBuy": True,
-        "isLongToken": False,
+    assert approx(balance - getBalance(bob)) == cost2 - cost1
+    assert approx(getBalance(market)) == cost2
+    assert tx.events["Deposit"] == {
+        "account": bob,
+        "sharesOut": 500 * scale,
+        "amountIn": tx.return_value,
+        "newB": 1500 * scale,
+    }
+
+    # bob buys 3 puts
+    balance = getBalance(bob)
+    tx = market.buy(PUT, 2, 3 * scale, 10000 * scale, {"from": bob})
+    cost1 = scale * lmsr([2 * 300, 0, 0, 0, 0], 1500) + 3 * 300 * percent
+    cost2 = (
+        scale * lmsr([2 * 300 + 3 * 500, 3 * 500, 3 * 500, 0, 0], 1500)
+        + 3 * 300 * percent
+        + 3 * 500 * percent
+    )
+    assert approx(tx.return_value) == cost2 - cost1
+    assert approx(balance - getBalance(bob)) == cost2 - cost1
+    assert approx(getBalance(market)) == cost2
+    assert longTokens[0].balanceOf(alice) == 2 * scale
+    assert longTokens[2].balanceOf(bob) == 3 * scale
+    assert tx.events["Buy"] == {
+        "account": bob,
+        "isLongToken": True,
         "strikeIndex": 2,
-        "size": 5 * 1e6,
-        "cost": tx.return_value,
-        "newSupply": 5 * 1e6,
+        "optionsOut": 3 * scale,
+        "amountIn": tx.return_value,
+        "newSupply": 3 * scale,
+    }
+
+    # buy 6 covers
+    balance = getBalance(alice)
+    tx = market.buy(COVER, 3, 6 * scale, 10000 * scale, {"from": alice})
+    cost1 = (
+        scale * lmsr([2 * 300 + 3 * 500, 3 * 500, 3 * 500, 0, 0], 1500)
+        + 3 * 300 * percent
+        + 3 * 500 * percent
+    )
+    cost2 = (
+        scale * lmsr([2 * 300 + 3 * 500, 3 * 500, 3 * 500, 0, 6 * 600], 1500)
+        + 3 * 300 * percent
+        + 3 * 500 * percent
+        + 6 * 600 * percent
+    )
+    assert approx(tx.return_value) == cost2 - cost1
+    assert approx(balance - getBalance(alice)) == cost2 - cost1
+    assert approx(getBalance(market)) == cost2
+    assert longTokens[0].balanceOf(alice) == 2 * scale
+    assert longTokens[2].balanceOf(bob) == 3 * scale
+    assert shortTokens[3].balanceOf(alice) == 6 * scale
+    assert tx.events["Buy"] == {
+        "account": alice,
+        "isLongToken": False,
+        "strikeIndex": 3,
+        "optionsOut": 6 * scale,
+        "amountIn": tx.return_value,
+        "newSupply": 6 * scale,
     }
 
     # can't sell more than you have
     with reverts("ERC20: burn amount exceeds balance"):
-        market.sell(CALL, 0, 3 * 1e6, 0, {"from": alice})
+        market.sell(PUT, 0, 3 * scale, 0, {"from": alice})
     with reverts("ERC20: burn amount exceeds balance"):
-        market.sell(COVER, 1, 1 * 1e6, 0, {"from": alice})
+        market.sell(COVER, 0, 7 * scale, 0, {"from": alice})
+    with reverts("ERC20: burn amount exceeds balance"):
+        market.sell(COVER, 1, 1 * scale, 0, {"from": alice})
+    with reverts("ERC20: burn amount exceeds balance"):
+        market.sell(PUT, 0, 1 * scale, 0, {"from": bob})
 
-    # sell 2 covers
-    cost1 = lmsr([2 * 300, 0, 0, 5 * 500, 5 * 500], 1000) * 1e6
-    cost2 = lmsr([2 * 300, 0, 0, 3 * 500, 3 * 500], 1000) * 1e6
-    assert approx(market.calcSellAmountAndFee(COVER, 2, 2 * 1e6)) == (cost1 - cost2, 0)
-
+    # sell 1 calls
+    balance = getBalance(alice)
+    tx = market.sell(PUT, 0, 1 * scale, 0, {"from": alice})
     cost1 = (
-        lmsr([2 * 300, 0, 0, 5 * 500, 5 * 500], 1000) * 1e6
-        + 300 * 2 * 1e4
-        + 500 * 5 * 1e4
+        scale * lmsr([2 * 300 + 3 * 500, 3 * 500, 3 * 500, 0, 6 * 600], 1500)
+        + 3 * 300 * percent
+        + 3 * 500 * percent
+        + 6 * 600 * percent
     )
     cost2 = (
-        lmsr([2 * 300, 0, 0, 3 * 500, 3 * 500], 1000) * 1e6
-        + 300 * 2 * 1e4
-        + 500 * 5 * 1e4
+        scale * lmsr([1 * 300 + 3 * 500, 3 * 500, 3 * 500, 0, 6 * 600], 1500)
+        + 3 * 300 * percent
+        + 3 * 500 * percent
+        + 6 * 600 * percent
     )
-    tx = market.sell(COVER, 2, 2 * 1e6, 0, {"from": alice})
     assert approx(tx.return_value) == cost1 - cost2
-    assert approx(baseToken.balanceOf(alice)) == 100000 * 1e6 - cost2 + initial
-    assert longTokens[0].balanceOf(alice) == 2 * 1e6
-    assert shortTokens[2].balanceOf(alice) == 3 * 1e6
-    assert tx.events["Trade"] == {
+    assert approx(getBalance(alice) - balance) == cost1 - cost2
+    assert approx(getBalance(market)) == cost2
+    assert longTokens[0].balanceOf(alice) == 1 * scale
+    assert longTokens[2].balanceOf(bob) == 3 * scale
+    assert shortTokens[3].balanceOf(alice) == 6 * scale
+    assert tx.events["Sell"] == {
         "account": alice,
-        "isBuy": False,
-        "isLongToken": False,
-        "strikeIndex": 2,
-        "size": 2 * 1e6,
-        "cost": tx.return_value,
-        "newSupply": 3 * 1e6,
+        "isLongToken": True,
+        "strikeIndex": 0,
+        "optionsIn": 1 * scale,
+        "amountOut": tx.return_value,
+        "newSupply": 1 * scale,
     }
 
-    # can't buy beyond balance cap
+    # sell 5 covers
+    balance = getBalance(alice)
+    tx = market.sell(COVER, 3, 5 * scale, 0, {"from": alice})
+    cost1 = (
+        scale * lmsr([1 * 300 + 3 * 500, 3 * 500, 3 * 500, 0, 6 * 600], 1500)
+        + 3 * 300 * percent
+        + 3 * 500 * percent
+        + 6 * 600 * percent
+    )
+    cost2 = (
+        scale * lmsr([1 * 300 + 3 * 500, 3 * 500, 3 * 500, 0, 1 * 600], 1500)
+        + 3 * 300 * percent
+        + 3 * 500 * percent
+        + 6 * 600 * percent
+    )
+    assert approx(tx.return_value) == cost1 - cost2
+    assert approx(getBalance(alice) - balance) == cost1 - cost2
+    assert approx(getBalance(market)) == cost2
+    assert longTokens[0].balanceOf(alice) == 1 * scale
+    assert longTokens[2].balanceOf(bob) == 3 * scale
+    assert shortTokens[3].balanceOf(alice) == 1 * scale
+    assert tx.events["Sell"] == {
+        "account": alice,
+        "isLongToken": False,
+        "strikeIndex": 3,
+        "optionsIn": 5 * scale,
+        "amountOut": tx.return_value,
+        "newSupply": 1 * scale,
+    }
+
+    # try to withdraw
+    with reverts("Max slippage exceeded"):
+        market.withdraw(3 * scale, 5 * scale, {"from": alice})
+    with reverts("ERC20: burn amount exceeds balance"):
+        market.withdraw(1100 * scale, 0 * scale, {"from": alice})
+
+    # alice withdraws
+    balance = getBalance(alice)
+    tx = market.withdraw(300 * scale, 0, {"from": alice})
+    cost1 = (
+        scale * lmsr([1 * 300 + 3 * 500, 3 * 500, 3 * 500, 0, 1 * 600], 1500)
+        + 3 * 300 * percent
+        + 3 * 500 * percent
+        + 6 * 600 * percent
+    )
+    cost2 = (
+        scale * lmsr([1 * 300 + 3 * 500, 3 * 500, 3 * 500, 0, 1 * 600], 1200)
+        + 0.8 * 3 * 300 * percent
+        + 0.8 * 3 * 500 * percent
+        + 0.8 * 6 * 600 * percent
+    )
+    assert approx(tx.return_value) == cost1 - cost2
+    assert approx(getBalance(alice) - balance) == cost1 - cost2
+    assert approx(getBalance(market)) == cost2
+    assert tx.events["Withdraw"] == {
+        "account": alice,
+        "sharesIn": 300 * scale,
+        "amountOut": tx.return_value,
+        "newB": 1200 * scale,
+    }
+
+    # can't deposit beyond balance cap
     if balanceCap > 0:
         with reverts("Balance cap exceeded"):
-            tx = market.buy(COVER, 0, 150 * 1e6, 100000 * 1e6, {"from": alice})
+            market.deposit(
+                25000 * scale,
+                100000 * scale,
+                {"from": alice},
+            )
 
     # no balance cap
     else:
-        tx = market.buy(COVER, 0, 150 * 1e6, 100000 * 1e6, {"from": alice})
+        market.deposit(
+            25 * scale,
+            100 * scale,
+            {"from": alice},
+        )
+        market.withdraw(
+            25 * scale,
+            0 * scale,
+            {"from": alice},
+        )
 
-
-@pytest.mark.parametrize("isEth", [False, True])
-@pytest.mark.parametrize("isPut", [False, True])
-def test_settle(
-    a, OptionMarket, MockToken, MockOracle, OptionToken, fast_forward, isEth, isPut
-):
-
-    # setup args
-    deployer, alice = a[:2]
-    baseToken = ZERO_ADDRESS if isEth else deployer.deploy(MockToken)
-    oracle = deployer.deploy(MockOracle)
-    longTokens = [deployer.deploy(OptionToken) for _ in range(4)]
-    shortTokens = [deployer.deploy(OptionToken) for _ in range(4)]
-    oracle.setPrice(444 * SCALE)
-
-    # deploy and initialize
-    market = deployer.deploy(OptionMarket)
-    market.initialize(
-        baseToken,
-        oracle,
-        longTokens,
-        shortTokens,
-        [300 * SCALE, 400 * SCALE, 500 * SCALE, 600 * SCALE],
-        2000000000,  # expiry = 18 May 2033
-        isPut,
-        1 * PERCENT,  # trading fee = 1%
-        40000 * SCALE,  # balance cap = 40000
-        3600,  # dispute period = 1 hour
-    )
-    for token in longTokens + shortTokens:
-        token.initialize(market, "name", "symbol", 18)
-
+    # can't settle before expiry
     with reverts("Cannot be called before expiry"):
         market.settle({"from": alice})
 
-    # can only call settle() after expiry time and can only call once
+    # settle
     fast_forward(2000000000)
     assert market.expiryPrice() == 0
     tx = market.settle({"from": alice})
     assert market.expiryPrice() == 444 * SCALE
-    assert tx.events["Settled"] == {
+    assert tx.events["Settle"] == {
         "expiryPrice": 444 * SCALE,
     }
 
+    # can't settle more than once
     with reverts("Already settled"):
         market.settle({"from": alice})
 
-
-@pytest.mark.parametrize("isEth", [False, True])
-def test_redeem_calls(
-    a, OptionMarket, MockToken, MockOracle, OptionToken, fast_forward, isEth
-):
-
-    # setup args
-    deployer, alice, bob = a[:3]
-    baseToken = ZERO_ADDRESS if isEth else deployer.deploy(MockToken)
-    oracle = deployer.deploy(MockOracle)
-    longTokens = [deployer.deploy(OptionToken) for _ in range(4)]
-    shortTokens = [deployer.deploy(OptionToken) for _ in range(4)]
-    oracle.setPrice(444 * SCALE)
-
-    def getBalance(wallet):
-        return wallet.balance() if isEth else baseToken.balanceOf(wallet)
-
-    # deploy and initialize
-    market = deployer.deploy(OptionMarket)
-    market.initialize(
-        baseToken,
-        oracle,
-        longTokens,
-        shortTokens,
-        [300 * SCALE, 400 * SCALE, 500 * SCALE, 600 * SCALE],
-        2000000000,  # expiry = 18 May 2033
-        False,  # call
-        1 * PERCENT,  # trading fee = 1%
-        40000 * SCALE,  # balance cap = 40000
-        3600,  # dispute period = 1 hour
-    )
-    for token in longTokens + shortTokens:
-        token.initialize(market, "name", "symbol", 18)
-
-    # give users base tokens
-    if not isEth:
-        baseToken.mint(deployer, 100 * SCALE, {"from": deployer})
-        baseToken.approve(market, 100 * SCALE, {"from": deployer})
-        baseToken.mint(alice, 100 * SCALE, {"from": deployer})
-        baseToken.approve(market, 100 * SCALE, {"from": alice})
-        baseToken.mint(bob, 100 * SCALE, {"from": deployer})
-        baseToken.approve(market, 100 * SCALE, {"from": bob})
-    valueDict = {"value": 50 * SCALE} if isEth else {}
-
-    # needs to call increaseB
-    market.increaseB(
-        10 * SCALE,
-        {"from": deployer, **valueDict},
-    )
-
-    # buy 2 calls (strike=300)
-    market.buy(CALL, 0, 2 * SCALE, 100 * SCALE, {"from": alice, **valueDict})
-
-    # buy 1 call (strike=600) and 3 covers (strike=400)
-    market.buy(CALL, 3, 3 * SCALE, 100 * SCALE, {"from": bob, **valueDict})
-    market.buy(COVER, 1, 3 * SCALE, 100 * SCALE, {"from": bob, **valueDict})
-    market.sell(CALL, 3, 2 * SCALE, 0, {"from": bob})
-
-    with reverts("Cannot be called before expiry"):
-        market.redeem(CALL, 0, {"from": alice})
-
-    fast_forward(2000000000)
-    with reverts("Cannot be called before settlement"):
-        market.redeem(CALL, 0, {"from": alice})
-
-    market.settle({"from": alice})
-    with reverts("Cannot be called during dispute period"):
-        market.redeem(CALL, 0, {"from": alice})
-
-    cost = SCALE * lmsr([3, 5, 2, 2, 3], 10)
-    assert approx(market.currentCumulativeCost()) == cost
-
-    with reverts("Cannot be called during dispute period"):
-        market.collectFees({"from": deployer})
+    # still dispute period
+    with reverts("Dispute period"):
+        market.sell(PUT, 0, 1 * scale, 0, {"from": alice})
 
     fast_forward(2000000000 + 3600)
 
-    alicePayoff = 2 * (444 - 300)
-    bobPayoff = 3 * 400
-
-    balance = getBalance(market)
-    aliceBalance = getBalance(alice)
-    assert approx(market.calcRedeemAmountAndFee(CALL, 0, {"from": alice})) == (
-        alicePayoff * SCALE / 444,
-        0,
-    )
-
-    tx = market.redeem(CALL, 0, {"from": alice})
-    assert approx(tx.return_value) == alicePayoff * SCALE / 444
-    assert approx(balance - getBalance(market)) == alicePayoff * SCALE / 444
-    assert approx(getBalance(alice) - aliceBalance) == alicePayoff * SCALE / 444
-    assert tx.events["Redeemed"] == {
-        "account": alice,
-        "isLongToken": True,
-        "strikeIndex": 0,
-        "amount": tx.return_value,
-    }
-
-    with reverts("Balance must be > 0"):
-        market.redeem(CALL, 0, {"from": alice})
-    with reverts("Balance must be > 0"):
-        market.redeem(CALL, 1, {"from": alice})
-
-    balance = getBalance(market)
-    bobBalance = getBalance(bob)
-    assert approx(market.calcRedeemAmountAndFee(CALL, 3, {"from": bob})) == (0, 0)
-
-    tx = market.redeem(CALL, 3, {"from": bob})
-    assert approx(tx.return_value) == 0
-    assert approx(balance - getBalance(market)) == 0
-    assert approx(getBalance(bob) - bobBalance) == 0
-    assert tx.events["Redeemed"] == {
-        "account": bob,
-        "isLongToken": True,
-        "strikeIndex": 3,
-        "amount": 0,
-    }
-
-    balance = getBalance(market)
-    bobBalance = getBalance(bob)
-    assert approx(market.calcRedeemAmountAndFee(COVER, 1, {"from": bob})) == (
-        bobPayoff * SCALE / 444,
-        0,
-    )
-
-    tx = market.redeem(COVER, 1, {"from": bob})
-    assert approx(tx.return_value) == bobPayoff * SCALE / 444
-    assert approx(balance - getBalance(market)) == bobPayoff * SCALE / 444
-    assert approx(getBalance(bob) - bobBalance) == bobPayoff * SCALE / 444
-    assert tx.events["Redeemed"] == {
-        "account": bob,
-        "isLongToken": False,
-        "strikeIndex": 1,
-        "amount": tx.return_value,
-    }
-
-    feesAccrued = 8 * PERCENT + cost - (alicePayoff + bobPayoff) * SCALE / 444
-    assert approx(market.calcFeesAccrued()) == feesAccrued
-
-    balance1 = getBalance(deployer)
-    tx = market.collectFees({"from": deployer})
-    assert approx(tx.return_value) == feesAccrued
-    assert approx(getBalance(deployer) - balance1) == feesAccrued
-    assert market.calcFeesAccrued() == 0
-
-
-def test_redeem_puts(a, OptionMarket, MockToken, MockOracle, OptionToken, fast_forward):
-
-    # setup args
-    deployer, alice, bob = a[:3]
-    baseToken = deployer.deploy(MockToken)
-    baseToken.setDecimals(6)
-    oracle = deployer.deploy(MockOracle)
-    longTokens = [deployer.deploy(OptionToken) for _ in range(4)]
-    shortTokens = [deployer.deploy(OptionToken) for _ in range(4)]
-    oracle.setPrice(444 * SCALE)
-
-    # deploy and initialize
-    market = deployer.deploy(OptionMarket)
-    market.initialize(
-        baseToken,
-        oracle,
-        longTokens,
-        shortTokens,
-        [300 * SCALE, 400 * SCALE, 500 * SCALE, 600 * SCALE],
-        2000000000,  # expiry = 18 May 2033
-        True,  # put
-        1 * PERCENT,  # trading fee = 1%
-        40000 * 1e6,  # balance cap = 40000
-        3600,  # dispute period = 1 hour
-    )
-    for token in longTokens + shortTokens:
-        token.initialize(market, "name", "symbol", 18)
-
-    # give users base tokens
-    baseToken.mint(deployer, 10000 * 1e6, {"from": deployer})
-    baseToken.approve(market, 10000 * 1e6, {"from": deployer})
-    baseToken.mint(alice, 10000 * 1e6, {"from": deployer})
-    baseToken.approve(market, 10000 * 1e6, {"from": alice})
-    baseToken.mint(bob, 10000 * 1e6, {"from": deployer})
-    baseToken.approve(market, 10000 * 1e6, {"from": bob})
-
-    # needs to call increaseB
-    market.increaseB(1000 * 1e6, {"from": deployer})
-
-    # buy 2 puts (strike=500)
-    market.buy(PUT, 2, 2 * 1e6, 10000 * 1e6, {"from": alice})
-
-    # buy 1 put (strike=600) and 3 covers (strike=400)
-    market.buy(PUT, 3, 3 * 1e6, 10000 * 1e6, {"from": bob})
-    market.buy(COVER, 1, 3 * 1e6, 10000 * 1e6, {"from": bob})
-    market.sell(PUT, 3, 2 * 1e6, 0, {"from": bob})
+    alicePayoff1 = 0
+    alicePayoff2 = 1 * 444
+    bobPayoff = 3 * (500 - 444)
 
     cost = (
-        lmsr(
-            [
-                2 * 500 + 1 * 600,
-                2 * 500 + 1 * 600,
-                2 * 500 + 1 * 600 + 3 * 400,
-                1 * 600 + 3 * 400,
-                3 * 400,
-            ],
-            1000,
-        )
-        * 1e6
+        scale * lmsr([1 * 300 + 3 * 500, 3 * 500, 3 * 500, 0, 1 * 600], 1200)
+        + 0.8 * 3 * 300 * percent
+        + 0.8 * 3 * 500 * percent
+        + 0.8 * 6 * 600 * percent
     )
-    assert approx(market.currentCumulativeCost()) == cost
+    lpPayoff = cost - (alicePayoff1 + alicePayoff2 + bobPayoff) * scale
 
-    fast_forward(2000000000 + 3600)
-    market.settle({"from": alice})
+    marketBalance = getBalance(market)
+    aliceBalance = getBalance(alice)
+    with reverts("Amount out must be > 0"):
+        market.sell(PUT, 0, 1 * scale, 0, {"from": alice})
 
-    alicePayoff = 2 * (500 - 444)
-    bobPayoff1 = 3 * 400
-    bobPayoff2 = 1 * (600 - 444)
-
-    balance = baseToken.balanceOf(market)
-    aliceBalance = baseToken.balanceOf(alice)
-    assert approx(market.calcRedeemAmountAndFee(PUT, 2, {"from": alice})) == (
-        alicePayoff * 1e6,
-        0,
-    )
-
-    tx = market.redeem(PUT, 2, {"from": alice})
-    assert approx(tx.return_value) == alicePayoff * 1e6
-    assert approx(balance - baseToken.balanceOf(market)) == alicePayoff * 1e6
-    assert approx(baseToken.balanceOf(alice) - aliceBalance) == alicePayoff * 1e6
-    assert tx.events["Redeemed"] == {
+    marketBalance = getBalance(market)
+    aliceBalance = getBalance(alice)
+    tx = market.sell(COVER, 3, 1 * scale, 0, {"from": alice})
+    assert approx(tx.return_value) == alicePayoff2 * scale
+    assert approx(marketBalance - getBalance(market)) == alicePayoff2 * scale
+    assert approx(getBalance(alice) - aliceBalance) == alicePayoff2 * scale
+    assert tx.events["Redeem"] == {
         "account": alice,
-        "isLongToken": True,
+        "isLongToken": COVER,
+        "strikeIndex": 3,
+        "amount": tx.return_value,
+    }
+
+    # bob withdraws
+    balance = getBalance(bob)
+    tx = market.withdraw(500 * scale, 0, {"from": bob})
+    assert approx(tx.return_value) == lpPayoff * 5.0 / 12.0
+    assert approx(getBalance(bob) - balance) == lpPayoff * 5.0 / 12.0
+    assert tx.events["Withdraw"] == {
+        "account": bob,
+        "sharesIn": 500 * scale,
+        "amountOut": tx.return_value,
+        "newB": 700 * scale,
+    }
+
+    marketBalance = getBalance(market)
+    bobBalance = getBalance(bob)
+    tx = market.sell(PUT, 2, 3 * scale, 0, {"from": bob})
+    assert approx(tx.return_value) == bobPayoff * scale
+    assert approx(marketBalance - getBalance(market)) == bobPayoff * scale
+    assert approx(getBalance(bob) - bobBalance) == bobPayoff * scale
+    assert tx.events["Redeem"] == {
+        "account": bob,
+        "isLongToken": PUT,
         "strikeIndex": 2,
         "amount": tx.return_value,
     }
 
-    balance = baseToken.balanceOf(market)
-    bobBalance = baseToken.balanceOf(bob)
-    assert approx(market.calcRedeemAmountAndFee(COVER, 1, {"from": bob})) == (
-        bobPayoff1 * 1e6,
-        0,
-    )
-
-    tx = market.redeem(COVER, 1, {"from": bob})
-    assert approx(tx.return_value) == bobPayoff1 * 1e6
-    assert approx(balance - baseToken.balanceOf(market)) == bobPayoff1 * 1e6
-    assert approx(baseToken.balanceOf(bob) - bobBalance) == bobPayoff1 * 1e6
-    assert tx.events["Redeemed"] == {
-        "account": bob,
-        "isLongToken": False,
-        "strikeIndex": 1,
-        "amount": tx.return_value,
+    # alice withdraws
+    balance = getBalance(alice)
+    tx = market.withdraw(700 * scale, 0, {"from": alice})
+    assert approx(tx.return_value) == lpPayoff * 7.0 / 12.0
+    assert approx(getBalance(alice) - balance) == lpPayoff * 7.0 / 12.0
+    assert tx.events["Withdraw"] == {
+        "account": alice,
+        "sharesIn": 700 * scale,
+        "amountOut": tx.return_value,
+        "newB": 0 * scale,
     }
 
-    balance = baseToken.balanceOf(market)
-    bobBalance = baseToken.balanceOf(bob)
-    assert approx(market.calcRedeemAmountAndFee(PUT, 3, {"from": bob})) == (
-        bobPayoff2 * 1e6,
-        0,
-    )
-
-    tx = market.redeem(PUT, 3, {"from": bob})
-    assert approx(tx.return_value) == bobPayoff2 * 1e6
-    assert approx(balance - baseToken.balanceOf(market)) == bobPayoff2 * 1e6
-    assert approx(baseToken.balanceOf(bob) - bobBalance) == bobPayoff2 * 1e6
-    assert tx.events["Redeemed"] == {
-        "account": bob,
-        "isLongToken": True,
-        "strikeIndex": 3,
-        "amount": tx.return_value,
-    }
-
-    feesAccrued = (
-        2 * 500 * 1e4
-        + 3 * 600 * 1e4
-        + 3 * 400 * 1e4
-        + cost
-        - (alicePayoff + bobPayoff1 + bobPayoff2) * 1e6
-    )
-    assert approx(market.calcFeesAccrued()) == feesAccrued
-
-    balance1 = baseToken.balanceOf(deployer)
-    tx = market.collectFees({"from": deployer})
-    assert approx(tx.return_value) == feesAccrued
-    assert approx(baseToken.balanceOf(deployer) - balance1) == feesAccrued
-    assert market.calcFeesAccrued() == 0
+    # no tvl left
+    assert getBalance(market) == 0
 
 
 @pytest.mark.parametrize("isEth", [False, True])
@@ -1300,10 +1044,10 @@ def test_emergency_methods(
         baseToken.approve(market, 100 * SCALE, {"from": alice})
     valueDict = {"value": 50 * SCALE} if isEth else {}
 
-    # needs to call increaseB
-    market.increaseB(
+    market.deposit(
         0.01 * SCALE,
-        {"from": deployer, **valueDict},
+        0.1 * SCALE,
+        {"from": alice, **valueDict},
     )
 
     # pause and unpause
@@ -1311,9 +1055,9 @@ def test_emergency_methods(
         market.pause({"from": alice})
     market.pause({"from": deployer})
 
-    with reverts("This method has been paused"):
+    with reverts("Paused"):
         market.buy(CALL, 0, 1 * PERCENT, 100 * SCALE, {"from": alice, **valueDict})
-    with reverts("This method has been paused"):
+    with reverts("Paused"):
         market.sell(CALL, 0, 1 * PERCENT, 0, {"from": alice})
 
     # can call paused methods from deployer
@@ -1351,21 +1095,20 @@ def test_emergency_methods(
     market.disputeExpiryPrice(666 * SCALE, {"from": deployer})
     assert market.expiryPrice() == 666 * SCALE
     assert market.isSettled()
-    assert market.lastPayoff() == market.currentCumulativePayoff()
 
     fast_forward(2000000000 + 2400)
     with reverts("Not dispute period"):
         market.disputeExpiryPrice(777 * SCALE, {"from": deployer})
 
     market.pause({"from": deployer})
-    with reverts("This method has been paused"):
-        market.redeem(CALL, 0, {"from": alice})
+    with reverts("Paused"):
+        market.sell(CALL, 0, 1 * PERCENT, 0, {"from": alice})
 
     # can call paused methods from deployer
-    market.redeem(COVER, 0, {"from": deployer})
+    market.sell(COVER, 0, 1 * PERCENT, 0, {"from": deployer})
 
     market.unpause({"from": deployer})
-    market.redeem(COVER, 0, {"from": alice})
+    market.sell(COVER, 0, 1 * PERCENT, 0, {"from": alice})
 
     # change owner
     with reverts("Ownable: caller is not the owner"):
@@ -1422,9 +1165,10 @@ def test_set_balance_limit(
 
     # balance cap too low
     with reverts("Balance cap exceeded"):
-        market.increaseB(
+        market.deposit(
             10 * SCALE,
-            {"from": deployer, **valueDict},
+            100 * SCALE,
+            {"from": alice, **valueDict},
         )
 
     # only owner
@@ -1436,7 +1180,8 @@ def test_set_balance_limit(
     assert market.balanceCap() == balanceCap
 
     # now works
-    market.increaseB(
+    market.deposit(
         10 * SCALE,
-        {"from": deployer, **valueDict},
+        100 * SCALE,
+        {"from": alice, **valueDict},
     )
