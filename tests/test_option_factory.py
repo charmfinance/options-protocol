@@ -50,14 +50,12 @@ def test_option_factory(
     assert market.baseToken() == quoteToken if isPut else baseToken
     assert market.oracle() == oracle
     assert market.isPut() == isPut
-    assert market.numStrikes() == 3
     assert market.strikePrices(0) == 300 * SCALE
     assert market.strikePrices(1) == 400 * SCALE
     assert market.strikePrices(2) == 500 * SCALE
     assert market.expiryTime() == 2000000000
     assert market.balanceCap() == 40 * SCALE
     assert market.disputePeriod() == 3600
-    assert market.b() == 0
 
     suffix = "P" if isPut else "C"
     suffix2 = "SP" if isPut else "SC"

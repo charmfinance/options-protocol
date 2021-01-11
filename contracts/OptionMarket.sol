@@ -94,12 +94,16 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         bool _isPut,
         uint256 _tradingFee,
         uint256 _balanceCap,
-        uint256 _disputePeriod
+        uint256 _disputePeriod,
+        string memory _symbol
     ) public payable initializer {
-        __ERC20_init("name", "symbol");
-        _setupDecimals(18);
+        __ERC20_init(_symbol, _symbol);
         __ReentrancyGuard_init();
         __Ownable_init();
+
+        // use same decimals as `baseToken`
+        uint8 decimals = IERC20(_baseToken).isETH() ? 18 : ERC20UpgradeSafe(_baseToken).decimals();
+        _setupDecimals(decimals);
 
         require(_longTokens.length == _strikePrices.length, "Lengths do not match");
         require(_shortTokens.length == _strikePrices.length, "Lengths do not match");

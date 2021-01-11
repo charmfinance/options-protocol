@@ -24,6 +24,7 @@ def lmsr(q, b):
 @pytest.mark.parametrize("tradingFee", [0, 10 * PERCENT, SCALE - 1])
 @pytest.mark.parametrize("balanceCap", [0, 40 * SCALE])
 @pytest.mark.parametrize("disputePeriod", [0, 3600])
+@pytest.mark.parametrize("baseDecimals", [6, 18])
 def test_initialize(
     a,
     OptionMarket,
@@ -35,11 +36,18 @@ def test_initialize(
     tradingFee,
     balanceCap,
     disputePeriod,
+    baseDecimals,
 ):
 
     # setup args
     deployer = a[0]
-    baseToken = ZERO_ADDRESS if isEth else deployer.deploy(MockToken)
+
+    if isEth:
+        baseToken = ZERO_ADDRESS
+    else:
+        baseToken = deployer.deploy(MockToken)
+        baseToken.setDecimals(baseDecimals)
+
     oracle = deployer.deploy(MockOracle)
     longTokens = [deployer.deploy(OptionToken) for _ in range(4)]
     shortTokens = [deployer.deploy(OptionToken) for _ in range(4)]
@@ -57,6 +65,7 @@ def test_initialize(
         tradingFee,
         balanceCap,
         disputePeriod,
+        "symbol",
     )
 
     # check variables all set
@@ -67,6 +76,9 @@ def test_initialize(
     assert market.tradingFee() == tradingFee
     assert market.balanceCap() == balanceCap
     assert market.disputePeriod() == disputePeriod
+    assert market.name() == "symbol"
+    assert market.symbol() == "symbol"
+    assert market.decimals() == 18 if isEth else baseDecimals
 
     # check token arrays
     for i in range(4):
@@ -100,6 +112,7 @@ def test_initialize(
             tradingFee,
             balanceCap,
             disputePeriod,
+            "symbol",
         )
 
 
@@ -129,6 +142,7 @@ def test_initialize_errors(
             SCALE,  # trading fee = 100%
             40 * SCALE,  # balance cap = 40
             3600,  # dispute period = 1 hour
+            "symbol",
         )
 
     market = deployer.deploy(OptionMarket)
@@ -144,6 +158,7 @@ def test_initialize_errors(
             1e16,  # trading fee = 1%
             40 * SCALE,  # balance cap = 40
             3600,  # dispute period = 1 hour
+            "symbol",
         )
 
     market = deployer.deploy(OptionMarket)
@@ -159,6 +174,7 @@ def test_initialize_errors(
             1e16,  # trading fee = 1%
             40 * SCALE,  # balance cap = 40
             3600,  # dispute period = 1 hour
+            "symbol",
         )
 
     market = deployer.deploy(OptionMarket)
@@ -174,6 +190,7 @@ def test_initialize_errors(
             1e16,  # trading fee = 1%
             40 * SCALE,  # balance cap = 40
             3600,  # dispute period = 1 hour
+            "symbol",
         )
 
     market = deployer.deploy(OptionMarket)
@@ -189,6 +206,7 @@ def test_initialize_errors(
             1e16,  # trading fee = 1%
             40 * SCALE,  # balance cap = 40
             3600,  # dispute period = 1 hour
+            "symbol",
         )
 
     market = deployer.deploy(OptionMarket)
@@ -204,6 +222,7 @@ def test_initialize_errors(
             1e16,  # trading fee = 1%
             40 * SCALE,  # balance cap = 40
             3600,  # dispute period = 1 hour
+            "symbol",
         )
 
     market = deployer.deploy(OptionMarket)
@@ -219,6 +238,7 @@ def test_initialize_errors(
             1e16,  # trading fee = 1%
             40 * SCALE,  # balance cap = 40
             3600,  # dispute period = 1 hour
+            "symbol",
         )
 
 
@@ -269,6 +289,7 @@ def test_calls(
         1 * PERCENT,  # trading fee = 1%
         balanceCap * scale,
         3600,  # dispute period = 1 hour
+        "symbol",
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
@@ -647,6 +668,7 @@ def test_puts(
         1 * PERCENT,  # trading fee = 1%
         balanceCap * scale,
         3600,  # dispute period = 1 hour
+        "symbol",
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
@@ -1032,6 +1054,7 @@ def test_emergency_methods(
         1 * PERCENT,  # trading fee = 1%
         40000 * SCALE,  # balance cap = 40000
         3600,  # dispute period = 1 hour
+        "symbol",
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
@@ -1151,6 +1174,7 @@ def test_set_balance_limit(
         1 * PERCENT,  # trading fee = 1%
         10 * SCALE,  # balance cap = 10
         3600,  # dispute period = 1 hour
+        "symbol",
     )
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)

@@ -18,7 +18,36 @@ contract OptionSymbol {
     uint256 private constant STRIKE_PRICE_SCALE = 1e18;
     uint256 private constant STRIKE_PRICE_DIGITS = 18;
 
-    function getSymbol(
+    function getMarketSymbol(
+        string memory underlying,
+        uint256 expiryTime,
+        bool isPut
+    ) public pure returns (string memory) {
+        // convert expiry to a readable string
+        (uint256 year, uint256 month, uint256 day) = BokkyPooBahsDateTimeLibrary.timestampToDate(expiryTime);
+
+        //get option month string
+        (string memory monthSymbol, ) = _getMonth(month);
+
+        string memory suffix = isPut ? "P" : "C";
+
+        // concatenated symbol string: LP ETH 04DEC2020 C
+        return
+            string(
+                abi.encodePacked(
+                    "LP",
+                    underlying,
+                    " ",
+                    _uintTo2Chars(day),
+                    monthSymbol,
+                    Strings.toString(year),
+                    " ",
+                    suffix
+                )
+            );
+    }
+
+    function getOptionSymbol(
         string memory underlying,
         uint256 strikePrice,
         uint256 expiryTime,
