@@ -260,7 +260,7 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
      *
      * This method can be called by anyone but cannot be called more than once.
      */
-    function settle() public nonReentrant {
+    function settle() external nonReentrant {
         require(isExpired(), "Cannot be called before expiry");
         require(!isSettled, "Already settled");
 
