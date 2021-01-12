@@ -151,7 +151,6 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         require(optionsOut > 0, "optionsOut must be > 0");
 
         // mint the options
-        uint256 costBefore = lastCost;
         OptionToken option = isLongToken ? longTokens[strikeIndex] : shortTokens[strikeIndex];
         option.mint(msg.sender, optionsOut);
 
@@ -160,8 +159,15 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         fee = isPut ? fee.mul(strikePrices[strikeIndex]).div(SCALE_SCALE) : fee.div(SCALE);
         poolValue = poolValue.add(fee);
 
+        // calculate amount that needs to be sent in
+        uint256 costBefore = lastCost;
+        lastCost = currentCost();
+        amountIn = lastCost.sub(costBefore).add(fee);
+        require(amountIn > 0, "Amount in must be > 0");
+        require(amountIn <= maxAmountIn, "Max slippage exceeded");
+
         // transfer in amount from user
-        amountIn = _transferIn(fee, maxAmountIn);
+        _transferIn(amountIn);
         emit Buy(msg.sender, isLongToken, strikeIndex, optionsOut, amountIn, option.totalSupply());
     }
 
@@ -185,8 +191,15 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         OptionToken option = isLongToken ? longTokens[strikeIndex] : shortTokens[strikeIndex];
         option.burn(msg.sender, optionsIn);
 
+        // calculate amount that needs to be sent out
+        uint256 costBefore = lastCost;
+        lastCost = currentCost();
+        amountOut = costBefore.sub(lastCost);
+        require(amountOut > 0, "Amount out must be > 0");
+        require(amountOut >= minAmountOut, "Max slippage exceeded");
+
         // return amount to user
-        amountOut = _transferOut(0, minAmountOut);
+        baseToken.uniTransfer(msg.sender, amountOut);
         if (isSettled) {
             emit Redeem(msg.sender, isLongToken, strikeIndex, amountOut);
         } else {
@@ -207,14 +220,21 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         }
         _mint(msg.sender, sharesOut);
 
+        // calculate amount that needs to be sent in
+        uint256 costBefore = lastCost;
+        lastCost = currentCost();
+        amountIn = lastCost.sub(costBefore).add(poolAmountIn);
+        require(amountIn > 0, "Amount in must be > 0");
+        require(amountIn <= maxAmountIn, "Max slippage exceeded");
+
         // transfer in amount from user
-        amountIn = _transferIn(poolAmountIn, maxAmountIn);
+        _transferIn(amountIn);
         emit Deposit(msg.sender, sharesOut, amountIn, totalSupply());
     }
 
     function withdraw(uint256 sharesIn, uint256 minAmountOut) external nonReentrant returns (uint256 amountOut) {
-        require(!isDisputePeriod(), "Dispute period");
         require(!isExpired() || isSettled, "Must be called before expiry or after settlement");
+        require(!isDisputePeriod(), "Dispute period");
         require(msg.sender == owner() || !isPaused, "Paused");
         require(sharesIn > 0, "sharesIn must be > 0");
 
@@ -223,8 +243,15 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         poolValue = poolValue.sub(poolAmountOut);
         _burn(msg.sender, sharesIn);
 
-        // return amount to sender
-        amountOut = _transferOut(poolAmountOut, minAmountOut);
+        // calculate amount that needs to be sent out
+        uint256 costBefore = lastCost;
+        lastCost = currentCost();
+        amountOut = costBefore.sub(lastCost).add(poolAmountOut);
+        require(amountOut > 0, "Amount out must be > 0");
+        require(amountOut >= minAmountOut, "Max slippage exceeded");
+
+        // return amount to user
+        baseToken.uniTransfer(msg.sender, amountOut);
         emit Withdraw(msg.sender, sharesIn, amountOut, totalSupply());
     }
 
@@ -286,32 +313,12 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         return block.timestamp >= expiryTime && block.timestamp < expiryTime + disputePeriod;
     }
 
-    function _transferIn(uint256 extraAmount, uint256 maxAmountIn) private returns (uint256 amountIn) {
-        // calculate amount that needs to be sent in
-        uint256 costBefore = lastCost;
-        lastCost = currentCost();
-        amountIn = lastCost.sub(costBefore).add(extraAmount);
-        require(amountIn > 0, "Amount in must be > 0");
-        require(amountIn <= maxAmountIn, "Max slippage exceeded");
-
-        // transfer in amount from user
+    function _transferIn(uint256 amountIn) private {
         uint256 balanceBefore = baseToken.uniBalanceOf(address(this));
         baseToken.uniTransferFromSenderToThis(amountIn);
         uint256 balanceAfter = baseToken.uniBalanceOf(address(this));
         require(baseToken.isETH() || balanceAfter.sub(balanceBefore) == amountIn, "Deflationary tokens not supported");
         require(balanceCap == 0 || baseToken.uniBalanceOf(address(this)) <= balanceCap, "Balance cap exceeded");
-    }
-
-    function _transferOut(uint256 extraAmount, uint256 minAmountOut) private returns (uint256 amountOut) {
-        // calculate amount that needs to be sent out
-        uint256 costBefore = lastCost;
-        lastCost = currentCost();
-        amountOut = costBefore.sub(lastCost).add(extraAmount);
-        require(amountOut > 0, "Amount out must be > 0");
-        require(amountOut >= minAmountOut, "Max slippage exceeded");
-
-        // return amount to user
-        baseToken.uniTransfer(msg.sender, amountOut);
     }
 
     // used for guarded launch. to be removed in future versions
