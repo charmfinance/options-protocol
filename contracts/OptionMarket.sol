@@ -61,13 +61,15 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
     uint256 public tradingFee;
     uint256 public balanceCap;
     uint256 public disputePeriod;
+    uint256 public numStrikes;
 
     bool public isPaused;
     bool public isSettled;
     uint256 public expiryPrice;
 
-    // cache currentCost between trades/redeems to save gas
+    // cache getCurrentCost and getCurrentPayoff between trades to save gas
     uint256 public lastCost;
+    uint256 public lastPayoff;
 
     // total value of fees owed to LPs
     uint256 public poolValue;
@@ -126,6 +128,7 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         tradingFee = _tradingFee;
         balanceCap = _balanceCap;
         disputePeriod = _disputePeriod;
+        numStrikes = _strikePrices.length;
 
         for (uint256 i = 0; i < _strikePrices.length; i++) {
             longTokens.push(OptionToken(_longTokens[i]));
@@ -159,10 +162,10 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         fee = isPut ? fee.mul(strikePrices[strikeIndex]).div(SCALE_SCALE) : fee.div(SCALE);
         poolValue = poolValue.add(fee);
 
-        // calculate amount that needs to be sent in
-        uint256 costBefore = lastCost;
-        lastCost = currentCost();
-        amountIn = lastCost.sub(costBefore).add(fee);
+        // calculate amount that needs to be sent in from lmsr cost
+        uint256 costAfter = getCurrentCost();
+        amountIn = costAfter.sub(lastCost).add(fee); // do sub first as a check since should be positive
+        lastCost = costAfter;
         require(amountIn > 0, "Amount in must be > 0");
         require(amountIn <= maxAmountIn, "Max slippage exceeded");
 
@@ -172,7 +175,7 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
     }
 
     /**
-     * Sell `optionsIn` quantity of options
+     * Sell options
      */
     function sell(
         bool isLongToken,
@@ -191,10 +194,17 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         OptionToken option = isLongToken ? longTokens[strikeIndex] : shortTokens[strikeIndex];
         option.burn(msg.sender, optionsIn);
 
-        // calculate amount that needs to be sent out
-        uint256 costBefore = lastCost;
-        lastCost = currentCost();
-        amountOut = costBefore.sub(lastCost);
+        if (isSettled) {
+            // after settlement, amount returned is option payoff
+            uint256 payoffAfter = getCurrentPayoff();
+            amountOut = lastPayoff.sub(payoffAfter);
+            lastPayoff = payoffAfter;
+        } else {
+            // before expiry, amount returned is calculated from lmsr cost
+            uint256 costAfter = getCurrentCost();
+            amountOut = lastCost.sub(costAfter);
+            lastCost = costAfter;
+        }
         require(amountOut > 0, "Amount out must be > 0");
         require(amountOut >= minAmountOut, "Max slippage exceeded");
 
@@ -220,10 +230,10 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         }
         _mint(msg.sender, sharesOut);
 
-        // calculate amount that needs to be sent in
-        uint256 costBefore = lastCost;
-        lastCost = currentCost();
-        amountIn = lastCost.sub(costBefore).add(poolAmountIn);
+        // calculate amount that needs to be sent in from lmsr cost
+        uint256 costAfter = getCurrentCost();
+        amountIn = costAfter.sub(lastCost).add(poolAmountIn); // do sub first as a check since should be positive
+        lastCost = costAfter;
         require(amountIn > 0, "Amount in must be > 0");
         require(amountIn <= maxAmountIn, "Max slippage exceeded");
 
@@ -243,10 +253,15 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         poolValue = poolValue.sub(poolAmountOut);
         _burn(msg.sender, sharesIn);
 
-        // calculate amount that needs to be sent out
-        uint256 costBefore = lastCost;
-        lastCost = currentCost();
-        amountOut = costBefore.sub(lastCost).add(poolAmountOut);
+        if (isSettled) {
+            // after settlement, amount returned is the user's share in pool
+            amountOut = poolAmountOut;
+        } else {
+            // before expiry, amount returned is calculated from lmsr cost
+            uint256 costAfter = getCurrentCost();
+            amountOut = lastCost.sub(costAfter).add(poolAmountOut); // do sub first as a check since should be positive
+            lastCost = costAfter;
+        }
         require(amountOut > 0, "Amount out must be > 0");
         require(amountOut >= minAmountOut, "Max slippage exceeded");
 
@@ -270,38 +285,42 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         require(expiryPrice > 0, "Price from oracle must be > 0");
 
         // update cached cost and pool value
-        uint256 costBefore = lastCost;
-        lastCost = currentCost();
-        poolValue = baseToken.uniBalanceOf(address(this)).sub(lastCost);
+        lastPayoff = getCurrentPayoff();
+        poolValue = baseToken.uniBalanceOf(address(this)).sub(lastPayoff);
         emit Settle(expiryPrice);
     }
 
     /**
-     * Returns amount that is owed in total to all option holders
+     * Calculates LMSR cost
      *
-     * This amount should always be less than the balance held by this contract.
-     * The difference in balance is owed to LPs
+     * Represents the net amount deposited into the LMSR. This method is used
+     * to calculate the cost of trades.
      */
-    function currentCost() public view returns (uint256) {
-        (uint256[] memory longSupplies, uint256[] memory shortSupplies) = getTotalSupplies();
-        if (isSettled) {
-            return OptionMath.calcPayoff(strikePrices, expiryPrice, isPut, longSupplies, shortSupplies);
-        } else {
-            uint256[] memory quantities = OptionMath.calcQuantities(strikePrices, isPut, longSupplies, shortSupplies);
-            return OptionMath.calcLmsr(quantities, totalSupply());
-        }
+    function getCurrentCost() public view returns (uint256) {
+        uint256[] memory longSupplies = getTotalSupplies(longTokens);
+        uint256[] memory shortSupplies = getTotalSupplies(shortTokens);
+        uint256[] memory quantities = OptionMath.calcQuantities(strikePrices, isPut, longSupplies, shortSupplies);
+        return OptionMath.calcLmsrCost(quantities, totalSupply());
+    }
+
+    /**
+     * Calculates option payoff
+     *
+     * Represents total payoff to option holders
+     */
+    function getCurrentPayoff() public view returns (uint256) {
+        uint256[] memory longSupplies = getTotalSupplies(longTokens);
+        uint256[] memory shortSupplies = getTotalSupplies(shortTokens);
+        return OptionMath.calcPayoff(strikePrices, expiryPrice, isPut, longSupplies, shortSupplies);
     }
 
     /**
      * Convenience method that returns arrays containing total supplies of all option tokens
      */
-    function getTotalSupplies() public view returns (uint256[] memory longSupplies, uint256[] memory shortSupplies) {
-        uint256 numStrikes = strikePrices.length; // save gas
-        longSupplies = new uint256[](numStrikes);
-        shortSupplies = new uint256[](numStrikes);
-        for (uint256 i = 0; i < numStrikes; i++) {
-            longSupplies[i] = longTokens[i].totalSupply();
-            shortSupplies[i] = shortTokens[i].totalSupply();
+    function getTotalSupplies(OptionToken[] memory optionTokens) public view returns (uint256[] memory totalSupplies) {
+        totalSupplies = new uint256[](optionTokens.length);
+        for (uint256 i = 0; i < optionTokens.length; i++) {
+            totalSupplies[i] = optionTokens[i].totalSupply();
         }
     }
 
@@ -313,6 +332,9 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         return block.timestamp >= expiryTime && block.timestamp < expiryTime + disputePeriod;
     }
 
+    /**
+     * Transfer amount from sender and do additional checks
+     */
     function _transferIn(uint256 amountIn) private {
         uint256 balanceBefore = baseToken.uniBalanceOf(address(this));
         baseToken.uniTransferFromSenderToThis(amountIn);
@@ -357,8 +379,8 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         require(isSettled, "Cannot be called before settlement");
         expiryPrice = _expiryPrice;
 
-        // set initial cached value of currentCost()
-        lastCost = currentCost();
+        // set initial cached value of getCurrentCost()
+        lastCost = getCurrentCost();
         poolValue = baseToken.uniBalanceOf(address(this)).sub(lastCost);
         emit Settle(expiryPrice);
     }

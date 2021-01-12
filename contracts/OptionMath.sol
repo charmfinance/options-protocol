@@ -69,7 +69,7 @@ library OptionMath {
      *
      *   m = max(q_1, ..., q_n)
      */
-    function calcLmsr(uint256[] memory quantities, uint256 b) internal pure returns (uint256) {
+    function calcLmsrCost(uint256[] memory quantities, uint256 b) internal pure returns (uint256) {
         if (b == 0) {
             return 0;
         }

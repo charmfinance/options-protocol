@@ -79,6 +79,7 @@ def test_initialize(
     assert market.name() == "symbol"
     assert market.symbol() == "symbol"
     assert market.decimals() == 18 if isEth else baseDecimals
+    assert market.numStrikes() == 4
 
     # check token arrays
     for i in range(4):
