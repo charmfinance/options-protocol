@@ -18,20 +18,17 @@ contract OptionSymbol {
     uint256 private constant STRIKE_PRICE_SCALE = 1e18;
     uint256 private constant STRIKE_PRICE_DIGITS = 18;
 
+    // example symbol: LP ETH 04DEC2020 C
     function getMarketSymbol(
         string memory underlying,
         uint256 expiryTime,
         bool isPut
     ) public pure returns (string memory) {
-        // convert expiry to a readable string
         (uint256 year, uint256 month, uint256 day) = BokkyPooBahsDateTimeLibrary.timestampToDate(expiryTime);
-
-        //get option month string
         (string memory monthSymbol, ) = _getMonth(month);
 
         string memory suffix = isPut ? "P" : "C";
 
-        // concatenated symbol string: LP ETH 04DEC2020 C
         return
             string(
                 abi.encodePacked(
@@ -47,6 +44,7 @@ contract OptionSymbol {
             );
     }
 
+    // example symbol: ETH 04DEC2020 500 C
     function getOptionSymbol(
         string memory underlying,
         uint256 strikePrice,
@@ -56,15 +54,11 @@ contract OptionSymbol {
     ) public pure returns (string memory) {
         string memory displayStrikePrice = _getDisplayedStrikePrice(strikePrice);
 
-        // convert expiry to a readable string
         (uint256 year, uint256 month, uint256 day) = BokkyPooBahsDateTimeLibrary.timestampToDate(expiryTime);
-
-        //get option month string
         (string memory monthSymbol, ) = _getMonth(month);
 
         string memory suffix = isPut ? (isLong ? "P" : "SP") : (isLong ? "C" : "SC");
 
-        // concatenated symbol string: ETH 04DEC2020 500 C
         return
             string(
                 abi.encodePacked(

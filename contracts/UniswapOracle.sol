@@ -12,6 +12,16 @@ import "@openzeppelin/contracts/utils/Address.sol";
 import "../interfaces/IUniswapV2Pair.sol";
 import "../interfaces/IOracle.sol";
 
+/**
+ * Fetches TWAP (time-weighted average price) from Uniswap V2 Oracle
+ *
+ * To calculate the TWAP between time A and time B, call `takeSnapshot` just
+ * before time A. Then at time B, `getPrice` will return the TWAP during
+ * this window
+ *
+ * Tokens can optionally be sent to this contract to be claimed by the user
+ * who last calls `takeSnapshot` before the window starts
+ */
 contract UniswapOracle is IOracle {
     using Address for address;
     using SafeERC20 for IERC20;
@@ -32,15 +42,6 @@ contract UniswapOracle is IOracle {
     address public snapshotCaller;
 
     /**
-     * Fetches TWAP (time-weighted average price) from Uniswap V2 Oracle
-     *
-     * To calculate the TWAP between time A and time B, call `takeSnapshot` just
-     * before time A. Then at time B, `getPrice` will return the TWAP during
-     * this window
-     *
-     * Tokens can optionally be sent to this contract to be claimed by the user
-     * who last calls `takeSnapshot` before the window starts
-     *
      * @param _pair                     `UniswapV2Pair` address
      * @param _startTime                Start time of the TWAP window
      * @param _isInverted               If false, this oracle calculates token0/token1 price

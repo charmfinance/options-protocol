@@ -12,6 +12,14 @@ import "@openzeppelin/contracts/utils/Address.sol";
 import "../interfaces/AggregatorV3Interface.sol";
 import "../interfaces/IOracle.sol";
 
+/**
+ * Fetches price from Chainlink price feed
+ *
+ * Supports multiplying two prices together, such as WBTC/ETH and ETH/USDC
+ * to get WBTC/USDC price.
+ *
+ * Decimals is set to 18
+ */
 contract ChainlinkOracle is IOracle {
     using Address for address;
     using SafeERC20 for IERC20;

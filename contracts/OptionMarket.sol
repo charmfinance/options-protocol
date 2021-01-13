@@ -16,7 +16,44 @@ import "./OptionMath.sol";
 import "./OptionToken.sol";
 
 /**
- * Automated market maker that lets users buy and sell options from it
+ * Automated market-maker for options
+ *
+ * This contract allows an asset to be split up into tokenized payoffs such that
+ * different combinations of payoffs sum up to different call/put option payoffs.
+ * An LMSR (Hanson's market-maker) is used to provide liquidity for the tokenized
+ * payoffs.
+ *
+ * The constant `b` in the LMSR represents the market depth. `b` is increased when
+ * users provide liquidity by depositing funds and it is decreased when they withdraw
+ * liquidity. Trading fees are distributed proportionally to liquidity providers
+ * at the time of the trade.
+ *
+ * Call and put option with any of the supported strikes are provided. Short options
+ * (equivalent to owning 1 underlying + sell 1 option) are provided, which let users
+ * take on short option exposure
+ *
+ * `buy`, `sell`, `deposit` and `withdraw` are the main methods used to interact with
+ * this contract.
+ *
+ * After expiration, `settle` can be called to fetch the expiry price from a
+ * price oracle. `buy` and `deposit` cannot be called after expiration, but `sell`
+ * can be called to redeem options for their corresponding payouts and `withdraw`
+ * can be called to redeem LP tokens for a stake of the remaining funds left
+ * in the contract.
+ *
+ * Methods to calculate the LMSR cost and option payoffs can be found in `OptionMath`.
+ * `OptionToken` is an ERC20 token representing a long or short option position
+ * that's minted or burned when users buy or sell options.
+ *
+ * This contract is also an ERC20 token itself representing shares in the liquidity
+ * pool.
+ *
+ * The intended way to deploy this contract is to call `createMarket` in `OptionFactory`
+ * Then liquidity has to be provided using `deposit` before trades can occur.
+ *
+ * The deployer of this contract is highly privileged and has permissions such as
+ * being able to pause trading, modify the market parameters and override the
+ * settlement price. These permissions will be removed in future versions.
  */
 contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     using Address for address;
@@ -74,16 +111,18 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
     uint256 public poolValue;
 
     /**
-     * @param _baseToken        Underlying ERC20 token. Represents ETH if equal to 0x0
-     * @param _oracle           Oracle from which the settlement price is obtained
-     * @param _longTokens       Options tokens representing long calls/puts
-     * @param _shortTokens      Options tokens representing short calls/puts
-     * @param _strikePrices     Strike prices expressed in wei. Must be in ascending order
+     * @param _baseToken        Underlying asset if call. Strike currency if put
+     *                          Represents ETH if equal to 0x0
+     * @param _oracle           Oracle from which settlement price is obtained
+     * @param _longTokens       Tokens representing long calls/puts
+     * @param _shortTokens      Tokens representing short calls/puts
+     * @param _strikePrices     Strike prices expressed in wei. Must be in increasing order
      * @param _expiryTime       Expiration time as a unix timestamp
-     * @param _isPut            Whether options are calls or puts
-     * @param _tradingFee       Trading fee as fraction of notional expressed in wei
-     * @param _balanceCap       Cap on total value locked in contract. Used for guarded launch. Set to 0 means no cap
+     * @param _isPut            Whether this market provides calls or puts
+     * @param _tradingFee       Trading fee as fraction of underlying expressed in wei
+     * @param _balanceCap       Cap on TVL for guarded launch. No limit if equal to 0
      * @param _disputePeriod    How long after expiry the oracle price can be disputed by deployer
+     * @param _symbol           Name and symbol of LP tokens
      */
     function initialize(
         address _baseToken,
@@ -98,11 +137,12 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         uint256 _disputePeriod,
         string memory _symbol
     ) public payable initializer {
+        // this contract is also an ERC20 token, representing shares in the liquidity pool
         __ERC20_init(_symbol, _symbol);
         __ReentrancyGuard_init();
         __Ownable_init();
 
-        // use same decimals as `baseToken`
+        // LP tokens use same decimals as `baseToken`
         uint8 decimals = IERC20(_baseToken).isETH() ? 18 : ERC20UpgradeSafe(_baseToken).decimals();
         _setupDecimals(decimals);
 
@@ -112,11 +152,12 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         require(_strikePrices.length > 0, "Strike prices must not be empty");
         require(_strikePrices[0] > 0, "Strike prices must be > 0");
 
-        // check strike prices are in increasing order
+        // check strike prices are increasing
         for (uint256 i = 0; i < _strikePrices.length - 1; i++) {
             require(_strikePrices[i] < _strikePrices[i + 1], "Strike prices must be increasing");
         }
 
+        // trading fee can be 0
         require(_tradingFee < SCALE, "Trading fee must be < 1");
 
         baseToken = IERC20(_baseToken);
@@ -139,6 +180,11 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
 
     /**
      * Buy options
+     *
+     * The option bought is specified by `isLongToken` and `strikeIndex` and the
+     * amount by `optionsOut`
+     *
+     * This method reverts if the resulting cost is greater than `maxAmountIn`
      */
     function buy(
         bool isLongToken,
@@ -150,20 +196,22 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         require(!isExpired(), "Already expired");
         require(msg.sender == owner() || !isPaused, "Paused");
         require(strikeIndex < strikePrices.length, "Index too large");
-        require(optionsOut > 0, "optionsOut must be > 0");
+        require(optionsOut > 0, "options out must be > 0");
 
-        // mint the options
+        // mint options to user
         OptionToken option = isLongToken ? longTokens[strikeIndex] : shortTokens[strikeIndex];
         option.mint(msg.sender, optionsOut);
 
-        // calculate trading fee
+        // calculate trading fee and allocate it to the LP pool
+        // like LMSR cost, fees have to be multiplied by strike price
         uint256 fee = optionsOut.mul(tradingFee);
         fee = isPut ? fee.mul(strikePrices[strikeIndex]).div(SCALE_SCALE) : fee.div(SCALE);
         poolValue = poolValue.add(fee);
 
-        // calculate amount that needs to be sent in from lmsr cost
+        // calculate amount that needs to be paid by user to buy these options
+        // it's equal to the increase in LMSR cost after minting the options
         uint256 costAfter = getCurrentCost();
-        amountIn = costAfter.sub(lastCost).add(fee); // do sub first as a check since should be positive
+        amountIn = costAfter.sub(lastCost).add(fee); // do sub first as a check since should not fail
         lastCost = costAfter;
         require(amountIn > 0, "Amount in must be > 0");
         require(amountIn <= maxAmountIn, "Max slippage exceeded");
@@ -175,6 +223,11 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
 
     /**
      * Sell options
+     *
+     * The option sold is specified by `isLongToken` and `strikeIndex` and the
+     * amount by `optionsIn`
+     *
+     * This method reverts if the resulting amount returned is less than `minAmountOut`
      */
     function sell(
         bool isLongToken,
@@ -187,19 +240,20 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         require(!isDisputePeriod(), "Dispute period");
         require(msg.sender == owner() || !isPaused, "Paused");
         require(strikeIndex < strikePrices.length, "Index too large");
-        require(optionsIn > 0, "optionsIn must be > 0");
+        require(optionsIn > 0, "options in must be > 0");
 
         // burn user's options
         OptionToken option = isLongToken ? longTokens[strikeIndex] : shortTokens[strikeIndex];
         option.burn(msg.sender, optionsIn);
 
+        // calculate amount that needs to be returned to user
         if (isSettled) {
-            // after settlement, amount returned is option payoff
+            // after settlement, amount is the option payoff
             uint256 payoffAfter = getCurrentPayoff();
             amountOut = lastPayoff.sub(payoffAfter);
             lastPayoff = payoffAfter;
         } else {
-            // before expiry, amount returned is calculated from lmsr cost
+            // before expiry, amount is the decrease in LMSR cost after burning the options
             uint256 costAfter = getCurrentCost();
             amountOut = lastCost.sub(costAfter);
             lastCost = costAfter;
@@ -207,27 +261,37 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         require(amountOut > 0, "Amount out must be > 0");
         require(amountOut >= minAmountOut, "Max slippage exceeded");
 
-        // return amount to user
+        // transfer amount to user
         baseToken.uniTransfer(msg.sender, amountOut);
         emit Sell(msg.sender, isLongToken, strikeIndex, optionsIn, amountOut, option.totalSupply(), isSettled);
     }
 
+    /**
+     * Deposit liquidity
+     *
+     * `sharesOut` is the intended increase in the parameter `b`
+     *
+     * This method reverts if the resulting cost is greater than `maxAmountIn`
+     */
     function deposit(uint256 sharesOut, uint256 maxAmountIn) external payable nonReentrant returns (uint256 amountIn) {
         require(!isExpired(), "Already expired");
         require(msg.sender == owner() || !isPaused, "Paused");
         require(sharesOut > 0, "sharesOut must be > 0");
 
-        // calculate extra amount user needs to contribute to pool
+        // user needs to contribute proportional amount of fees to pool, which
+        // ensures they are only earning fees generated after they have deposited
         uint256 poolAmountIn;
         if (totalSupply() > 0) {
-            poolAmountIn = poolValue.mul(sharesOut).div(totalSupply());
+            // add 1 to round up
+            poolAmountIn = poolValue.mul(sharesOut).div(totalSupply()).add(1);
             poolValue = poolValue.add(poolAmountIn);
         }
         _mint(msg.sender, sharesOut);
 
-        // calculate amount that needs to be sent in from lmsr cost
+        // calculate amount that needs to be deposited by user
+        // it's equal to the increase in LMSR cost after minting the options
         uint256 costAfter = getCurrentCost();
-        amountIn = costAfter.sub(lastCost).add(poolAmountIn); // do sub first as a check since should be positive
+        amountIn = costAfter.sub(lastCost).add(poolAmountIn); // do sub first as a check since should not fail
         lastCost = costAfter;
         require(amountIn > 0, "Amount in must be > 0");
         require(amountIn <= maxAmountIn, "Max slippage exceeded");
@@ -237,24 +301,32 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         emit Deposit(msg.sender, sharesOut, amountIn, totalSupply());
     }
 
+    /**
+     * Withdraw liquidity
+     *
+     * `sharesIn` is the intended decrease in the parameter `b`
+     *
+     * This method reverts if the resulting amount returned is less than `minAmountOut`
+     */
     function withdraw(uint256 sharesIn, uint256 minAmountOut) external nonReentrant returns (uint256 amountOut) {
         require(!isExpired() || isSettled, "Must be called before expiry or after settlement");
         require(!isDisputePeriod(), "Dispute period");
         require(msg.sender == owner() || !isPaused, "Paused");
         require(sharesIn > 0, "sharesIn must be > 0");
 
-        // calculate extra amount that needs to be returned to user
+        // calculate the cut of fees earned by user
         uint256 poolAmountOut = poolValue.mul(sharesIn).div(totalSupply());
         poolValue = poolValue.sub(poolAmountOut);
         _burn(msg.sender, sharesIn);
 
+        // calculate amount that needs to be returned to user
         if (isSettled) {
-            // after settlement, amount returned is the user's share in pool
+            // after settlement, amount is the user's share in pool
             amountOut = poolAmountOut;
         } else {
-            // before expiry, amount returned is calculated from lmsr cost
+            // before expiry, amount is the decrease in LMSR cost after burning the options
             uint256 costAfter = getCurrentCost();
-            amountOut = lastCost.sub(costAfter).add(poolAmountOut); // do sub first as a check since should be positive
+            amountOut = lastCost.sub(costAfter).add(poolAmountOut); // do sub first as a check since should not fail
             lastCost = costAfter;
         }
         require(amountOut > 0, "Amount out must be > 0");
@@ -290,6 +362,11 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
      *
      * Represents the net amount deposited into the LMSR. This method is used
      * to calculate the cost of trades.
+     *
+     * This method is only used before expiry to calculate trade costs. Before
+     * expiry, the `baseToken` balance of this contract is always at least current
+     * cost + pool value. Current cost is maximum possible amount that needs to
+     * be paid out to option holders. Pool value is the fees earned by LPs.
      */
     function getCurrentCost() public view returns (uint256) {
         uint256[] memory longSupplies = getTotalSupplies(longTokens);
@@ -302,6 +379,11 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
      * Calculates option payoff
      *
      * Represents total payoff to option holders
+     *
+     * This method is only used after expiry. After expiry, the `baseToken` balance
+     * of this contract is always at least current payoff + pool value. Current
+     * payoff is the amount owed to option holders and pool value is the amount
+     * owed to LPs.
      */
     function getCurrentPayoff() public view returns (uint256) {
         uint256[] memory longSupplies = getTotalSupplies(longTokens);
@@ -309,9 +391,6 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         return OptionMath.calcPayoff(strikePrices, expiryPrice, isPut, longSupplies, shortSupplies);
     }
 
-    /**
-     * Convenience method that returns arrays containing total supplies of all option tokens
-     */
     function getTotalSupplies(OptionToken[] memory optionTokens) public view returns (uint256[] memory totalSupplies) {
         totalSupplies = new uint256[](optionTokens.length);
         for (uint256 i = 0; i < optionTokens.length; i++) {
@@ -324,7 +403,7 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
     }
 
     function isDisputePeriod() public view returns (bool) {
-        return block.timestamp >= expiryTime && block.timestamp < expiryTime + disputePeriod;
+        return block.timestamp >= expiryTime && block.timestamp < expiryTime.add(disputePeriod);
     }
 
     /**
@@ -374,7 +453,7 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         require(isSettled, "Cannot be called before settlement");
         expiryPrice = _expiryPrice;
 
-        // set initial cached value of getCurrentCost()
+        // update cached cost and pool value
         lastCost = getCurrentCost();
         poolValue = baseToken.uniBalanceOf(address(this)).sub(lastCost);
         emit Settle(expiryPrice);

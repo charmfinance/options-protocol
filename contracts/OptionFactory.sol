@@ -23,7 +23,6 @@ contract OptionFactory is CloneFactory, OptionSymbol, ReentrancyGuard {
     address public optionTokenLibary;
     address[] public markets;
 
-    // used by `createMarket` to avoid stack too deep error
     address private oracle;
     uint256[] private strikePrices;
     uint256 private expiryTime;

@@ -9,10 +9,10 @@ import "@openzeppelin/contracts/utils/Address.sol";
 import "./libraries/openzeppelin/ERC20UpgradeSafe.sol";
 
 /**
- * ERC20 token representing ownership of an options contract
+ * ERC20 token representing a long or short option position. It is intended to be
+ * used by `OptionMarket`, which mints/burns these tokens when users buy/sell options
  *
- * Should be instantiated by the `OptionMarket` contract which is then allowed
- * to mint/burn these tokens when users buy/sell options
+ * Note that `decimals` should match the decimals of the `baseToken` in `OptionMarket`
  */
 contract OptionToken is ERC20UpgradeSafe {
     using Address for address;
