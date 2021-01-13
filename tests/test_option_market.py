@@ -468,6 +468,7 @@ def test_calls(
         "optionsIn": 1 * scale,
         "amountOut": tx.return_value,
         "newSupply": 1 * scale,
+        "isSettled": False,
     }
 
     # sell 5 covers
@@ -487,6 +488,7 @@ def test_calls(
         "optionsIn": 5 * scale,
         "amountOut": tx.return_value,
         "newSupply": 1 * scale,
+        "isSettled": False,
     }
 
     # try to withdraw
@@ -507,6 +509,7 @@ def test_calls(
         "sharesIn": 3 * scale,
         "amountOut": tx.return_value,
         "newB": 12 * scale,
+        "isSettled": False,
     }
 
     # can't deposit beyond balance cap
@@ -567,11 +570,14 @@ def test_calls(
     assert approx(tx.return_value) == alicePayoff1 * scale / 555
     assert approx(marketBalance - getBalance(market)) == alicePayoff1 * scale / 555
     assert approx(getBalance(alice) - aliceBalance) == alicePayoff1 * scale / 555
-    assert tx.events["Redeem"] == {
+    assert tx.events["Sell"] == {
         "account": alice,
         "isLongToken": CALL,
         "strikeIndex": 0,
-        "amount": tx.return_value,
+        "optionsIn": 1 * scale,
+        "amountOut": tx.return_value,
+        "newSupply": 0,
+        "isSettled": True,
     }
 
     marketBalance = getBalance(market)
@@ -580,11 +586,14 @@ def test_calls(
     assert approx(tx.return_value) == alicePayoff2 * scale / 555
     assert approx(marketBalance - getBalance(market)) == alicePayoff2 * scale / 555
     assert approx(getBalance(alice) - aliceBalance) == alicePayoff2 * scale / 555
-    assert tx.events["Redeem"] == {
+    assert tx.events["Sell"] == {
         "account": alice,
         "isLongToken": COVER,
         "strikeIndex": 3,
-        "amount": tx.return_value,
+        "optionsIn": 1 * scale,
+        "amountOut": tx.return_value,
+        "newSupply": 0,
+        "isSettled": True,
     }
 
     # bob withdraws
@@ -597,6 +606,7 @@ def test_calls(
         "sharesIn": 5 * scale,
         "amountOut": tx.return_value,
         "newB": 7 * scale,
+        "isSettled": True,
     }
 
     marketBalance = getBalance(market)
@@ -605,11 +615,14 @@ def test_calls(
     assert approx(tx.return_value) == bobPayoff * scale / 555
     assert approx(marketBalance - getBalance(market)) == bobPayoff * scale / 555
     assert approx(getBalance(bob) - bobBalance) == bobPayoff * scale / 555
-    assert tx.events["Redeem"] == {
+    assert tx.events["Sell"] == {
         "account": bob,
         "isLongToken": CALL,
         "strikeIndex": 2,
-        "amount": tx.return_value,
+        "optionsIn": 3 * scale,
+        "amountOut": tx.return_value,
+        "newSupply": 0,
+        "isSettled": True,
     }
 
     # alice withdraws
@@ -622,6 +635,7 @@ def test_calls(
         "sharesIn": 7 * scale,
         "amountOut": tx.return_value,
         "newB": 0 * scale,
+        "isSettled": True,
     }
 
     # no tvl left
@@ -847,6 +861,7 @@ def test_puts(
         "optionsIn": 1 * scale,
         "amountOut": tx.return_value,
         "newSupply": 1 * scale,
+        "isSettled": False,
     }
 
     # sell 5 covers
@@ -877,6 +892,7 @@ def test_puts(
         "optionsIn": 5 * scale,
         "amountOut": tx.return_value,
         "newSupply": 1 * scale,
+        "isSettled": False,
     }
 
     # try to withdraw
@@ -908,6 +924,7 @@ def test_puts(
         "sharesIn": 300 * scale,
         "amountOut": tx.return_value,
         "newB": 1200 * scale,
+        "isSettled": False,
     }
 
     # can't deposit beyond balance cap
@@ -978,11 +995,14 @@ def test_puts(
     assert approx(tx.return_value) == alicePayoff2 * scale
     assert approx(marketBalance - getBalance(market)) == alicePayoff2 * scale
     assert approx(getBalance(alice) - aliceBalance) == alicePayoff2 * scale
-    assert tx.events["Redeem"] == {
+    assert tx.events["Sell"] == {
         "account": alice,
         "isLongToken": COVER,
         "strikeIndex": 3,
-        "amount": tx.return_value,
+        "optionsIn": 1 * scale,
+        "amountOut": tx.return_value,
+        "newSupply": 0,
+        "isSettled": True,
     }
 
     # bob withdraws
@@ -995,6 +1015,7 @@ def test_puts(
         "sharesIn": 500 * scale,
         "amountOut": tx.return_value,
         "newB": 700 * scale,
+        "isSettled": True,
     }
 
     marketBalance = getBalance(market)
@@ -1003,11 +1024,14 @@ def test_puts(
     assert approx(tx.return_value) == bobPayoff * scale
     assert approx(marketBalance - getBalance(market)) == bobPayoff * scale
     assert approx(getBalance(bob) - bobBalance) == bobPayoff * scale
-    assert tx.events["Redeem"] == {
+    assert tx.events["Sell"] == {
         "account": bob,
         "isLongToken": PUT,
         "strikeIndex": 2,
-        "amount": tx.return_value,
+        "optionsIn": 3 * scale,
+        "amountOut": tx.return_value,
+        "newSupply": 0,
+        "isSettled": True,
     }
 
     # alice withdraws
@@ -1020,6 +1044,7 @@ def test_puts(
         "sharesIn": 700 * scale,
         "amountOut": tx.return_value,
         "newB": 0 * scale,
+        "isSettled": True,
     }
 
     # no tvl left

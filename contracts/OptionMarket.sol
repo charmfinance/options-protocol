@@ -39,13 +39,13 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         uint256 strikeIndex,
         uint256 optionsIn,
         uint256 amountOut,
-        uint256 newSupply
+        uint256 newSupply,
+        bool isSettled
     );
 
     event Deposit(address indexed account, uint256 sharesOut, uint256 amountIn, uint256 newB);
-    event Withdraw(address indexed account, uint256 sharesIn, uint256 amountOut, uint256 newB);
+    event Withdraw(address indexed account, uint256 sharesIn, uint256 amountOut, uint256 newB, bool isSettled);
     event Settle(uint256 expiryPrice);
-    event Redeem(address indexed account, bool isLongToken, uint256 strikeIndex, uint256 amount);
 
     uint256 public constant SCALE = 1e18;
     uint256 public constant SCALE_SCALE = 1e36;
@@ -209,11 +209,7 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
 
         // return amount to user
         baseToken.uniTransfer(msg.sender, amountOut);
-        if (isSettled) {
-            emit Redeem(msg.sender, isLongToken, strikeIndex, amountOut);
-        } else {
-            emit Sell(msg.sender, isLongToken, strikeIndex, optionsIn, amountOut, option.totalSupply());
-        }
+        emit Sell(msg.sender, isLongToken, strikeIndex, optionsIn, amountOut, option.totalSupply(), isSettled);
     }
 
     function deposit(uint256 sharesOut, uint256 maxAmountIn) external payable nonReentrant returns (uint256 amountIn) {
@@ -266,7 +262,7 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
 
         // return amount to user
         baseToken.uniTransfer(msg.sender, amountOut);
-        emit Withdraw(msg.sender, sharesIn, amountOut, totalSupply());
+        emit Withdraw(msg.sender, sharesIn, amountOut, totalSupply(), isSettled);
     }
 
     /**
