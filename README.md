@@ -1,43 +1,42 @@
-# Charm Finance
+# Charm Options
 
-Charm Finance is an AMM (automated market-maker) for options on Ethereum
+This repository contains an automated market-maker for options
 
-It uses an LS-LMSR (Othman et al., 2013) to price the options. In short, it acts like token bonding curve, minting/burning option tokens as users buy/sell them.
+It implements an AMM that allows an asset to be split up into tokenized payoffs such that
+different combinations of payoffs sum up to different call/put option payoffs.
+An LMSR (Hanson's market-maker) is used to provide liquidity for the tokenized
+payoffs.
 
-At expiration, the settlement price is fetched from a Chainlink or Uniswap V2 oracle. Users can them redeem their options for the settlement value
 
+## Deployer privileges
 
-## Owner privileges
+Please note the deployer is highly privileged and has the permissions below. These are only intended to be used in an emergency situation and will be removed in future versions.
 
-Please note the owner of the options market is highly privileged and has the permissions below. These are only intended to be used in an emergency situation. These permissions will be removed in future versions.
+- Modify parameters of market
 
 - Pause the contract indefinitely. This includes preventing users from buying, selling, and redeeming their options.
 
-- Change the contract’s oracle. If an invalid or malicious oracle is provided, users can potentially lose funds.
-
-- Change the contract’s expiry date.
-
-- Dispute the settlement price
+- Override the expiry price
 
 
-## Repo
+## Repository
 
-The main contract is `OptionMarket.sol`. This contains methods `buy` and `sell` that let users mint/burn options. Calling `settle` after expiration fetches the settlement price from the oracle and users can call `redeem` to redeem their options for the settlement value.
+The main contract that users will interact with is `OptionMarket.sol`, which implements the `buy`, `sell`, `deposit` and `withdraw` methods.
 
-`OptionToken.sol` is an ERC20 token representing ownership of an option.
+`OptionMath.sol` implements calculation logic for the LMSR cost function and for option payoffs.
 
-`UniswapOracle.sol` is used by `OptionMarket.sol` to fetch the TWAP price at expiration from a Uniswap market.
+`OptionToken.sol` is an ERC-20 token representing a long or short option position.
 
-`contracts/mocks` contains mock contracts for unit tests which include methods for setting fake data in them.
+`ChainlinkOracle.sol` and `UniswapOracle.sol` are price oracles used to retrieve the price of the underlying asset at expiration.
 
-We use the `log` and `exp` methods in the library `ABDKMath64x64.sol` to calculate the LS-LMSR cost function in `OptionMarket.sol`.
+`OptionFactory.sol` is a factory contract. `createMarket` is the intended way to deploy a new market.
 
-We use `UniERC20.sol` as a wrapper around ETH and ERC20 tokens for convenience. It's based on `https://github.com/CryptoManiacsZone/mooniswap/blob/master/contracts/libraries/UniERC20.sol`
+`OptionSymbol.sol` is used to build the symbols and names of the option and LP tokens. It's adapted from `https://github.com/opynfinance/GammaProtocol/blob/master/contracts/Otoken.sol`.
 
 
 ## Commands
 
-Run solidity formatter
+Run solidity linter
 
 ```
 npm run lint:fix

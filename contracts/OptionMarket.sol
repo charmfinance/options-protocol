@@ -51,9 +51,10 @@ import "./OptionToken.sol";
  * The intended way to deploy this contract is to call `createMarket` in `OptionFactory`
  * Then liquidity has to be provided using `deposit` before trades can occur.
  *
- * The deployer of this contract is highly privileged and has permissions such as
- * being able to pause trading, modify the market parameters and override the
- * settlement price. These permissions will be removed in future versions.
+ * Please note that the deployer of this contract is highly privileged and has
+ * permissions such as being able to pause trading, modify the market parameters
+ * and override the settlement price. These permissions will be removed in future
+ * versions.
  */
 contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     using Address for address;
