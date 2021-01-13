@@ -23,7 +23,7 @@ import "./OptionToken.sol";
  * An LMSR (Hanson's market-maker) is used to provide liquidity for the tokenized
  * payoffs.
  *
- * The constant `b` in the LMSR represents the market depth. `b` is increased when
+ * The parameter `b` in the LMSR represents the market depth. `b` is increased when
  * users provide liquidity by depositing funds and it is decreased when they withdraw
  * liquidity. Trading fees are distributed proportionally to liquidity providers
  * at the time of the trade.
@@ -361,13 +361,16 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
     /**
      * Calculates LMSR cost
      *
-     * Represents the net amount deposited into the LMSR. This method is used
-     * to calculate the cost of trades.
+     * Represents the net amount locked in the LMSR
      *
-     * This method is only used before expiry to calculate trade costs. Before
-     * expiry, the `baseToken` balance of this contract is always at least current
-     * cost + pool value. Current cost is maximum possible amount that needs to
-     * be paid out to option holders. Pool value is the fees earned by LPs.
+     * This value will increase as options are bought and decrease as options
+     * are sold. The change in value corresponds to the total cost of a purchase
+     * or the amount returned from a sale.
+     *
+     * This method is only used before expiry. Before expiry, the `baseToken`
+     * balance of this contract is always at least current cost + pool value.
+     * Current cost is maximum possible amount that needs to be paid out to
+     * option holders. Pool value is the fees earned by LPs.
      */
     function getCurrentCost() public view returns (uint256) {
         uint256[] memory longSupplies = getTotalSupplies(longTokens);
@@ -380,6 +383,9 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
      * Calculates option payoff
      *
      * Represents total payoff to option holders
+     *
+     * This value will increase as options are redeemed. The change in value
+     * corresponds to the payoff returned from a redemption.
      *
      * This method is only used after expiry. After expiry, the `baseToken` balance
      * of this contract is always at least current payoff + pool value. Current

@@ -11,6 +11,10 @@ library OptionMath {
 
     uint256 public constant SCALE = 1e18;
 
+    /**
+     * Converts total supplies of options into the tokenized payoff quantities used
+     * by the LMSR
+     */
     function calcQuantities(
         uint256[] memory strikePrices,
         bool isPut,
@@ -19,11 +23,11 @@ library OptionMath {
     ) internal pure returns (uint256[] memory quantities) {
         require(longSupplies.length == strikePrices.length, "Lengths do not match");
         require(shortSupplies.length == strikePrices.length, "Lengths do not match");
-        uint256 length = longSupplies.length;
+        uint256 n = strikePrices.length;
 
         // this mutates the method arguments, but costs less gas
         if (isPut) {
-            for (uint256 i = 0; i < length; i++) {
+            for (uint256 i = 0; i < n; i++) {
                 uint256 strikePrice = strikePrices[i];
                 longSupplies[i] = longSupplies[i].mul(strikePrice).div(SCALE);
                 shortSupplies[i] = shortSupplies[i].mul(strikePrice).div(SCALE);
@@ -33,17 +37,17 @@ library OptionMath {
         uint256[] memory leftSupplies = isPut ? shortSupplies : longSupplies;
         uint256[] memory rightSupplies = isPut ? longSupplies : shortSupplies;
 
-        // initally set runningSum to total supply of shortSupplies
+        // initially set runningSum = sum(rightSupplies)
         uint256 runningSum;
-        for (uint256 i = 0; i < length; i++) {
+        for (uint256 i = 0; i < n; i++) {
             runningSum = runningSum.add(rightSupplies[i]);
         }
 
-        quantities = new uint256[](length + 1);
+        quantities = new uint256[](n + 1);
         quantities[0] = runningSum;
 
-        // set quantities[i] to be total supply of longSupplies[:i] and shortSupplies[i:]
-        for (uint256 i = 0; i < length; i++) {
+        // set quantities[i] = leftSupplies[:i] + rightSupplies[i:]
+        for (uint256 i = 0; i < n; i++) {
             runningSum = runningSum.add(leftSupplies[i]).sub(rightSupplies[i]);
             quantities[i + 1] = runningSum;
         }
@@ -57,11 +61,10 @@ library OptionMath {
      *
      * where
      *
-     *   q_i = total supply of ith spread
+     *   q_i = total supply of ith tokenized payoff
      *   b = liquidity parameter
      *
-     * An equivalent expression for C is used to avoid overflow when
-     * calculating exponentials
+     * An equivalent expression for C is used to avoid overflow when calculating exponentials
      *
      *   C(q_1, ..., q_n) = m + b * log(exp((q_1 - m) / b) + ... + exp((q_n - m) / b))
      *
@@ -100,7 +103,9 @@ library OptionMath {
     }
 
     /**
-     * Calculates amount of base tokens that needs to be paid out to all users
+     * Calculate total payoff of all outstanding options
+     *
+     * This value will decrease as options are redeemed
      */
     function calcPayoff(
         uint256[] memory strikePrices,
