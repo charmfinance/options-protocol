@@ -9,7 +9,7 @@ from brownie import (
 
 # deployment parameters
 ACCOUNT = "deployer"
-PAIR = "RINKEBY_ETH/USD"
+PAIR = "BTC/USD"
 
 
 # addresses can be found here: https://docs.chain.link/docs/ethereum-addresses
@@ -34,7 +34,7 @@ def main():
     balance = deployer.balance()
 
     price_feed1, price_feed2 = CHAINLINK_PAIRS[PAIR]
-    oracle = ChainlinkOracle.deploy(price_feed1, price_feed2, {"from": deployer})
+    oracle = deployer.deploy(ChainlinkOracle, price_feed1, price_feed2, publish_source=True)
 
     print(f"Current price: {oracle.getPrice() / 1e18:.4f}")
     print(f"Gas used in deployment: {(balance - deployer.balance()) / 1e18:.4f} ETH")
