@@ -26,6 +26,7 @@ PATHS = [
     "contracts/ChainlinkOracle.sol",
     "contracts/OptionSymbol.sol",
     "contracts/OptionToken.sol",
+    "contracts/OptionMath.sol",
     "contracts/OptionMarket.sol",
     "contracts/OptionFactory.sol",
 ]
