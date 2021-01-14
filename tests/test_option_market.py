@@ -1143,6 +1143,7 @@ def test_emergency_methods(
     market.settle({"from": alice})
     market.disputeExpiryPrice(666 * SCALE, {"from": deployer})
     assert market.expiryPrice() == 666 * SCALE
+    assert market.lastPayoff() == market.getCurrentPayoff()
     assert market.isSettled()
 
     fast_forward(2000000000 + 2400)

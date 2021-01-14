@@ -98,7 +98,6 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
     uint256 public tradingFee;
     uint256 public balanceCap;
     uint256 public disputePeriod;
-    uint256 public numStrikes;
 
     bool public isPaused;
     bool public isSettled;
@@ -169,7 +168,6 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         tradingFee = _tradingFee;
         balanceCap = _balanceCap;
         disputePeriod = _disputePeriod;
-        numStrikes = _strikePrices.length;
 
         for (uint256 i = 0; i < _strikePrices.length; i++) {
             longTokens.push(OptionToken(_longTokens[i]));
@@ -290,7 +288,7 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         _mint(msg.sender, sharesOut);
 
         // calculate amount that needs to be deposited by user
-        // it's equal to the increase in LMSR cost after minting the options
+        // it's equal to the increase in LMSR cost after increasing b
         uint256 costAfter = getCurrentCost();
         amountIn = costAfter.sub(lastCost).add(poolAmountIn); // do sub first as a check since should not fail
         lastCost = costAfter;
@@ -325,7 +323,7 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
             // after settlement, amount is the user's share in pool
             amountOut = poolAmountOut;
         } else {
-            // before expiry, amount is the decrease in LMSR cost after burning the options
+            // before expiry, amount is the decrease in LMSR cost after decreasing b
             uint256 costAfter = getCurrentCost();
             amountOut = lastCost.sub(costAfter).add(poolAmountOut); // do sub first as a check since should not fail
             lastCost = costAfter;
@@ -339,9 +337,11 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
     }
 
     /**
-     * At expiration, retrieve and store the underlying price from the oracle
+     * Retrieve and store the underlying price from the oracle
      *
-     * This method can be called by anyone but cannot be called more than once.
+     * This method can be called by anyone after expiration but cannot be called
+     * more than once. In practice it should be called as soon as possible after the
+     * expiration time.
      */
     function settle() external nonReentrant {
         require(isExpired(), "Cannot be called before expiry");
@@ -352,16 +352,16 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         expiryPrice = oracle.getPrice();
         require(expiryPrice > 0, "Price from oracle must be > 0");
 
-        // update cached cost and pool value
+        // update cached payoff and pool value
         lastPayoff = getCurrentPayoff();
         poolValue = baseToken.uniBalanceOf(address(this)).sub(lastPayoff);
         emit Settle(expiryPrice);
     }
 
     /**
-     * Calculates LMSR cost
+     * Calculate LMSR cost
      *
-     * Represents the net amount locked in the LMSR
+     * Represents total amount locked in the LMSR
      *
      * This value will increase as options are bought and decrease as options
      * are sold. The change in value corresponds to the total cost of a purchase
@@ -380,11 +380,11 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
     }
 
     /**
-     * Calculates option payoff
+     * Calculate option payoff
      *
      * Represents total payoff to option holders
      *
-     * This value will increase as options are redeemed. The change in value
+     * This value will decrease as options are redeemed. The change in value
      * corresponds to the payoff returned from a redemption.
      *
      * This method is only used after expiry. After expiry, the `baseToken` balance
@@ -411,6 +411,10 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
 
     function isDisputePeriod() public view returns (bool) {
         return block.timestamp >= expiryTime && block.timestamp < expiryTime.add(disputePeriod);
+    }
+
+    function numStrikes() external view returns (uint256) {
+        return strikePrices.length;
     }
 
     /**
@@ -460,9 +464,9 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         require(isSettled, "Cannot be called before settlement");
         expiryPrice = _expiryPrice;
 
-        // update cached cost and pool value
-        lastCost = getCurrentCost();
-        poolValue = baseToken.uniBalanceOf(address(this)).sub(lastCost);
+        // update cached payoff and pool value
+        lastPayoff = getCurrentPayoff();
+        poolValue = baseToken.uniBalanceOf(address(this)).sub(lastPayoff);
         emit Settle(expiryPrice);
     }
 }

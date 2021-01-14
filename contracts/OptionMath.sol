@@ -14,6 +14,9 @@ library OptionMath {
     /**
      * Converts total supplies of options into the tokenized payoff quantities used
      * by the LMSR
+     *
+     * For puts, multiply by strike price since option quantity is in terms of the
+     * underlying, but lmsr quantities should be in terms of the strike currency
      */
     function calcQuantities(
         uint256[] memory strikePrices,
@@ -106,6 +109,9 @@ library OptionMath {
      * Calculate total payoff of all outstanding options
      *
      * This value will decrease as options are redeemed
+     *
+     * For calls, divide by expiry price since payoff should be in terms of the
+     * `baseToken`
      */
     function calcPayoff(
         uint256[] memory strikePrices,
