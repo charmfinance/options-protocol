@@ -23,15 +23,11 @@ contract OptionFactory is CloneFactory, OptionSymbol, ReentrancyGuard {
     address public optionTokenLibary;
     address[] public markets;
 
-    address private oracle;
+    // avoid stack too deep error
     uint256[] private strikePrices;
     uint256 private expiryTime;
     bool private isPut;
-    uint256 private tradingFee;
-    uint256 private balanceCap;
-    uint256 private disputePeriod;
     IERC20 private underlyingToken;
-    address private baseToken;
     uint8 private baseDecimals;
 
     constructor(address _optionMarketLibrary, address _optionTokenLibrary) public {
@@ -42,8 +38,8 @@ contract OptionFactory is CloneFactory, OptionSymbol, ReentrancyGuard {
     }
 
     function createMarket(
-        address _baseToken,
-        address _quoteToken,
+        address _baseAsset,
+        address _quoteAsset,
         address _oracle,
         uint256[] memory _strikePrices,
         uint256 _expiryTime,
@@ -54,35 +50,29 @@ contract OptionFactory is CloneFactory, OptionSymbol, ReentrancyGuard {
     ) external nonReentrant returns (address) {
         // set member variables to avoid stack too deep error
         // TODO: cleaner way to do this?
-        oracle = _oracle;
         strikePrices = _strikePrices;
         expiryTime = _expiryTime;
         isPut = _isPut;
-        tradingFee = _tradingFee;
-        balanceCap = _balanceCap;
-        disputePeriod = _disputePeriod;
-        underlyingToken = IERC20(_baseToken);
-        baseToken = isPut ? _quoteToken : _baseToken;
-        baseDecimals = IERC20(baseToken).isETH() ? 18 : ERC20UpgradeSafe(baseToken).decimals();
-        return _createMarket();
-    }
+        underlyingToken = IERC20(_baseAsset);
 
-    function _createMarket() private returns (address) {
+        address baseToken = isPut ? _quoteAsset : _baseAsset;
+        baseDecimals = IERC20(baseToken).isETH() ? 18 : ERC20UpgradeSafe(baseToken).decimals();
+
         address marketAddress = createClone(optionMarketLibrary);
         OptionMarket market = OptionMarket(marketAddress);
         markets.push(marketAddress);
 
         market.initialize(
             baseToken,
-            oracle,
+            _oracle,
             _createOptionTokens(marketAddress, true),
             _createOptionTokens(marketAddress, false),
-            strikePrices,
-            expiryTime,
-            isPut,
-            tradingFee,
-            balanceCap,
-            disputePeriod,
+            _strikePrices,
+            _expiryTime,
+            _isPut,
+            _tradingFee,
+            _balanceCap,
+            _disputePeriod,
             getMarketSymbol(underlyingToken.uniSymbol(), expiryTime, isPut)
         );
 
