@@ -13,8 +13,8 @@ import "../interfaces/IOracle.sol";
 /**
  * Fetches price from Chainlink price feed
  *
- * Supports multiplying two prices together, such as WBTC/ETH and ETH/USDC
- * to get WBTC/USDC price.
+ * Supports multiplying two prices together, such as WBTC/ETH price and ETH/USDC
+ * price to get WBTC/USDC price.
  *
  * Decimals is set to 18
  */
@@ -41,7 +41,6 @@ contract ChainlinkOracle is IOracle {
         if (priceFeed2 != address(0)) {
             price = price.mul(getPriceFromFeed(priceFeed2)).div(SCALE);
         }
-        return price;
     }
 
     function getPriceFromFeed(address priceFeed) public view returns (uint256) {
