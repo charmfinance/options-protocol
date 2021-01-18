@@ -1236,3 +1236,118 @@ def test_set_balance_limit(
         100 * SCALE,
         {"from": alice, **valueDict},
     )
+
+
+@pytest.mark.parametrize("isEth", [False, True])
+@pytest.mark.parametrize("balanceCap", [0, 40])
+@pytest.mark.parametrize("baseDecimals", [6, 18])
+@pytest.mark.parametrize("depositFirst", [False, True])
+def test_liquidity_manipulation_attack(
+    a,
+    OptionMarket,
+    MockToken,
+    MockOracle,
+    OptionToken,
+    fast_forward,
+    isEth,
+    balanceCap,
+    baseDecimals,
+    depositFirst,
+):
+
+    # setup args
+    deployer, alice = a[:2]
+    oracle = deployer.deploy(MockOracle)
+    longTokens = [deployer.deploy(OptionToken) for _ in range(4)]
+    shortTokens = [deployer.deploy(OptionToken) for _ in range(4)]
+
+    if isEth:
+        scale = 1e18
+        baseToken = ZERO_ADDRESS
+    else:
+        scale = 10 ** baseDecimals
+        baseToken = deployer.deploy(MockToken)
+        baseToken.setDecimals(baseDecimals)
+    percent = scale // 100
+
+    def getBalance(wallet):
+        return wallet.balance() if isEth else baseToken.balanceOf(wallet)
+
+    # deploy and initialize
+    market = deployer.deploy(OptionMarket)
+    market.initialize(
+        baseToken,
+        oracle,
+        longTokens,
+        shortTokens,
+        [300 * SCALE, 400 * SCALE, 500 * SCALE, 600 * SCALE],
+        2000000000,  # expiry = 18 May 2033
+        False,  # call
+        1 * PERCENT,  # trading fee = 1%
+        balanceCap * scale,
+        3600,  # dispute period = 1 hour
+        "symbol",
+    )
+    for token in longTokens + shortTokens:
+        token.initialize(market, "name", "symbol", 18)
+
+    # give users base tokens
+    if not isEth:
+        for user in [deployer, alice]:
+            baseToken.mint(user, 100 * scale, {"from": deployer})
+            baseToken.approve(market, 100 * scale, {"from": user})
+    valueDict = {"value": 50 * scale} if isEth else {}
+
+    # deployers deposits 1
+    market.deposit(
+        1 * scale,
+        100 * scale,
+        {"from": deployer, **valueDict},
+    )
+    balance = getBalance(alice)
+
+    if depositFirst:
+
+        # alice deposits 10
+        market.deposit(
+            10 * scale,
+            100 * scale,
+            {"from": alice, **valueDict},
+        )
+
+        # alice buys 1
+        market.buy(CALL, 0, 1 * scale, 100 * scale, {"from": alice, **valueDict})
+
+        # alice withdraws 10
+        market.withdraw(
+            10 * scale,
+            0,
+            {"from": alice},
+        )
+
+        # alice sells 1
+        market.sell(CALL, 0, 1 * scale, 0, {"from": alice})
+
+    else:
+
+        # alice buys 1
+        market.buy(CALL, 0, 1 * scale, 100 * scale, {"from": alice, **valueDict})
+
+        # alice deposits 10
+        market.deposit(
+            10 * scale,
+            100 * scale,
+            {"from": alice, **valueDict},
+        )
+
+        # alice sells 1
+        market.sell(CALL, 0, 1 * scale, 0, {"from": alice})
+
+        # alice withdraws 10
+        market.withdraw(
+            10 * scale,
+            0,
+            {"from": alice},
+        )
+
+    assert getBalance(alice) >= balance
