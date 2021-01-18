@@ -1350,4 +1350,4 @@ def test_liquidity_manipulation_attack(
             {"from": alice},
         )
 
-    assert getBalance(alice) >= balance
+    assert getBalance(alice) <= balance
