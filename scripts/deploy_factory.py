@@ -8,6 +8,7 @@ from brownie import (
 
 ZERO = "0x0000000000000000000000000000000000000000"
 
+
 def main():
     deployer = accounts.load("deployer")
     balance = deployer.balance()
