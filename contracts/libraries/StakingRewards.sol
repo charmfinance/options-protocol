@@ -26,7 +26,6 @@
 // Changes made from original:
 // - Set pragma version to 0.6.12
 // - Added abstract, override and virtual keywords where needed
-// - Removed `stake` and `withdraw` from interface as SeedRewards uses a different signature
 // - Replaced SNX with CHARM
 
 
@@ -57,13 +56,13 @@ interface IStakingRewards {
 
     // Mutative
 
-    // function stake(uint256 amount) external;
+    function stake(uint256 amount) external;
 
-    // function withdraw(uint256 amount) external;
+    function withdraw(uint256 amount) external;
 
     function getReward() external;
 
-    // function exit() external;
+    function exit() external;
 }
 
 
@@ -231,7 +230,7 @@ contract StakingRewards is IStakingRewards, RewardsDistributionRecipient, Reentr
 
     /* ========== MUTATIVE FUNCTIONS ========== */
 
-    function stake(uint256 amount) external nonReentrant notPaused updateReward(msg.sender) {
+    function stake(uint256 amount) external override nonReentrant notPaused updateReward(msg.sender) {
         require(amount > 0, "Cannot stake 0");
         _totalSupply = _totalSupply.add(amount);
         _balances[msg.sender] = _balances[msg.sender].add(amount);
@@ -239,7 +238,7 @@ contract StakingRewards is IStakingRewards, RewardsDistributionRecipient, Reentr
         emit Staked(msg.sender, amount);
     }
 
-    function withdraw(uint256 amount) public nonReentrant updateReward(msg.sender) {
+    function withdraw(uint256 amount) public override nonReentrant updateReward(msg.sender) {
         require(amount > 0, "Cannot withdraw 0");
         _totalSupply = _totalSupply.sub(amount);
         _balances[msg.sender] = _balances[msg.sender].sub(amount);
@@ -256,7 +255,7 @@ contract StakingRewards is IStakingRewards, RewardsDistributionRecipient, Reentr
         }
     }
 
-    function exit() external {
+    function exit() external override {
         withdraw(_balances[msg.sender]);
         getReward();
     }
