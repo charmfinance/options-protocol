@@ -14,13 +14,10 @@ from brownie import (
 # deployment parameters
 ACCOUNT = "deployer"
 BASE_TOKEN = "ETH"
-BASE_TOKEN = "WBTC"
-EXPIRY_DATE = "11 Dec 2020"
-EXPIRY_DATE = "18 Dec 2020"
-STRIKE_PRICES = [400, 500, 600]
-STRIKE_PRICES = [20000, 25000, 30000]
-LIQUIDITY_PARAM = 0.20
-NETWORK = "rinkeby"
+# BASE_TOKEN = "WBTC"
+EXPIRY_DATE = "29 Jan 2021"
+STRIKE_PRICES = [800, 960, 1120, 1280, 1440, 1600, 1920, 2240]
+NETWORK = "mainnet"
 
 
 # constants
@@ -28,16 +25,21 @@ SCALE = 10 ** 18
 EXPIRY_TIME = "16:00"
 QUOTE_TOKEN = "USDC"
 TRADING_FEE = 0.01
+DISPUTE_PERIOD = 3600  # 1 hour
+BALANCE_LIMIT = {
+    "ETH": 100e18,
+    "USDC": 100000e6,
+}
 
 
 DEPLOYED_ORACLES = {
     "mainnet": {
-        "BTC/USDC": "0xe3F5abfC874b6B5A3416b0A01c3913eE11B8A02C",
-        "ETH/USDC": "0x4DA31B35fc13298A473aDF620844033B9F9342AD",
+        "ETH/USDC": "0x3D52e452a284969b4110C04506cF22C18d7e7fF3",
+        "WBTC/USDC": "0xB2a98Bd623038930d5d158EA6b20890ef4965A5a",
     },
     "rinkeby": {
         "ETH/USDC": "0xD014CDc41f9AF7A6456c920aD17fFf14F136640F",
-        "WBTC/USDC": "0xECe365B379E1dD183B20fc5f022230C044d51404",
+        "WBTC/USDC": "0x8C74d6a122e6951C769914b0c52879000B1129a8",
     },
 }
 
@@ -55,15 +57,13 @@ TOKEN_ADDRESSES = {
 }
 
 FACTORY = {
-    "mainnet": "",
-    # "rinkeby": "0xA8d6D6623fc492eA9acbE39EE929E7205fE66687",  # v1. remove
-    "rinkeby": "0x17e54471d69e59152e966DE03E29442A34cf19B5",
+    "mainnet": "0x443ec3dc7840c3eB610a2A80068DfE3c56822e86",
+    "rinkeby": "",
 }
 
 
 def create_market(deployer, is_put):
-    n = len(STRIKE_PRICES)
-    alpha_wei = int(SCALE * LIQUIDITY_PARAM / log(n) / n)
+    n = len(STRIKE_PRICES) + 1
     strike_prices_wei = [int(SCALE * px + 1e-9) for px in STRIKE_PRICES]
 
     expiry = arrow.get(EXPIRY_DATE + " " + EXPIRY_TIME, "DD MMM YYYY HH:mm")
@@ -83,9 +83,10 @@ def create_market(deployer, is_put):
         oracle,
         strike_prices_wei,
         expiry.timestamp,
-        alpha_wei,
         is_put,
         int(TRADING_FEE * SCALE + 1e-9),
+        BALANCE_LIMIT[QUOTE_TOKEN if is_put else BASE_TOKEN],
+        DISPUTE_PERIOD,
         {"from": deployer},
     )
 
@@ -93,7 +94,9 @@ def create_market(deployer, is_put):
     time.sleep(1)
     address = factory.markets(factory.numMarkets() - 1)
     print(f"Deployed at: {address}")
-    return OptionMarket.at(address)
+    market = OptionMarket.at(address)
+    market.pause({"from": deployer})
+    return market
 
 
 def main():
