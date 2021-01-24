@@ -68,11 +68,11 @@ def test_option_factory(
     for i, strike in enumerate([300, 400, 500]):
         longToken = OptionToken.at(market.longTokens(i))
         shortToken = OptionToken.at(market.shortTokens(i))
-        assert longToken.name() == f"{symbol} 18MAY2033 {strike} {suffix}"
-        assert longToken.symbol() == f"{symbol} 18MAY2033 {strike} {suffix}"
+        assert longToken.name() == f"Charm {symbol} 18MAY2033 {strike} {suffix}"
+        assert longToken.symbol() == f"Charm {symbol} 18MAY2033 {strike} {suffix}"
         assert longToken.decimals() == decimals
-        assert shortToken.name() == f"{symbol} 18MAY2033 {strike} {suffix2}"
-        assert shortToken.symbol() == f"{symbol} 18MAY2033 {strike} {suffix2}"
+        assert shortToken.name() == f"Charm {symbol} 18MAY2033 {strike} {suffix2}"
+        assert shortToken.symbol() == f"Charm {symbol} 18MAY2033 {strike} {suffix2}"
         assert shortToken.decimals() == decimals
 
     assert factory.numMarkets() == 1
