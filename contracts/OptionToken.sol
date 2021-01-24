@@ -32,14 +32,12 @@ contract OptionToken is ERC20UpgradeSafe {
         market = _market;
     }
 
-    // TODO: change to external
-    function mint(address account, uint256 amount) public {
+    function mint(address account, uint256 amount) external {
         require(msg.sender == market, "!market");
         _mint(account, amount);
     }
 
-    // TODO: change to external
-    function burn(address account, uint256 amount) public {
+    function burn(address account, uint256 amount) external {
         require(msg.sender == market, "!market");
         _burn(account, amount);
     }
