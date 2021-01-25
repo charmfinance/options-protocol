@@ -22,8 +22,6 @@ def lmsr(q, b):
 @pytest.mark.parametrize("isEth", [False, True])
 @pytest.mark.parametrize("isPut", [False, True])
 @pytest.mark.parametrize("tradingFee", [0, 10 * PERCENT, SCALE - 1])
-@pytest.mark.parametrize("balanceCap", [0, 40 * SCALE])
-@pytest.mark.parametrize("disputePeriod", [0, 3600])
 @pytest.mark.parametrize("baseDecimals", [6, 18])
 def test_initialize(
     a,
@@ -34,8 +32,6 @@ def test_initialize(
     isEth,
     isPut,
     tradingFee,
-    balanceCap,
-    disputePeriod,
     baseDecimals,
 ):
 
@@ -63,8 +59,6 @@ def test_initialize(
         2000000000,  # expiry = 18 May 2033
         isPut,
         tradingFee,
-        balanceCap,
-        disputePeriod,
         "symbol",
     )
 
@@ -74,8 +68,9 @@ def test_initialize(
     assert market.expiryTime() == 2000000000
     assert market.isPut() == isPut
     assert market.tradingFee() == tradingFee
-    assert market.balanceCap() == balanceCap
-    assert market.disputePeriod() == disputePeriod
+    assert market.balanceCap() == 0
+    assert market.totalSupplyCap() == 0
+    assert market.disputePeriod() == 0
     assert market.name() == "symbol"
     assert market.symbol() == "symbol"
     assert market.decimals() == 18 if isEth else baseDecimals
@@ -111,8 +106,6 @@ def test_initialize(
             2000000000,  # expiry = 18 May 2033
             isPut,
             tradingFee,
-            balanceCap,
-            disputePeriod,
             "symbol",
         )
 
@@ -141,8 +134,6 @@ def test_initialize_errors(
             2000000000,  # expiry = 18 May 2033
             isPut,
             SCALE,  # trading fee = 100%
-            40 * SCALE,  # balance cap = 40
-            3600,  # dispute period = 1 hour
             "symbol",
         )
 
@@ -157,8 +148,6 @@ def test_initialize_errors(
             1500000000,  # expiry = 14 July 2017
             isPut,
             1e16,  # trading fee = 1%
-            40 * SCALE,  # balance cap = 40
-            3600,  # dispute period = 1 hour
             "symbol",
         )
 
@@ -173,8 +162,6 @@ def test_initialize_errors(
             2000000000,  # expiry = 18 May 2033
             isPut,
             1e16,  # trading fee = 1%
-            40 * SCALE,  # balance cap = 40
-            3600,  # dispute period = 1 hour
             "symbol",
         )
 
@@ -189,8 +176,6 @@ def test_initialize_errors(
             2000000000,  # expiry = 18 May 2033
             isPut,
             1e16,  # trading fee = 1%
-            40 * SCALE,  # balance cap = 40
-            3600,  # dispute period = 1 hour
             "symbol",
         )
 
@@ -205,8 +190,6 @@ def test_initialize_errors(
             2000000000,  # expiry = 18 May 2033
             isPut,
             1e16,  # trading fee = 1%
-            40 * SCALE,  # balance cap = 40
-            3600,  # dispute period = 1 hour
             "symbol",
         )
 
@@ -221,8 +204,6 @@ def test_initialize_errors(
             2000000000,  # expiry = 18 May 2033
             isPut,
             1e16,  # trading fee = 1%
-            40 * SCALE,  # balance cap = 40
-            3600,  # dispute period = 1 hour
             "symbol",
         )
 
@@ -237,14 +218,13 @@ def test_initialize_errors(
             2000000000,  # expiry = 18 May 2033
             isPut,
             1e16,  # trading fee = 1%
-            40 * SCALE,  # balance cap = 40
-            3600,  # dispute period = 1 hour
             "symbol",
         )
 
 
 @pytest.mark.parametrize("isEth", [False, True])
 @pytest.mark.parametrize("balanceCap", [0, 40])
+@pytest.mark.parametrize("totalSupplyCap", [0, 100])
 @pytest.mark.parametrize("baseDecimals", [6, 18])
 def test_calls(
     a,
@@ -255,6 +235,7 @@ def test_calls(
     fast_forward,
     isEth,
     balanceCap,
+    totalSupplyCap,
     baseDecimals,
 ):
 
@@ -288,10 +269,12 @@ def test_calls(
         2000000000,  # expiry = 18 May 2033
         False,  # call
         1 * PERCENT,  # trading fee = 1%
-        balanceCap * scale,
-        3600,  # dispute period = 1 hour
         "symbol",
     )
+    market.setBalanceCap(balanceCap * scale, {"from": deployer})
+    market.setTotalSupplyCap(totalSupplyCap * scale, {"from": deployer})
+    market.setDisputePeriod(3600, {"from": deployer})  # 1 hour
+
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
 
@@ -643,6 +626,7 @@ def test_calls(
 
 
 @pytest.mark.parametrize("balanceCap", [0, 40000])
+@pytest.mark.parametrize("totalSupplyCap", [0, 80000])
 @pytest.mark.parametrize("baseDecimals", [6, 18])
 def test_puts(
     a,
@@ -652,6 +636,7 @@ def test_puts(
     OptionToken,
     fast_forward,
     balanceCap,
+    totalSupplyCap,
     baseDecimals,
 ):
 
@@ -681,10 +666,12 @@ def test_puts(
         2000000000,  # expiry = 18 May 2033
         True,  # put
         1 * PERCENT,  # trading fee = 1%
-        balanceCap * scale,
-        3600,  # dispute period = 1 hour
         "symbol",
     )
+    market.setBalanceCap(balanceCap * scale, {"from": deployer})
+    market.setTotalSupplyCap(totalSupplyCap * scale, {"from": deployer})
+    market.setDisputePeriod(3600, {"from": deployer})  # 1 hour
+
     for token in longTokens + shortTokens:
         token.initialize(market, "name", "symbol", 18)
 
@@ -1053,8 +1040,19 @@ def test_puts(
 
 @pytest.mark.parametrize("isEth", [False, True])
 @pytest.mark.parametrize("isPut", [False, True])
+@pytest.mark.parametrize("balanceCap", [0, 40])
+@pytest.mark.parametrize("totalSupplyCap", [0, 10])
 def test_emergency_methods(
-    a, OptionMarket, MockToken, MockOracle, OptionToken, fast_forward, isEth, isPut
+    a,
+    OptionMarket,
+    MockToken,
+    MockOracle,
+    OptionToken,
+    fast_forward,
+    isEth,
+    isPut,
+    balanceCap,
+    totalSupplyCap,
 ):
 
     # setup args
@@ -1078,8 +1076,6 @@ def test_emergency_methods(
         2000000000,  # expiry = 18 May 2033
         isPut,
         1 * PERCENT,  # trading fee = 1%
-        40000 * SCALE,  # balance cap = 40000
-        3600,  # dispute period = 1 hour
         "symbol",
     )
     for token in longTokens + shortTokens:
@@ -1098,6 +1094,16 @@ def test_emergency_methods(
         0.1 * SCALE,
         {"from": alice, **valueDict},
     )
+
+    with reverts("Ownable: caller is not the owner"):
+        market.setBalanceCap(balanceCap * SCALE, {"from": alice})
+    market.setBalanceCap(balanceCap * SCALE, {"from": deployer})
+    assert market.balanceCap() == balanceCap * SCALE
+
+    with reverts("Ownable: caller is not the owner"):
+        market.setTotalSupplyCap(totalSupplyCap * SCALE, {"from": alice})
+    market.setTotalSupplyCap(totalSupplyCap * SCALE, {"from": deployer})
+    assert market.totalSupplyCap() == totalSupplyCap * SCALE
 
     # pause and unpause
     with reverts("Ownable: caller is not the owner"):
@@ -1130,7 +1136,10 @@ def test_emergency_methods(
     market.setExpiryTime(2000000000 - 1, {"from": deployer})
     assert market.expiryTime() == 2000000000 - 1
 
-    market.setDisputePeriod(2400)
+    with reverts("Ownable: caller is not the owner"):
+        market.setDisputePeriod(2400, {"from": alice})
+    assert market.disputePeriod() == 0
+    market.setDisputePeriod(2400, {"from": deployer})
     assert market.disputePeriod() == 2400
 
     # dispute expiry price
@@ -1169,8 +1178,8 @@ def test_emergency_methods(
 
 
 @pytest.mark.parametrize("isEth", [False, True])
-@pytest.mark.parametrize("balanceCap", [0, 20 * SCALE])
-def test_set_balance_limit(
+@pytest.mark.parametrize("balanceCap", [0, 20])
+def test_balance_cap(
     a,
     OptionMarket,
     MockToken,
@@ -1199,8 +1208,6 @@ def test_set_balance_limit(
         2000000000,  # expiry = 18 May 2033
         False,
         1 * PERCENT,  # trading fee = 1%
-        10 * SCALE,  # balance cap = 10
-        3600,  # dispute period = 1 hour
         "symbol",
     )
     for token in longTokens + shortTokens:
@@ -1214,32 +1221,123 @@ def test_set_balance_limit(
         baseToken.approve(market, 100 * SCALE, {"from": alice})
     valueDict = {"value": 50 * SCALE} if isEth else {}
 
-    # balance cap too low
-    with reverts("Balance cap exceeded"):
-        market.deposit(
-            10 * SCALE,
-            100 * SCALE,
-            {"from": alice, **valueDict},
-        )
-
     # only owner
     with reverts("Ownable: caller is not the owner"):
-        market.setBalanceCap(20 * SCALE, {"from": alice})
+        market.setBalanceCap(balanceCap * SCALE, {"from": alice})
+
+    # works
+    market.deposit(
+        20 * SCALE,
+        100 * SCALE,
+        {"from": alice, **valueDict},
+    )
+    market.withdraw(
+        20 * SCALE,
+        0,
+        {"from": alice},
+    )
 
     # increase cap
-    market.setBalanceCap(balanceCap, {"from": deployer})
-    assert market.balanceCap() == balanceCap
+    market.setBalanceCap(balanceCap * SCALE, {"from": deployer})
+    assert market.balanceCap() == balanceCap * SCALE
 
-    # now works
+    # balance cap too low
+    if balanceCap:
+        with reverts("Balance cap exceeded"):
+            market.deposit(
+                13 * SCALE,
+                100 * SCALE,
+                {"from": alice, **valueDict},
+            )
+
     market.deposit(
-        10 * SCALE,
+        12 * SCALE,
         100 * SCALE,
         {"from": alice, **valueDict},
     )
 
 
 @pytest.mark.parametrize("isEth", [False, True])
-@pytest.mark.parametrize("balanceCap", [0, 40])
+@pytest.mark.parametrize("totalSupplyCap", [0, 20])
+def test_total_supply_cap(
+    a,
+    OptionMarket,
+    MockToken,
+    MockOracle,
+    OptionToken,
+    fast_forward,
+    isEth,
+    totalSupplyCap,
+):
+
+    # setup args
+    deployer, alice = a[:2]
+    baseToken = ZERO_ADDRESS if isEth else deployer.deploy(MockToken)
+    oracle = deployer.deploy(MockOracle)
+    longTokens = [deployer.deploy(OptionToken) for _ in range(4)]
+    shortTokens = [deployer.deploy(OptionToken) for _ in range(4)]
+
+    # deploy and initialize
+    market = deployer.deploy(OptionMarket)
+    market.initialize(
+        baseToken,
+        oracle,
+        longTokens,
+        shortTokens,
+        [300 * SCALE, 400 * SCALE, 500 * SCALE, 600 * SCALE],
+        2000000000,  # expiry = 18 May 2033
+        False,
+        1 * PERCENT,  # trading fee = 1%
+        "symbol",
+    )
+    for token in longTokens + shortTokens:
+        token.initialize(market, "name", "symbol", 18)
+
+    # give users base tokens
+    if not isEth:
+        baseToken.mint(deployer, 100 * SCALE, {"from": deployer})
+        baseToken.approve(market, 100 * SCALE, {"from": deployer})
+        baseToken.mint(alice, 100 * SCALE, {"from": deployer})
+        baseToken.approve(market, 100 * SCALE, {"from": alice})
+    valueDict = {"value": 50 * SCALE} if isEth else {}
+
+    # only owner
+    with reverts("Ownable: caller is not the owner"):
+        market.setTotalSupplyCap(totalSupplyCap * SCALE, {"from": alice})
+
+    # works
+    market.deposit(
+        20 * SCALE,
+        100 * SCALE,
+        {"from": alice, **valueDict},
+    )
+    market.withdraw(
+        20 * SCALE,
+        0,
+        {"from": alice},
+    )
+
+    # increase cap
+    market.setTotalSupplyCap(totalSupplyCap * SCALE, {"from": deployer})
+    assert market.totalSupplyCap() == totalSupplyCap * SCALE
+
+    # balance cap too low
+    if totalSupplyCap:
+        with reverts("Total supply cap exceeded"):
+            market.deposit(
+                21 * SCALE,
+                100 * SCALE,
+                {"from": alice, **valueDict},
+            )
+
+    market.deposit(
+        20 * SCALE,
+        100 * SCALE,
+        {"from": alice, **valueDict},
+    )
+
+
+@pytest.mark.parametrize("isEth", [False, True])
 @pytest.mark.parametrize("baseDecimals", [6, 18])
 @pytest.mark.parametrize("depositFirst", [False, True])
 def test_liquidity_manipulation_attack(
@@ -1250,7 +1348,6 @@ def test_liquidity_manipulation_attack(
     OptionToken,
     fast_forward,
     isEth,
-    balanceCap,
     baseDecimals,
     depositFirst,
 ):
@@ -1284,8 +1381,6 @@ def test_liquidity_manipulation_attack(
         2000000000,  # expiry = 18 May 2033
         False,  # call
         1 * PERCENT,  # trading fee = 1%
-        balanceCap * scale,
-        3600,  # dispute period = 1 hour
         "symbol",
     )
     for token in longTokens + shortTokens:

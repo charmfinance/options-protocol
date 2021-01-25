@@ -28,7 +28,7 @@ contract OptionFactory is CloneFactory, OptionSymbol, ReentrancyGuard {
     uint256 private expiryTime;
     bool private isPut;
     IERC20 private underlyingToken;
-    uint8 private baseDecimals;
+    address private baseToken;
 
     constructor(address _optionMarketLibrary, address _optionTokenLibrary) public {
         require(_optionMarketLibrary != address(0), "optionMarketLibrary should not be address 0");
@@ -44,21 +44,17 @@ contract OptionFactory is CloneFactory, OptionSymbol, ReentrancyGuard {
         uint256[] memory _strikePrices,
         uint256 _expiryTime,
         bool _isPut,
-        uint256 _tradingFee,
-        uint256 _balanceCap,
-        uint256 _disputePeriod
-    ) external nonReentrant returns (address) {
+        uint256 _tradingFee
+    ) external nonReentrant returns (address marketAddress) {
         // set member variables to avoid stack too deep error
-        // TODO: cleaner way to do this?
         strikePrices = _strikePrices;
         expiryTime = _expiryTime;
         isPut = _isPut;
         underlyingToken = IERC20(_baseAsset);
 
-        address baseToken = isPut ? _quoteAsset : _baseAsset;
-        baseDecimals = IERC20(baseToken).isETH() ? 18 : ERC20UpgradeSafe(baseToken).decimals();
+        baseToken = isPut ? _quoteAsset : _baseAsset;
 
-        address marketAddress = createClone(optionMarketLibrary);
+        marketAddress = createClone(optionMarketLibrary);
         OptionMarket market = OptionMarket(marketAddress);
         markets.push(marketAddress);
 
@@ -71,8 +67,6 @@ contract OptionFactory is CloneFactory, OptionSymbol, ReentrancyGuard {
             _expiryTime,
             _isPut,
             _tradingFee,
-            _balanceCap,
-            _disputePeriod,
             getMarketSymbol(underlyingToken.uniSymbol(), expiryTime, isPut)
         );
 
@@ -82,6 +76,8 @@ contract OptionFactory is CloneFactory, OptionSymbol, ReentrancyGuard {
     }
 
     function _createOptionTokens(address marketAddress, bool isLong) private returns (address[] memory optionTokens) {
+        uint8 baseDecimals = IERC20(baseToken).isETH() ? 18 : ERC20UpgradeSafe(baseToken).decimals();
+
         optionTokens = new address[](strikePrices.length);
         for (uint256 i = 0; i < strikePrices.length; i++) {
             optionTokens[i] = createClone(optionTokenLibary);

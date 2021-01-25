@@ -97,6 +97,7 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
     bool public isPut;
     uint256 public tradingFee;
     uint256 public balanceCap;
+    uint256 public totalSupplyCap;
     uint256 public disputePeriod;
 
     bool public isPaused;
@@ -120,8 +121,6 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
      * @param _expiryTime       Expiration time as a unix timestamp
      * @param _isPut            Whether this market provides calls or puts
      * @param _tradingFee       Trading fee as fraction of underlying expressed in wei
-     * @param _balanceCap       Cap on TVL for guarded launch. No limit if equal to 0
-     * @param _disputePeriod    How long after expiry the oracle price can be disputed by deployer
      * @param _symbol           Name and symbol of LP tokens
      */
     function initialize(
@@ -133,8 +132,6 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         uint256 _expiryTime,
         bool _isPut,
         uint256 _tradingFee,
-        uint256 _balanceCap,
-        uint256 _disputePeriod,
         string memory _symbol
     ) public payable initializer {
         // this contract is also an ERC20 token, representing shares in the liquidity pool
@@ -166,8 +163,6 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         expiryTime = _expiryTime;
         isPut = _isPut;
         tradingFee = _tradingFee;
-        balanceCap = _balanceCap;
-        disputePeriod = _disputePeriod;
 
         for (uint256 i = 0; i < _strikePrices.length; i++) {
             longTokens.push(OptionToken(_longTokens[i]));
@@ -286,6 +281,7 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
             poolValue = poolValue.add(poolAmountIn);
         }
         _mint(msg.sender, sharesOut);
+        require(totalSupplyCap == 0 || totalSupply() <= totalSupplyCap, "Total supply cap exceeded");
 
         // calculate amount that needs to be deposited by user
         // it's equal to the increase in LMSR cost after increasing b
@@ -428,9 +424,14 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         require(balanceCap == 0 || baseToken.uniBalanceOf(address(this)) <= balanceCap, "Balance cap exceeded");
     }
 
-    // used for guarded launch. to be removed in future versions
+    // used for guarded launch
     function setBalanceCap(uint256 _balanceCap) external onlyOwner {
         balanceCap = _balanceCap;
+    }
+
+    // used for guarded launch
+    function setTotalSupplyCap(uint256 _totalSupplyCap) external onlyOwner {
+        totalSupplyCap = _totalSupplyCap;
     }
 
     // emergency use only. to be removed in future versions
