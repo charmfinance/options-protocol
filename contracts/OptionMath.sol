@@ -37,12 +37,13 @@ library OptionMath {
             }
         }
 
+        // swap shortSupplies and longSupplies for puts
         uint256[] memory leftSupplies = isPut ? shortSupplies : longSupplies;
         uint256[] memory rightSupplies = isPut ? longSupplies : shortSupplies;
 
         quantities = new uint256[](n + 1);
 
-        // initially set runningSum = sum(rightSupplies)
+        // set quantities[0] = sum(rightSupplies)
         for (uint256 i = 0; i < n; i++) {
             quantities[0] = quantities[0].add(rightSupplies[i]);
         }

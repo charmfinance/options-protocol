@@ -139,7 +139,7 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         __ReentrancyGuard_init();
         __Ownable_init();
 
-        // LP tokens use same decimals as `baseToken`
+        // use same decimals as `baseToken`
         uint8 decimals = IERC20(_baseToken).isETH() ? 18 : ERC20UpgradeSafe(_baseToken).decimals();
         _setupDecimals(decimals);
 
@@ -154,7 +154,8 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
             require(_strikePrices[i] < _strikePrices[i + 1], "Strike prices must be increasing");
         }
 
-        // trading fee can be 0
+        // check trading fee is less than 100%
+        // note trading fee can be 0
         require(_tradingFee < SCALE, "Trading fee must be < 1");
 
         baseToken = IERC20(_baseToken);
