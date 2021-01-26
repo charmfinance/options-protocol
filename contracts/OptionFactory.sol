@@ -23,11 +23,10 @@ contract OptionFactory is CloneFactory, OptionSymbol, ReentrancyGuard {
     address public optionTokenLibary;
     address[] public markets;
 
-    // avoid stack too deep error
     uint256[] private strikePrices;
     uint256 private expiryTime;
     bool private isPut;
-    IERC20 private underlyingToken;
+    string private underlyingSymbol;
     address private baseToken;
 
     constructor(address _optionMarketLibrary, address _optionTokenLibrary) public {
@@ -50,9 +49,9 @@ contract OptionFactory is CloneFactory, OptionSymbol, ReentrancyGuard {
         strikePrices = _strikePrices;
         expiryTime = _expiryTime;
         isPut = _isPut;
-        underlyingToken = IERC20(_baseAsset);
+        underlyingSymbol = IERC20(_baseAsset).uniSymbol();
 
-        baseToken = isPut ? _quoteAsset : _baseAsset;
+        baseToken = _isPut ? _quoteAsset : _baseAsset;
 
         marketAddress = createClone(optionMarketLibrary);
         OptionMarket market = OptionMarket(marketAddress);
@@ -67,7 +66,7 @@ contract OptionFactory is CloneFactory, OptionSymbol, ReentrancyGuard {
             _expiryTime,
             _isPut,
             _tradingFee,
-            getMarketSymbol(underlyingToken.uniSymbol(), expiryTime, isPut)
+            getMarketSymbol(underlyingSymbol, expiryTime, isPut)
         );
 
         // transfer ownership to sender
@@ -76,19 +75,13 @@ contract OptionFactory is CloneFactory, OptionSymbol, ReentrancyGuard {
     }
 
     function _createOptionTokens(address marketAddress, bool isLong) private returns (address[] memory optionTokens) {
-        uint8 baseDecimals = IERC20(baseToken).isETH() ? 18 : ERC20UpgradeSafe(baseToken).decimals();
+        uint8 decimals = IERC20(baseToken).isETH() ? 18 : ERC20UpgradeSafe(baseToken).decimals();
 
         optionTokens = new address[](strikePrices.length);
         for (uint256 i = 0; i < strikePrices.length; i++) {
             optionTokens[i] = createClone(optionTokenLibary);
-            string memory symbol = getOptionSymbol(
-                underlyingToken.uniSymbol(),
-                strikePrices[i],
-                expiryTime,
-                isPut,
-                isLong
-            );
-            OptionToken(optionTokens[i]).initialize(marketAddress, symbol, symbol, baseDecimals);
+            string memory symbol = getOptionSymbol(underlyingSymbol, strikePrices[i], expiryTime, isPut, isLong);
+            OptionToken(optionTokens[i]).initialize(marketAddress, symbol, symbol, decimals);
         }
     }
 
