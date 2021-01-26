@@ -243,12 +243,12 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
 
         // calculate amount that needs to be returned to user
         if (isSettled) {
-            // after settlement, amount is the option payoff
+            // if after settlement, amount is the option payoff
             uint256 payoffAfter = getCurrentPayoff();
             amountOut = lastPayoff.sub(payoffAfter);
             lastPayoff = payoffAfter;
         } else {
-            // before expiry, amount is the decrease in LMSR cost after burning the options
+            // if before expiry, amount is the decrease in LMSR cost after burning the options
             uint256 costAfter = getCurrentCost();
             amountOut = lastCost.sub(costAfter);
             lastCost = costAfter;
@@ -275,19 +275,17 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
 
         // user needs to contribute proportional amount of fees to pool, which
         // ensures they are only earning fees generated after they have deposited
-        uint256 poolAmountIn;
         if (totalSupply() > 0) {
             // add 1 to round up
-            poolAmountIn = poolValue.mul(sharesOut).div(totalSupply()).add(1);
-            poolValue = poolValue.add(poolAmountIn);
+            amountIn = poolValue.mul(sharesOut).div(totalSupply()).add(1);
+            poolValue = poolValue.add(amountIn);
         }
         _mint(msg.sender, sharesOut);
         require(totalSupplyCap == 0 || totalSupply() <= totalSupplyCap, "Total supply cap exceeded");
 
-        // calculate amount that needs to be deposited by user
-        // it's equal to the increase in LMSR cost after increasing b
+        // need to add increase in LMSR cost after increasing b
         uint256 costAfter = getCurrentCost();
-        amountIn = costAfter.sub(lastCost).add(poolAmountIn); // do sub first as a check since should not fail
+        amountIn = costAfter.sub(lastCost).add(amountIn); // do sub first as a check since should not fail
         lastCost = costAfter;
         require(amountIn > 0, "Amount in must be > 0");
         require(amountIn <= maxAmountIn, "Max slippage exceeded");
@@ -310,19 +308,15 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         require(msg.sender == owner() || !isPaused, "Paused");
         require(sharesIn > 0, "sharesIn must be > 0");
 
-        // calculate the cut of fees earned by user
-        uint256 poolAmountOut = poolValue.mul(sharesIn).div(totalSupply());
-        poolValue = poolValue.sub(poolAmountOut);
+        // calculate cut of fees earned by user
+        amountOut = poolValue.mul(sharesIn).div(totalSupply());
+        poolValue = poolValue.sub(amountOut);
         _burn(msg.sender, sharesIn);
 
-        // calculate amount that needs to be returned to user
-        if (isSettled) {
-            // after settlement, amount is the user's share in pool
-            amountOut = poolAmountOut;
-        } else {
-            // before expiry, amount is the decrease in LMSR cost after decreasing b
+        // if before expiry, add decrease in LMSR cost after decreasing b
+        if (!isSettled) {
             uint256 costAfter = getCurrentCost();
-            amountOut = lastCost.sub(costAfter).add(poolAmountOut); // do sub first as a check since should not fail
+            amountOut = lastCost.sub(costAfter).add(amountOut); // do sub first as a check since should not fail
             lastCost = costAfter;
         }
         require(amountOut > 0, "Amount out must be > 0");
