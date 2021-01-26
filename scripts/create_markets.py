@@ -15,20 +15,26 @@ from brownie import (
 ACCOUNT = "deployer"
 BASE_TOKEN = "ETH"
 # BASE_TOKEN = "WBTC"
-EXPIRY_DATE = "29 Jan 2021"
+EXPIRY_DATE = "26 Feb 2021"
 STRIKE_PRICES = [800, 960, 1120, 1280, 1440, 1600, 1920, 2240]
 NETWORK = "mainnet"
 
 
 # constants
 SCALE = 10 ** 18
+SCALE6 = 10 ** 6
+
 EXPIRY_TIME = "16:00"
 QUOTE_TOKEN = "USDC"
 TRADING_FEE = 0.01
 DISPUTE_PERIOD = 3600  # 1 hour
-BALANCE_LIMIT = {
-    "ETH": 100e18,
-    "USDC": 100000e6,
+TVL_CAPS = {
+    "ETH": 300 * SCALE,
+    "USDC": 300_000 * SCALE6,
+}
+LP_CAPS = {
+    "ETH": 100 * SCALE,
+    "USDC": 100_000 * SCALE6,
 }
 
 
@@ -58,7 +64,7 @@ TOKEN_ADDRESSES = {
 
 FACTORY = {
     "mainnet": "0x443ec3dc7840c3eB610a2A80068DfE3c56822e86",
-    "rinkeby": "",
+    "rinkeby": "0x015c19D4292686511D40cA4D51dfFf4e8FA70bc9",
 }
 
 
@@ -85,17 +91,22 @@ def create_market(deployer, is_put):
         expiry.timestamp,
         is_put,
         int(TRADING_FEE * SCALE + 1e-9),
-        BALANCE_LIMIT[QUOTE_TOKEN if is_put else BASE_TOKEN],
-        DISPUTE_PERIOD,
         {"from": deployer},
     )
 
     # brownie doesn't let us see the transaction return value
-    time.sleep(1)
+    time.sleep(5)
     address = factory.markets(factory.numMarkets() - 1)
-    print(f"Deployed at: {address}")
+
     market = OptionMarket.at(address)
     market.pause({"from": deployer})
+    market.setBalanceCap(
+        TVL_CAPS[QUOTE_TOKEN if is_put else BASE_TOKEN], {"from": deployer}
+    )
+    market.setTotalSupplyCap(
+        LP_CAPS[QUOTE_TOKEN if is_put else BASE_TOKEN], {"from": deployer}
+    )
+    market.setDisputePeriod(DISPUTE_PERIOD, {"from": deployer})
     return market
 
 
@@ -108,12 +119,7 @@ def main():
         market = create_market(deployer, is_put)
         markets.append(market)
 
-    print(f"Gas used in deployment: {(balance - deployer.balance()) / 1e18:.4f} ETH")
-    # print()
+    for market in markets:
+        print(f"Deployed at: {market.address}")
 
-    # for i in range(len(STRIKE_PRICES)):
-    #     for market in markets:
-    #         for address in [market.longTokens(i), market.shortTokens(i)]:
-    #             option = OptionToken.at(address)
-    #             symbol = option.symbol()
-    #             print(f"{symbol}:\t{address}")
+    print(f"Gas used in deployment: {(balance - deployer.balance()) / 1e18:.4f} ETH")
