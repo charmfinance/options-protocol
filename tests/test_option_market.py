@@ -327,7 +327,7 @@ def test_calls(
         "account": alice,
         "sharesOut": 10 * scale,
         "amountIn": tx.return_value,
-        "newB": 10 * scale,
+        "newSupply": 10 * scale,
     }
 
     # index out of range
@@ -382,7 +382,7 @@ def test_calls(
         "account": bob,
         "sharesOut": 5 * scale,
         "amountIn": tx.return_value,
-        "newB": 15 * scale,
+        "newSupply": 15 * scale,
     }
 
     # bob buys 3 calls
@@ -491,7 +491,7 @@ def test_calls(
         "account": alice,
         "sharesIn": 3 * scale,
         "amountOut": tx.return_value,
-        "newB": 12 * scale,
+        "newSupply": 12 * scale,
         "isSettled": False,
     }
 
@@ -588,7 +588,7 @@ def test_calls(
         "account": bob,
         "sharesIn": 5 * scale,
         "amountOut": tx.return_value,
-        "newB": 7 * scale,
+        "newSupply": 7 * scale,
         "isSettled": True,
     }
 
@@ -617,7 +617,7 @@ def test_calls(
         "account": alice,
         "sharesIn": 7 * scale,
         "amountOut": tx.return_value,
-        "newB": 0 * scale,
+        "newSupply": 0 * scale,
         "isSettled": True,
     }
 
@@ -710,7 +710,7 @@ def test_puts(
         "account": alice,
         "sharesOut": 1000 * scale,
         "amountIn": tx.return_value,
-        "newB": 1000 * scale,
+        "newSupply": 1000 * scale,
     }
 
     # can't buy too much
@@ -755,7 +755,7 @@ def test_puts(
         "account": bob,
         "sharesOut": 500 * scale,
         "amountIn": tx.return_value,
-        "newB": 1500 * scale,
+        "newSupply": 1500 * scale,
     }
 
     # bob buys 3 puts
@@ -910,7 +910,7 @@ def test_puts(
         "account": alice,
         "sharesIn": 300 * scale,
         "amountOut": tx.return_value,
-        "newB": 1200 * scale,
+        "newSupply": 1200 * scale,
         "isSettled": False,
     }
 
@@ -1001,7 +1001,7 @@ def test_puts(
         "account": bob,
         "sharesIn": 500 * scale,
         "amountOut": tx.return_value,
-        "newB": 700 * scale,
+        "newSupply": 700 * scale,
         "isSettled": True,
     }
 
@@ -1030,7 +1030,7 @@ def test_puts(
         "account": alice,
         "sharesIn": 700 * scale,
         "amountOut": tx.return_value,
-        "newB": 0 * scale,
+        "newSupply": 0 * scale,
         "isSettled": True,
     }
 

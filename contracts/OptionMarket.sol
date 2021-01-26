@@ -81,8 +81,8 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         bool isSettled
     );
 
-    event Deposit(address indexed account, uint256 sharesOut, uint256 amountIn, uint256 newB);
-    event Withdraw(address indexed account, uint256 sharesIn, uint256 amountOut, uint256 newB, bool isSettled);
+    event Deposit(address indexed account, uint256 sharesOut, uint256 amountIn, uint256 newSupply);
+    event Withdraw(address indexed account, uint256 sharesIn, uint256 amountOut, uint256 newSupply, bool isSettled);
     event Settle(uint256 expiryPrice);
 
     uint256 public constant SCALE = 1e18;
