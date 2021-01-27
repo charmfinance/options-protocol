@@ -32,12 +32,19 @@ def main():
         longTokens = [OptionToken.at(market.longTokens(i)) for i in range(n)]
         shortTokens = [OptionToken.at(market.shortTokens(i)) for i in range(n)]
 
-        assert market.symbol().startswith("Charm LP ")
-        underlyingSymbol = market.symbol().split()[2]
-
-        totalSupplyCap = (
-            market.totalSupplyCap() if hasattr(market, "totalSupplyCap") else 0
+        assert market.symbol().startswith("Charm LP ") or market.symbol().startswith(
+            "LP "
         )
+        if market.symbol().startswith("Charm LP "):
+            underlyingSymbol = market.symbol().split()[2]
+        else:
+            underlyingSymbol = market.symbol().split()[1]
+
+        totalSupplyCap = 0
+        try:
+            totalSupplyCap = market.totalSupplyCap()
+        except ValueError:
+            pass
 
         res.append(
             {
