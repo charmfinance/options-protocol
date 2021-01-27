@@ -7,8 +7,8 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 
-import "../interfaces/AggregatorV3Interface.sol";
-import "../interfaces/IOracle.sol";
+import "../../interfaces/AggregatorV3Interface.sol";
+import "../../interfaces/IOracle.sol";
 
 /**
  * Fetches price from Chainlink price feed

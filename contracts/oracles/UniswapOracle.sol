@@ -9,8 +9,8 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 
-import "../interfaces/IUniswapV2Pair.sol";
-import "../interfaces/IOracle.sol";
+import "../../interfaces/IUniswapV2Pair.sol";
+import "../../interfaces/IOracle.sol";
 
 /**
  * Fetches TWAP (time-weighted average price) from Uniswap V2 Oracle
