@@ -24,7 +24,7 @@ library OptionMath {
         bool isPut,
         uint256[] memory longSupplies,
         uint256[] memory shortSupplies
-    ) internal pure returns (uint256[] memory quantities) {
+    ) internal pure returns (uint256[] memory) {
         require(longSupplies.length == strikePrices.length, "Lengths do not match");
         require(shortSupplies.length == strikePrices.length, "Lengths do not match");
         uint256 n = strikePrices.length;
@@ -42,7 +42,7 @@ library OptionMath {
         uint256[] memory leftSupplies = isPut ? shortSupplies : longSupplies;
         uint256[] memory rightSupplies = isPut ? longSupplies : shortSupplies;
 
-        quantities = new uint256[](n + 1);
+        uint256[] memory quantities = new uint256[](n + 1);
 
         // set quantities[0] = sum(rightSupplies)
         for (uint256 i = 0; i < n; i++) {
@@ -118,7 +118,7 @@ library OptionMath {
         bool isPut,
         uint256[] memory longSupplies,
         uint256[] memory shortSupplies
-    ) internal pure returns (uint256 payoff) {
+    ) internal pure returns (uint256) {
         require(longSupplies.length == strikePrices.length, "Lengths do not match");
         require(shortSupplies.length == strikePrices.length, "Lengths do not match");
 
@@ -126,6 +126,7 @@ library OptionMath {
             return 0;
         }
 
+        uint256 payoff;
         for (uint256 i = 0; i < strikePrices.length; i++) {
             uint256 strikePrice = strikePrices[i];
 
@@ -140,7 +141,6 @@ library OptionMath {
             // short payoff = min(S, K)
             payoff = payoff.add(shortSupplies[i].mul(Math.min(expiryPrice, strikePrice)));
         }
-
-        payoff = payoff.div(isPut ? SCALE : expiryPrice);
+        return payoff.div(isPut ? SCALE : expiryPrice);
     }
 }
