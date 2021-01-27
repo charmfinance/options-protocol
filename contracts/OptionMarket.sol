@@ -7,13 +7,13 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 
-import "./libraries/UniERC20.sol";
 import "./libraries/openzeppelin/ERC20UpgradeSafe.sol";
 import "./libraries/openzeppelin/OwnableUpgradeSafe.sol";
 import "./libraries/openzeppelin/ReentrancyGuardUpgradeSafe.sol";
-import "../interfaces/IOracle.sol";
+import "./libraries/UniERC20.sol";
 import "./OptionMath.sol";
 import "./OptionToken.sol";
+import "../interfaces/IOracle.sol";
 
 /**
  * Automated market-maker for options

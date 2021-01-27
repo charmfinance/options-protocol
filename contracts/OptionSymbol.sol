@@ -7,9 +7,9 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 
+import "./libraries/openzeppelin/ERC20UpgradeSafe.sol";
 import "./libraries/BokkyPooBahsDateTimeLibrary.sol";
 import "./libraries/UniERC20.sol";
-import "./libraries/openzeppelin/ERC20UpgradeSafe.sol";
 
 contract OptionSymbol {
     using UniERC20 for IERC20;
