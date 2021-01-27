@@ -20,68 +20,67 @@ contract OptionFactory is CloneFactory, OptionSymbol, ReentrancyGuard {
     using SafeMath for uint256;
 
     address public optionMarketLibrary;
-    address public optionTokenLibary;
+    address public optionTokenLibrary;
     address[] public markets;
 
-    uint256[] private strikePrices;
-    uint256 private expiryTime;
-    bool private isPut;
-    string private underlyingSymbol;
-    address private baseToken;
+    uint256[] private _strikePrices;
+    uint256 private _expiryTime;
+    bool private _isPut;
+    string private _underlyingSymbol;
+    address private _baseToken;
+    address private _marketAddress;
 
     constructor(address _optionMarketLibrary, address _optionTokenLibrary) public {
         require(_optionMarketLibrary != address(0), "optionMarketLibrary should not be address 0");
-        require(_optionTokenLibrary != address(0), "optionTokenLibary should not be address 0");
+        require(_optionTokenLibrary != address(0), "optionTokenLibrary should not be address 0");
         optionMarketLibrary = _optionMarketLibrary;
-        optionTokenLibary = _optionTokenLibrary;
+        optionTokenLibrary = _optionTokenLibrary;
     }
 
     function createMarket(
-        address _baseAsset,
-        address _quoteAsset,
-        address _oracle,
-        uint256[] memory _strikePrices,
-        uint256 _expiryTime,
-        bool _isPut,
-        uint256 _tradingFee
-    ) external nonReentrant returns (address marketAddress) {
-        // set member variables to avoid stack too deep error
-        strikePrices = _strikePrices;
-        expiryTime = _expiryTime;
-        isPut = _isPut;
-        underlyingSymbol = IERC20(_baseAsset).uniSymbol();
+        address baseAsset,
+        address quoteAsset,
+        address oracle,
+        uint256[] memory strikePrices,
+        uint256 expiryTime,
+        bool isPut,
+        uint256 tradingFee
+    ) external nonReentrant returns (address) {
+        // avoid stack too deep error
+        _strikePrices = strikePrices;
+        _expiryTime = expiryTime;
+        _isPut = isPut;
+        _underlyingSymbol = IERC20(baseAsset).uniSymbol();
+        _baseToken = isPut ? quoteAsset : baseAsset;
 
-        baseToken = _isPut ? _quoteAsset : _baseAsset;
+        _marketAddress = createClone(optionMarketLibrary);
+        markets.push(_marketAddress);
 
-        marketAddress = createClone(optionMarketLibrary);
-        OptionMarket market = OptionMarket(marketAddress);
-        markets.push(marketAddress);
-
-        market.initialize(
-            baseToken,
-            _oracle,
-            _createOptionTokens(marketAddress, true),
-            _createOptionTokens(marketAddress, false),
-            _strikePrices,
-            _expiryTime,
-            _isPut,
-            _tradingFee,
-            getMarketSymbol(underlyingSymbol, expiryTime, isPut)
+        OptionMarket(_marketAddress).initialize(
+            _baseToken,
+            oracle,
+            _createOptionTokens(true),
+            _createOptionTokens(false),
+            strikePrices,
+            expiryTime,
+            isPut,
+            tradingFee,
+            getMarketSymbol(_underlyingSymbol, expiryTime, isPut)
         );
 
         // transfer ownership to sender
-        market.transferOwnership(msg.sender);
-        return marketAddress;
+        OptionMarket(_marketAddress).transferOwnership(msg.sender);
+        return _marketAddress;
     }
 
-    function _createOptionTokens(address marketAddress, bool isLong) private returns (address[] memory optionTokens) {
-        uint8 decimals = IERC20(baseToken).isETH() ? 18 : ERC20UpgradeSafe(baseToken).decimals();
+    function _createOptionTokens(bool isLong) private returns (address[] memory optionTokens) {
+        uint8 decimals = IERC20(_baseToken).isETH() ? 18 : ERC20UpgradeSafe(_baseToken).decimals();
 
-        optionTokens = new address[](strikePrices.length);
-        for (uint256 i = 0; i < strikePrices.length; i++) {
-            optionTokens[i] = createClone(optionTokenLibary);
-            string memory symbol = getOptionSymbol(underlyingSymbol, strikePrices[i], expiryTime, isPut, isLong);
-            OptionToken(optionTokens[i]).initialize(marketAddress, symbol, symbol, decimals);
+        optionTokens = new address[](_strikePrices.length);
+        for (uint256 i = 0; i < _strikePrices.length; i++) {
+            optionTokens[i] = createClone(optionTokenLibrary);
+            string memory symbol = getOptionSymbol(_underlyingSymbol, _strikePrices[i], _expiryTime, _isPut, isLong);
+            OptionToken(optionTokens[i]).initialize(_marketAddress, symbol, symbol, decimals);
         }
     }
 
