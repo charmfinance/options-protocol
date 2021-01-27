@@ -4,21 +4,17 @@
 pragma solidity ^0.6.12;
 
 import "@openzeppelin/contracts/math/SafeMath.sol";
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 
-import "./libraries/openzeppelin/ERC20UpgradeSafe.sol";
 import "./libraries/BokkyPooBahsDateTimeLibrary.sol";
-import "./libraries/UniERC20.sol";
 
 contract OptionSymbol {
-    using UniERC20 for IERC20;
     using SafeMath for uint256;
 
     uint256 private constant STRIKE_PRICE_SCALE = 1e18;
     uint256 private constant STRIKE_PRICE_DIGITS = 18;
 
-    // example symbol: LP ETH 04DEC2020 C
+    // example symbol: Charm LP ETH 04DEC2020 C
     function getMarketSymbol(
         string memory underlying,
         uint256 expiryTime,
@@ -44,7 +40,7 @@ contract OptionSymbol {
             );
     }
 
-    // example symbol: ETH 04DEC2020 500 C
+    // example symbol: Charm ETH 04DEC2020 500 C
     function getOptionSymbol(
         string memory underlying,
         uint256 strikePrice,
