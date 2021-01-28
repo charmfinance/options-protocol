@@ -23,13 +23,6 @@ contract OptionFactory is CloneFactory, OptionSymbol, ReentrancyGuard {
     address public optionTokenLibrary;
     address[] public markets;
 
-    uint256[] private _strikePrices;
-    uint256 private _expiryTime;
-    bool private _isPut;
-    string private _underlyingSymbol;
-    address private _baseToken;
-    address private _marketAddress;
-
     constructor(address _optionMarketLibrary, address _optionTokenLibrary) public {
         require(_optionMarketLibrary != address(0), "optionMarketLibrary should not be address 0");
         require(_optionTokenLibrary != address(0), "optionTokenLibrary should not be address 0");
@@ -45,43 +38,60 @@ contract OptionFactory is CloneFactory, OptionSymbol, ReentrancyGuard {
         uint256 expiryTime,
         bool isPut,
         uint256 tradingFee
-    ) external nonReentrant returns (address) {
-        // avoid stack too deep error
-        _strikePrices = strikePrices;
-        _expiryTime = expiryTime;
-        _isPut = isPut;
-        _underlyingSymbol = IERC20(baseAsset).uniSymbol();
-        _baseToken = isPut ? quoteAsset : baseAsset;
+    ) external nonReentrant returns (address marketAddress) {
+        marketAddress = createClone(optionMarketLibrary);
+        markets.push(marketAddress);
 
-        _marketAddress = createClone(optionMarketLibrary);
-        markets.push(_marketAddress);
+        string memory underlyingSymbol = IERC20(baseAsset).uniSymbol();
+        string memory lpSymbol = getMarketSymbol(underlyingSymbol, expiryTime, isPut);
+        address baseToken = isPut ? quoteAsset : baseAsset;
 
-        OptionMarket(_marketAddress).initialize(
-            _baseToken,
+        address[] memory longTokens = new address[](strikePrices.length);
+        address[] memory shortTokens = new address[](strikePrices.length);
+
+        // use scoping to avoid stack too deep error
+        {
+            uint8 decimals = IERC20(baseToken).isETH() ? 18 : ERC20UpgradeSafe(baseToken).decimals();
+
+            for (uint256 i = 0; i < strikePrices.length; i++) {
+                longTokens[i] = createClone(optionTokenLibrary);
+                string memory optionSymbol = getOptionSymbol(
+                    underlyingSymbol,
+                    strikePrices[i],
+                    expiryTime,
+                    isPut,
+                    true
+                );
+                OptionToken(longTokens[i]).initialize(marketAddress, optionSymbol, optionSymbol, decimals);
+            }
+
+            for (uint256 i = 0; i < strikePrices.length; i++) {
+                shortTokens[i] = createClone(optionTokenLibrary);
+                string memory optionSymbol = getOptionSymbol(
+                    underlyingSymbol,
+                    strikePrices[i],
+                    expiryTime,
+                    isPut,
+                    false
+                );
+                OptionToken(shortTokens[i]).initialize(marketAddress, optionSymbol, optionSymbol, decimals);
+            }
+        }
+
+        OptionMarket(marketAddress).initialize(
+            baseToken,
             oracle,
-            _createOptionTokens(true),
-            _createOptionTokens(false),
+            longTokens,
+            shortTokens,
             strikePrices,
             expiryTime,
             isPut,
             tradingFee,
-            getMarketSymbol(_underlyingSymbol, expiryTime, isPut)
+            lpSymbol
         );
 
         // transfer ownership to sender
-        OptionMarket(_marketAddress).transferOwnership(msg.sender);
-        return _marketAddress;
-    }
-
-    function _createOptionTokens(bool isLong) private returns (address[] memory optionTokens) {
-        uint8 decimals = IERC20(_baseToken).isETH() ? 18 : ERC20UpgradeSafe(_baseToken).decimals();
-
-        optionTokens = new address[](_strikePrices.length);
-        for (uint256 i = 0; i < _strikePrices.length; i++) {
-            optionTokens[i] = createClone(optionTokenLibrary);
-            string memory symbol = getOptionSymbol(_underlyingSymbol, _strikePrices[i], _expiryTime, _isPut, isLong);
-            OptionToken(optionTokens[i]).initialize(_marketAddress, symbol, symbol, decimals);
-        }
+        OptionMarket(marketAddress).transferOwnership(msg.sender);
     }
 
     function numMarkets() external view returns (uint256) {
