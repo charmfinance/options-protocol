@@ -63,8 +63,8 @@ TOKEN_ADDRESSES = {
 }
 
 FACTORY = {
-    "mainnet": "0x443ec3dc7840c3eB610a2A80068DfE3c56822e86",
-    "rinkeby": "0x015c19D4292686511D40cA4D51dfFf4e8FA70bc9",
+    "mainnet": "0x849EB90B944070096b0b1629361caaE6010377d5",
+    "rinkeby": "0x5a47304930F1c98D609FB972a50269d2099d9FE7",
 }
 
 
@@ -82,8 +82,8 @@ def create_market(deployer, is_put):
     oracle = DEPLOYED_ORACLES[NETWORK][BASE_TOKEN + "/" + QUOTE_TOKEN]
 
     # brownie doesn't let us use OptionFactory.at
-    factory = Contract.from_explorer(FACTORY[NETWORK])
-    factory.createMarket(
+    factory = OptionFactory.at(FACTORY[NETWORK])
+    tx = factory.createMarket(
         TOKEN_ADDRESSES[NETWORK][BASE_TOKEN],
         TOKEN_ADDRESSES[NETWORK][QUOTE_TOKEN],
         oracle,
@@ -94,8 +94,8 @@ def create_market(deployer, is_put):
         {"from": deployer},
     )
 
-    # brownie doesn't let us see the transaction return value
-    time.sleep(5)
+    # can't get transaction return value from infura
+    time.sleep(30)
     address = factory.markets(factory.numMarkets() - 1)
 
     market = OptionMarket.at(address)
