@@ -139,7 +139,7 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         __ReentrancyGuard_init();
         __Ownable_init();
 
-        // use same decimals as `baseToken`
+        // use same decimals as base token
         uint8 decimals = IERC20(_baseToken).isETH() ? 18 : ERC20UpgradeSafe(_baseToken).decimals();
         _setupDecimals(decimals);
 
