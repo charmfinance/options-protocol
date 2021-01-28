@@ -25,16 +25,15 @@ library OptionMath {
         uint256[] memory longSupplies,
         uint256[] memory shortSupplies
     ) internal pure returns (uint256[] memory) {
-        require(longSupplies.length == strikePrices.length, "Lengths do not match");
-        require(shortSupplies.length == strikePrices.length, "Lengths do not match");
         uint256 n = strikePrices.length;
+        require(longSupplies.length == n, "Lengths do not match");
+        require(shortSupplies.length == n, "Lengths do not match");
 
         // this mutates the method arguments, but costs less gas
         if (isPut) {
             for (uint256 i = 0; i < n; i++) {
-                uint256 strikePrice = strikePrices[i];
-                longSupplies[i] = longSupplies[i].mul(strikePrice).div(SCALE);
-                shortSupplies[i] = shortSupplies[i].mul(strikePrice).div(SCALE);
+                longSupplies[i] = longSupplies[i].mul(strikePrices[i]).div(SCALE);
+                shortSupplies[i] = shortSupplies[i].mul(strikePrices[i]).div(SCALE);
             }
         }
 
