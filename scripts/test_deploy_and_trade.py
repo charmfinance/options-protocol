@@ -3,13 +3,12 @@ from brownie import (
     OptionMarket,
     OptionToken,
     MockToken,
+    ZERO_ADDRESS,
 )
 
 
 # deployer = accounts.load("deployer")
 deployer = accounts[0]
-
-ZERO = "0x0000000000000000000000000000000000000000"
 
 IS_ETH = True
 ORACLE = "0xD014CDc41f9AF7A6456c920aD17fFf14F136640F"  # ETH/USDC rinkeby chainlink
@@ -17,8 +16,6 @@ STRIKE_PRICES = [(100 * x + 100) * 1e18 for x in range(4)]
 EXPIRY_TIME = 2e9
 IS_PUT = True
 TRADING_FEE = 1e16
-BALANCE_CAP = 1000e18
-DISPUTE_PERIOD = 3600
 B = 10e15
 DECIMALS = 18
 
@@ -35,7 +32,7 @@ def main():
     market = deployer.deploy(OptionMarket)
 
     if IS_ETH:
-        baseToken = ZERO if IS_ETH else deployer.deploy(MockToken)
+        baseToken = ZERO_ADDRESS if IS_ETH else deployer.deploy(MockToken)
     else:
         baseToken = deployer.deploy(MockToken)
         baseToken.mint(deployer, 100e18, {"from": deployer})
@@ -53,8 +50,6 @@ def main():
         EXPIRY_TIME,
         IS_PUT,
         TRADING_FEE,
-        BALANCE_CAP,
-        DISPUTE_PERIOD,
         "symbol",
     )
 
