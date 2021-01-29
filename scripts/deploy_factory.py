@@ -3,10 +3,8 @@ from brownie import (
     OptionFactory,
     OptionMarket,
     OptionToken,
+    ZERO_ADDRESS,
 )
-
-
-ZERO = "0x0000000000000000000000000000000000000000"
 
 
 def main():
@@ -17,17 +15,18 @@ def main():
     optionToken = deployer.deploy(OptionToken, publish_source=True)
 
     # initialize with dummy data so can't be initialized again
-    optionToken.initialize(ZERO, "", "", 18)
+    optionToken.initialize(ZERO_ADDRESS, "", "", 18, {"from": deployer})
     optionMarket.initialize(
-        ZERO,
-        ZERO,
-        [ZERO],
-        [ZERO],
+        ZERO_ADDRESS,
+        ZERO_ADDRESS,
+        [ZERO_ADDRESS],
+        [ZERO_ADDRESS],
         [1],
         2000000000,
         False,
         0,
         "",
+        {"from": deployer},
     )
 
     factory = deployer.deploy(
