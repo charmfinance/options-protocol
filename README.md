@@ -12,6 +12,8 @@ payoffs.
 
 Please note the deployer is highly privileged and has the permissions below. These are only intended to be used in an emergency situation and will be removed in future versions.
 
+- Withdraw all funds from market
+
 - Modify parameters of market
 
 - Pause the contract indefinitely. This includes preventing users from buying, selling, and redeeming their options.

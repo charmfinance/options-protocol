@@ -52,9 +52,9 @@ import "../interfaces/IOracle.sol";
  * Then liquidity has to be provided using `deposit` before trades can occur.
  *
  * Please note that the deployer of this contract is highly privileged and has
- * permissions such as being able to pause trading, modify the market parameters
- * and override the settlement price. These permissions will be removed in future
- * versions.
+ * permissions such as withdrawing all funds from the contract, being able to pause
+ * trading, modify the market parameters and override the settlement price. These
+ * permissions will be removed in future versions.
  */
 contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUpgradeSafe {
     using Address for address;
@@ -463,5 +463,10 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         lastPayoff = getCurrentPayoff();
         poolValue = baseToken.uniBalanceOf(address(this)).sub(lastPayoff);
         emit Settle(expiryPrice);
+    }
+
+    // emergency use only. to be removed in future versions
+    function emergencyWithdraw() external onlyOwner {
+        baseToken.uniTransfer(msg.sender, baseToken.uniBalanceOf(address(this)));
     }
 }

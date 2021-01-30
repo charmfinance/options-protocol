@@ -1065,6 +1065,9 @@ def test_emergency_methods(
     oracle.setPrice(444 * SCALE)
     oracle2.setPrice(555 * SCALE)
 
+    def getBalance(wallet):
+        return wallet.balance() if isEth else baseToken.balanceOf(wallet)
+
     # deploy and initialize
     market = deployer.deploy(OptionMarket)
     market.initialize(
@@ -1168,6 +1171,16 @@ def test_emergency_methods(
 
     market.unpause({"from": deployer})
     market.sell(COVER, 0, 1 * PERCENT, 0, {"from": alice})
+
+    # emergency withdraw
+    with reverts("Ownable: caller is not the owner"):
+        market.emergencyWithdraw({"from": alice})
+    marketBalance = getBalance(market)
+    deployerBalance = getBalance(deployer)
+    assert marketBalance > 0
+    market.emergencyWithdraw({"from": deployer})
+    assert getBalance(deployer) - deployerBalance == marketBalance
+    assert getBalance(market) == 0
 
     # change owner
     with reverts("Ownable: caller is not the owner"):
