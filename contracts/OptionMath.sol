@@ -74,13 +74,14 @@ library OptionMath {
      *   m = max(q_1, ..., q_n)
      */
     function calcLmsrCost(uint256[] memory quantities, uint256 b) internal pure returns (uint256) {
-        if (b == 0) {
-            return 0;
-        }
-
         uint256 maxQuantity = quantities[0];
         for (uint256 i = 1; i < quantities.length; i++) {
             maxQuantity = Math.max(maxQuantity, quantities[i]);
+        }
+
+        // cost converges to max(q) as b tends to 0
+        if (b == 0) {
+            return maxQuantity;
         }
 
         int128 sumExp;

@@ -230,7 +230,6 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         uint256 optionsIn,
         uint256 minAmountOut
     ) external nonReentrant returns (uint256 amountOut) {
-        require(totalSupply() > 0, "No liquidity");
         require(!isExpired() || isSettled, "Must be called before expiry or after settlement");
         require(!isDisputePeriod(), "Dispute period");
         require(msg.sender == owner() || !isPaused, "Paused");

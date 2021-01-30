@@ -1446,3 +1446,217 @@ def test_liquidity_manipulation_attack(
         )
 
     assert getBalance(alice) <= balance
+
+
+@pytest.mark.parametrize("isEth", [False, True])
+@pytest.mark.parametrize("baseDecimals", [6, 18])
+def test_withdraw_all_liquidity_before_expiry(
+    a,
+    OptionMarket,
+    MockToken,
+    MockOracle,
+    OptionToken,
+    fast_forward,
+    isEth,
+    baseDecimals,
+):
+
+    # setup args
+    deployer, alice, bob = a[:3]
+    oracle = deployer.deploy(MockOracle)
+    oracle.setPrice(555 * SCALE)
+    longTokens = [deployer.deploy(OptionToken) for _ in range(4)]
+    shortTokens = [deployer.deploy(OptionToken) for _ in range(4)]
+
+    if isEth:
+        scale = 1e18
+        baseToken = ZERO_ADDRESS
+    else:
+        scale = 10 ** baseDecimals
+        baseToken = deployer.deploy(MockToken)
+        baseToken.setDecimals(baseDecimals)
+    percent = scale // 100
+
+    def getBalance(wallet):
+        return wallet.balance() if isEth else baseToken.balanceOf(wallet)
+
+    # deploy and initialize
+    market = deployer.deploy(OptionMarket)
+    market.initialize(
+        baseToken,
+        oracle,
+        longTokens,
+        shortTokens,
+        [300 * SCALE, 400 * SCALE, 500 * SCALE, 600 * SCALE],
+        2000000000,  # expiry = 18 May 2033
+        False,  # call
+        1 * PERCENT,  # trading fee = 1%
+        "symbol",
+    )
+
+    for token in longTokens + shortTokens:
+        token.initialize(market, "name", "symbol", 18)
+
+    # give users base tokens
+    if not isEth:
+        for user in [deployer, alice, bob]:
+            baseToken.mint(user, 100 * scale, {"from": deployer})
+            baseToken.approve(market, 100 * scale, {"from": user})
+    valueDict = {"value": 50 * scale} if isEth else {}
+
+    # alice deposits
+    market.deposit(
+        10 * scale,
+        100 * scale,
+        {"from": alice, **valueDict},
+    )
+
+    # bob buys 2 calls
+    market.buy(CALL, 2, 2 * scale, 100 * scale, {"from": bob, **valueDict})
+
+    # alice withdraws
+    balance = getBalance(alice)
+    tx = market.withdraw(10 * scale, 0, {"from": alice})
+    cost1 = scale * lmsr([0, 0, 0, 2, 2], 10) + 2 * percent
+    cost2 = scale * 2
+    assert approx(tx.return_value) == cost1 - cost2
+    assert approx(getBalance(alice) - balance) == cost1 - cost2
+    assert tx.events["Withdraw"] == {
+        "account": alice,
+        "sharesIn": 10 * scale,
+        "amountOut": tx.return_value,
+        "newSupply": 0,
+        "isSettled": False,
+    }
+
+    fast_forward(2000000000 + 3600)
+    market.settle({"from": alice})
+
+    bobPayoff = 2 * (555 - 500)
+
+    cost = scale * 2
+    lpPayoff = cost - bobPayoff * scale / 555
+
+    # bob redeems
+    balance = getBalance(bob)
+    tx = market.sell(CALL, 2, 2 * scale, 0, {"from": bob})
+    assert approx(tx.return_value) == bobPayoff * scale / 555
+    assert approx(getBalance(bob) - balance) == bobPayoff * scale / 555
+    assert tx.events["Sell"] == {
+        "account": bob,
+        "isLongToken": CALL,
+        "strikeIndex": 2,
+        "optionsIn": 2 * scale,
+        "amountOut": tx.return_value,
+        "newSupply": 0,
+        "isSettled": True,
+    }
+
+    # tvl left if no lps
+    assert approx(getBalance(market)) == lpPayoff
+
+
+@pytest.mark.parametrize("isEth", [False, True])
+@pytest.mark.parametrize("baseDecimals", [6, 18])
+def test_withdraw_all_liquidity_after_expiry(
+    a,
+    OptionMarket,
+    MockToken,
+    MockOracle,
+    OptionToken,
+    fast_forward,
+    isEth,
+    baseDecimals,
+):
+
+    # setup args
+    deployer, alice, bob = a[:3]
+    oracle = deployer.deploy(MockOracle)
+    oracle.setPrice(555 * SCALE)
+    longTokens = [deployer.deploy(OptionToken) for _ in range(4)]
+    shortTokens = [deployer.deploy(OptionToken) for _ in range(4)]
+
+    if isEth:
+        scale = 1e18
+        baseToken = ZERO_ADDRESS
+    else:
+        scale = 10 ** baseDecimals
+        baseToken = deployer.deploy(MockToken)
+        baseToken.setDecimals(baseDecimals)
+    percent = scale // 100
+
+    def getBalance(wallet):
+        return wallet.balance() if isEth else baseToken.balanceOf(wallet)
+
+    # deploy and initialize
+    market = deployer.deploy(OptionMarket)
+    market.initialize(
+        baseToken,
+        oracle,
+        longTokens,
+        shortTokens,
+        [300 * SCALE, 400 * SCALE, 500 * SCALE, 600 * SCALE],
+        2000000000,  # expiry = 18 May 2033
+        False,  # call
+        1 * PERCENT,  # trading fee = 1%
+        "symbol",
+    )
+
+    for token in longTokens + shortTokens:
+        token.initialize(market, "name", "symbol", 18)
+
+    # give users base tokens
+    if not isEth:
+        for user in [deployer, alice, bob]:
+            baseToken.mint(user, 100 * scale, {"from": deployer})
+            baseToken.approve(market, 100 * scale, {"from": user})
+    valueDict = {"value": 50 * scale} if isEth else {}
+
+    # alice deposits
+    market.deposit(
+        10 * scale,
+        100 * scale,
+        {"from": alice, **valueDict},
+    )
+
+    # bob buys 2 calls
+    market.buy(CALL, 2, 2 * scale, 100 * scale, {"from": bob, **valueDict})
+
+    fast_forward(2000000000 + 3600)
+    market.settle({"from": alice})
+
+    bobPayoff = 2 * (555 - 500)
+
+    cost = scale * lmsr([0, 0, 0, 2, 2], 10) + 2 * percent
+    lpPayoff = cost - bobPayoff * scale / 555
+
+    # alice withdraws
+    balance = getBalance(alice)
+    tx = market.withdraw(10 * scale, 0, {"from": alice})
+    assert approx(tx.return_value) == lpPayoff
+    assert approx(getBalance(alice) - balance) == lpPayoff
+    assert tx.events["Withdraw"] == {
+        "account": alice,
+        "sharesIn": 10 * scale,
+        "amountOut": tx.return_value,
+        "newSupply": 0 * scale,
+        "isSettled": True,
+    }
+
+    # bob redeems
+    balance = getBalance(bob)
+    tx = market.sell(CALL, 2, 2 * scale, 0, {"from": bob})
+    assert approx(tx.return_value) == bobPayoff * scale / 555
+    assert approx(getBalance(bob) - balance) == bobPayoff * scale / 555
+    assert tx.events["Sell"] == {
+        "account": bob,
+        "isLongToken": CALL,
+        "strikeIndex": 2,
+        "optionsIn": 2 * scale,
+        "amountOut": tx.return_value,
+        "newSupply": 0,
+        "isSettled": True,
+    }
+
+    # no tvl left
+    assert getBalance(market) == 0
