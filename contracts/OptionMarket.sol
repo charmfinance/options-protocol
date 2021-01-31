@@ -191,7 +191,7 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         require(!isExpired(), "Already expired");
         require(msg.sender == owner() || !isPaused, "Paused");
         require(strikeIndex < strikePrices.length, "Index too large");
-        require(optionsOut > 0, "options out must be > 0");
+        require(optionsOut > 0, "Options out must be > 0");
 
         // mint options to user
         OptionToken option = isLongToken ? longTokens[strikeIndex] : shortTokens[strikeIndex];
@@ -234,7 +234,7 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         require(!isDisputePeriod(), "Dispute period");
         require(msg.sender == owner() || !isPaused, "Paused");
         require(strikeIndex < strikePrices.length, "Index too large");
-        require(optionsIn > 0, "options in must be > 0");
+        require(optionsIn > 0, "Options in must be > 0");
 
         // burn user's options
         OptionToken option = isLongToken ? longTokens[strikeIndex] : shortTokens[strikeIndex];
@@ -270,7 +270,7 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
     function deposit(uint256 sharesOut, uint256 maxAmountIn) external payable nonReentrant returns (uint256 amountIn) {
         require(!isExpired(), "Already expired");
         require(msg.sender == owner() || !isPaused, "Paused");
-        require(sharesOut > 0, "sharesOut must be > 0");
+        require(sharesOut > 0, "Shares out must be > 0");
 
         // user needs to contribute proportional amount of fees to pool, which
         // ensures they are only earning fees generated after they have deposited
@@ -305,7 +305,7 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         require(!isExpired() || isSettled, "Must be called before expiry or after settlement");
         require(!isDisputePeriod(), "Dispute period");
         require(msg.sender == owner() || !isPaused, "Paused");
-        require(sharesIn > 0, "sharesIn must be > 0");
+        require(sharesIn > 0, "Shares in must be > 0");
 
         // calculate cut of fees earned by user
         amountOut = poolValue.mul(sharesIn).div(totalSupply());
@@ -411,11 +411,13 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
      * Transfer amount from sender and do additional checks
      */
     function _transferIn(uint256 amountIn) private {
-        uint256 balanceBefore = baseToken.uniBalanceOf(address(this));
-        baseToken.uniTransferFromSenderToThis(amountIn);
-        uint256 balanceAfter = baseToken.uniBalanceOf(address(this));
-        require(baseToken.isETH() || balanceAfter.sub(balanceBefore) == amountIn, "Deflationary tokens not supported");
-        require(balanceCap == 0 || baseToken.uniBalanceOf(address(this)) <= balanceCap, "Balance cap exceeded");
+        // save gas
+        IERC20 _baseToken = baseToken;
+        uint256 balanceBefore = _baseToken.uniBalanceOf(address(this));
+        _baseToken.uniTransferFromSenderToThis(amountIn);
+        uint256 balanceAfter = _baseToken.uniBalanceOf(address(this));
+        require(_baseToken.isETH() || balanceAfter.sub(balanceBefore) == amountIn, "Deflationary tokens not supported");
+        require(balanceCap == 0 || _baseToken.uniBalanceOf(address(this)) <= balanceCap, "Balance cap exceeded");
     }
 
     // used for guarded launch
@@ -462,7 +464,7 @@ contract OptionMarket is ERC20UpgradeSafe, ReentrancyGuardUpgradeSafe, OwnableUp
         // update cached payoff and pool value
         lastPayoff = getCurrentPayoff();
         poolValue = baseToken.uniBalanceOf(address(this)).sub(lastPayoff);
-        emit Settle(expiryPrice);
+        emit Settle(_expiryPrice);
     }
 
     // emergency use only. to be removed in future versions
