@@ -4,6 +4,7 @@ import sys
 
 from brownie import (
     accounts,
+    network,
     Contract,
     OptionMarket,
     OptionToken,
@@ -17,9 +18,14 @@ TOKEN_SYMBOLS = {
     "0xfFf8641a3E2AA350624db17BDb0eb3998E314926": "WBTC",  # rinkeby
 }
 
+PATH = {
+    "mainnet": "markets.json",
+    "rinkeby": "markets-rinkeby.json",
+}
+
 
 def main():
-    with open("markets.json", "r") as f:
+    with open(PATH[network.show_active()], "r") as f:
         markets = json.load(f)
 
     res = []

@@ -4,6 +4,7 @@ import time
 
 from brownie import (
     accounts,
+    network,
     Contract,
     OptionFactory,
     OptionMarket,
@@ -15,9 +16,8 @@ from brownie import (
 ACCOUNT = "deployer"
 BASE_TOKEN = "ETH"
 # BASE_TOKEN = "WBTC"
-EXPIRY_DATE = "26 Feb 2021"
+EXPIRY_DATE = "5 Feb 2021"
 STRIKE_PRICES = [800, 960, 1120, 1280, 1440, 1600, 1920, 2240]
-NETWORK = "mainnet"
 
 
 # constants
@@ -29,12 +29,12 @@ QUOTE_TOKEN = "USDC"
 TRADING_FEE = 0.01
 DISPUTE_PERIOD = 3600  # 1 hour
 TVL_CAPS = {
-    "ETH": 300 * SCALE,
-    "USDC": 300_000 * SCALE6,
+    "ETH": 150 * SCALE,
+    "USDC": 150_000 * SCALE6,
 }
 LP_CAPS = {
-    "ETH": 100 * SCALE,
-    "USDC": 100_000 * SCALE6,
+    "ETH": 50 * SCALE,
+    "USDC": 50_000 * SCALE6,
 }
 
 
@@ -63,12 +63,15 @@ TOKEN_ADDRESSES = {
 }
 
 FACTORY = {
-    "mainnet": "0x849EB90B944070096b0b1629361caaE6010377d5",
-    "rinkeby": "0x5a47304930F1c98D609FB972a50269d2099d9FE7",
+    "mainnet": "",
+    "rinkeby": "",
 }
 
 
 def create_market(deployer, is_put):
+    _network = network.show_active()
+    print(f"Network: {_network}")
+
     n = len(STRIKE_PRICES) + 1
     strike_prices_wei = [int(SCALE * px + 1e-9) for px in STRIKE_PRICES]
 
@@ -79,13 +82,13 @@ def create_market(deployer, is_put):
     humanized = expiry.humanize(arrow.utcnow())
     print(f"Expiry: {expiry.isoformat()} ({humanized})")
 
-    oracle = DEPLOYED_ORACLES[NETWORK][BASE_TOKEN + "/" + QUOTE_TOKEN]
+    oracle = DEPLOYED_ORACLES[_network][BASE_TOKEN + "/" + QUOTE_TOKEN]
 
     # brownie doesn't let us use OptionFactory.at
-    factory = OptionFactory.at(FACTORY[NETWORK])
+    factory = OptionFactory.at(FACTORY[_network])
     tx = factory.createMarket(
-        TOKEN_ADDRESSES[NETWORK][BASE_TOKEN],
-        TOKEN_ADDRESSES[NETWORK][QUOTE_TOKEN],
+        TOKEN_ADDRESSES[_network][BASE_TOKEN],
+        TOKEN_ADDRESSES[_network][QUOTE_TOKEN],
         oracle,
         strike_prices_wei,
         expiry.timestamp,
