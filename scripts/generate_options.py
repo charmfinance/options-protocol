@@ -1,6 +1,7 @@
 import datetime
 import json
 import sys
+import yaml
 
 from brownie import (
     accounts,
@@ -19,14 +20,14 @@ TOKEN_SYMBOLS = {
 }
 
 PATH = {
-    "mainnet": "markets.json",
-    "rinkeby": "markets-rinkeby.json",
+    "mainnet": "markets.yaml",
+    "rinkeby": "markets-rinkeby.yaml",
 }
 
 
 def main():
     with open(PATH[network.show_active()], "r") as f:
-        markets = json.load(f)
+        markets = yaml.safe_load(f)
 
     res = []
     for address in markets:
