@@ -16,7 +16,7 @@ from brownie import (
 ACCOUNT = "deployer"
 BASE_TOKEN = "ETH"
 # BASE_TOKEN = "WBTC"
-EXPIRY_DATE = "5 Feb 2021"
+EXPIRY_DATE = "05 Feb 2021"
 STRIKE_PRICES = [800, 960, 1120, 1280, 1440, 1600, 1920, 2240]
 
 
@@ -63,7 +63,7 @@ TOKEN_ADDRESSES = {
 }
 
 FACTORY = {
-    "mainnet": "",
+    "mainnet": "0xCDFE169dF3D64E2e43D88794A21048A52C742F2B",
     "rinkeby": "",
 }
 
