@@ -16,8 +16,11 @@ from brownie import (
 ACCOUNT = "deployer"
 BASE_TOKEN = "ETH"
 # BASE_TOKEN = "WBTC"
-EXPIRY_DATE = "05 Feb 2021"
-STRIKE_PRICES = [800, 960, 1120, 1280, 1440, 1600, 1920, 2240]
+EXPIRY_DATE = "26 Feb 2021"
+STRIKE_PRICES = [960, 1120, 1280, 1440, 1600, 1920, 2240, 2560, 2880]
+
+# GAS_PRICE = "auto"
+GAS_PRICE = "310 gwei"
 
 
 # constants
@@ -29,8 +32,8 @@ QUOTE_TOKEN = "USDC"
 TRADING_FEE = 0.01
 DISPUTE_PERIOD = 3600  # 1 hour
 TVL_CAPS = {
-    "ETH": 150 * SCALE,
-    "USDC": 150_000 * SCALE6,
+    "ETH": 300 * SCALE,
+    "USDC": 300_000 * SCALE6,
 }
 LP_CAPS = {
     "ETH": 50 * SCALE,
@@ -64,7 +67,7 @@ TOKEN_ADDRESSES = {
 
 FACTORY = {
     "mainnet": "0xCDFE169dF3D64E2e43D88794A21048A52C742F2B",
-    "rinkeby": "",
+    "rinkeby": "0x2E3596e462279678044b03B1618A10564fb4f6E7",
 }
 
 
@@ -114,6 +117,7 @@ def create_market(deployer, is_put):
 
 
 def main():
+    network.gas_price(GAS_PRICE)
     deployer = accounts.load(ACCOUNT)
     balance = deployer.balance()
 
