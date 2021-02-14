@@ -9,15 +9,9 @@ from brownie import (
     Contract,
     OptionMarket,
     OptionToken,
+    ZERO_ADDRESS,
 )
 
-
-TOKEN_SYMBOLS = {
-    "0x0000000000000000000000000000000000000000": "ETH",
-    "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48": "USDC",
-    "0xE7d541c18D6aDb863F4C570065c57b75a53a64d3": "USDC",  # rinkeby
-    "0xfFf8641a3E2AA350624db17BDb0eb3998E314926": "WBTC",  # rinkeby
-}
 
 PATH = {
     "mainnet": "markets.yaml",
@@ -33,7 +27,11 @@ def main():
     for address in markets:
         market = OptionMarket.at(address)
         baseAddress = str(market.baseToken())
-        baseSymbol = TOKEN_SYMBOLS.get(baseAddress, "")
+        if baseAddress == ZERO_ADDRESS:
+            baseSymbol = "ETH"
+        else:
+            baseToken = Contract.from_explorer(baseAddress)
+            baseSymbol = baseToken.symbol()
 
         n = market.numStrikes()
         longTokens = [OptionToken.at(market.longTokens(i)) for i in range(n)]
