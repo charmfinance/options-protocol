@@ -14,18 +14,20 @@ from brownie import (
 
 # deployment parameters
 ACCOUNT = "deployer"
-BASE_TOKEN = "ETH"
-# BASE_TOKEN = "WBTC"
 EXPIRY_DATE = "26 Feb 2021"
-STRIKE_PRICES = [960, 1120, 1280, 1440, 1600, 1920, 2240, 2560, 2880]
 
-# GAS_PRICE = "auto"
-GAS_PRICE = "310 gwei"
+# BASE_TOKEN = "ETH"
+# STRIKE_PRICES = [960, 1120, 1280, 1440, 1600, 1920, 2240, 2560, 2880]
+
+BASE_TOKEN = "WBTC"
+STRIKE_PRICES = [36000, 40000, 44000, 48000, 52000, 56000, 64000]
+
+GAS_PRICE = "auto"
+# GAS_PRICE = "310 gwei"
 
 
 # constants
 SCALE = 10 ** 18
-SCALE6 = 10 ** 6
 
 EXPIRY_TIME = "16:00"
 QUOTE_TOKEN = "USDC"
@@ -33,11 +35,13 @@ TRADING_FEE = 0.01
 DISPUTE_PERIOD = 3600  # 1 hour
 TVL_CAPS = {
     "ETH": 300 * SCALE,
-    "USDC": 300_000 * SCALE6,
+    "USDC": 300_000 * 10 ** 6,
+    "WBTC": 10 * 10 ** 8,
 }
 LP_CAPS = {
     "ETH": 50 * SCALE,
-    "USDC": 50_000 * SCALE6,
+    "USDC": 50_000 * 10 ** 6,
+    "WBTC": 2 * 10 ** 8,
 }
 
 
@@ -61,7 +65,7 @@ TOKEN_ADDRESSES = {
     "rinkeby": {
         "ETH": "0x0000000000000000000000000000000000000000",
         "USDC": "0xE7d541c18D6aDb863F4C570065c57b75a53a64d3",
-        "WBTC": "0xfFf8641a3E2AA350624db17BDb0eb3998E314926",
+        "WBTC": "0x4f21f715A0DF6c498560fB6EC387F74DdeB93560",
     },
 }
 
