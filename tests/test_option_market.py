@@ -1,11 +1,10 @@
-from brownie import reverts
+from brownie import reverts, ZERO_ADDRESS
 import pytest
 from pytest import approx
 
 
 SCALE = 10 ** 18
 PERCENT = SCALE // 100
-ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 
 CALL = PUT = True
 COVER = False
@@ -15,6 +14,9 @@ def lmsr(q, b):
     from math import exp, log
 
     mx = max(q)
+    if b == 0:
+        return mx
+
     a = sum(exp((x - mx) / b) for x in q)
     return mx + b * log(a)
 
