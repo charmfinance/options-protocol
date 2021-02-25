@@ -184,6 +184,18 @@ contract OptionVault is Ownable, ReentrancyGuard, ERC20 {
         require(amountOut >= minAmountOut, "Max slippage exceeded");
     }
 
+    function sellAll(OptionMarket market, uint256 minAmountOut) external returns (uint256) {
+        require(msg.sender == strategy, "!strategy");
+        require(marketAdded[market], "Market not found");
+
+        (uint256[] memory longAmounts, uint256[] memory shortAmounts, uint256 lpShares) = _calcOptionsAndLpAmounts(
+            market,
+            totalSupply(),
+            false
+        );
+        return sell(market, longAmounts, shortAmounts, lpShares, minAmountOut);
+    }
+
     function _sellInternal(
         OptionMarket market,
         uint256[] memory longOptionsOut,
@@ -214,6 +226,7 @@ contract OptionVault is Ownable, ReentrancyGuard, ERC20 {
         bool roundUp
     )
         internal
+        view
         returns (
             uint256[] memory longAmounts,
             uint256[] memory shortAmounts,
@@ -258,16 +271,12 @@ contract OptionVault is Ownable, ReentrancyGuard, ERC20 {
     function totalAssets() external view returns (uint256 assets) {
         assets = baseToken.uniBalanceOf(address(this));
         for (uint256 i = 0; i < markets.length; i++) {
-            OptionMarket market = markets[i];
-            uint256 n = market.numStrikes();
-            uint256[] memory longOptionsIn = new uint256[](n);
-            uint256[] memory shortOptionsIn = new uint256[](n);
-            for (uint256 j = 0; j < n; j++) {
-                longOptionsIn[j] = market.longTokens(j).balanceOf(address(this));
-                shortOptionsIn[j] = market.shortTokens(j).balanceOf(address(this));
-            }
-            uint256 lpSharesIn = market.balanceOf(address(this));
-            assets = assets.add(optionViewsLibrary.getSellCost(market, longOptionsIn, shortOptionsIn, lpSharesIn));
+            (uint256[] memory longAmounts, uint256[] memory shortAmounts, uint256 lpShares) = _calcOptionsAndLpAmounts(
+                markets[i],
+                totalSupply(),
+                false
+            );
+            assets = assets.add(optionViewsLibrary.getSellCost(markets[i], longAmounts, shortAmounts, lpShares));
         }
     }
 
