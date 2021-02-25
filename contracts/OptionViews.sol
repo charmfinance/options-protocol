@@ -169,12 +169,13 @@ contract OptionViews {
         OptionMarket market,
         uint256[] memory longOptionsOut,
         uint256[] memory shortOptionsOut
-    ) internal view returns (uint256 fee) {
+    ) internal view returns (uint256) {
+        uint256 total;
         for (uint256 i = 0; i < market.numStrikes(); i++) {
-            fee = fee.add(longOptionsOut[i]);
-            fee = fee.add(shortOptionsOut[i]);
+            total = total.add(longOptionsOut[i]);
+            total = total.add(shortOptionsOut[i]);
         }
-        fee = fee.mul(market.tradingFee()).div(market.SCALE());
+        return total.mul(market.tradingFee()).div(market.SCALE());
     }
 
     function _getPoolValue(OptionMarket market, uint256 lpShares) internal view returns (uint256) {

@@ -56,8 +56,8 @@ contract OptionVault is Ownable, ReentrancyGuard, ERC20 {
         require(!isPaused, "Paused");
 
         baseToken.uniTransferFromSenderToThis(maxAmountIn);
-        uint256 balanceBefore = baseToken.uniBalanceOf(address(this));
         amountIn = _calcAmountFromShares(baseToken, sharesOut, maxAmountIn, true);
+        uint256 balanceBefore = baseToken.uniBalanceOf(address(this));
 
         for (uint256 i = 0; i < markets.length; i++) {
             (uint256[] memory longAmounts, uint256[] memory shortAmounts, uint256 lpShares) = _calcOptionsAndLpAmounts(
@@ -88,8 +88,8 @@ contract OptionVault is Ownable, ReentrancyGuard, ERC20 {
         require(sharesIn > 0, "Shares in must be > 0");
         require(!isPaused, "Paused");
 
-        uint256 balanceBefore = baseToken.uniBalanceOf(address(this));
         amountOut = _calcAmountFromShares(baseToken, sharesIn, 0, false);
+        uint256 balanceBefore = baseToken.uniBalanceOf(address(this));
 
         for (uint256 i = 0; i < markets.length; i++) {
             (uint256[] memory longAmounts, uint256[] memory shortAmounts, uint256 lpShares) = _calcOptionsAndLpAmounts(
@@ -121,6 +121,7 @@ contract OptionVault is Ownable, ReentrancyGuard, ERC20 {
         uint256 maxAmountIn
     ) external nonReentrant returns (uint256 amountIn) {
         require(msg.sender == strategy, "!strategy");
+        require(marketAdded[market], "Market not found");
 
         uint256 balanceBefore = baseToken.uniBalanceOf(address(this));
         _buyInternal(market, longOptionsIn, shortOptionsIn, lpSharesOut);
@@ -136,8 +137,6 @@ contract OptionVault is Ownable, ReentrancyGuard, ERC20 {
         uint256[] memory shortOptionsIn,
         uint256 lpSharesOut
     ) internal {
-        require(marketAdded[market], "Market not found");
-
         uint256 n = market.numStrikes();
         require(longOptionsIn.length == n, "Lengths don't match");
         require(shortOptionsIn.length == n, "Lengths don't match");
@@ -175,6 +174,7 @@ contract OptionVault is Ownable, ReentrancyGuard, ERC20 {
         uint256 minAmountOut
     ) public nonReentrant returns (uint256 amountOut) {
         require(msg.sender == strategy, "!strategy");
+        require(marketAdded[market], "Market not found");
 
         uint256 balanceBefore = baseToken.uniBalanceOf(address(this));
         _sellInternal(market, longOptionsOut, shortOptionsOut, lpSharesIn);
@@ -190,8 +190,6 @@ contract OptionVault is Ownable, ReentrancyGuard, ERC20 {
         uint256[] memory shortOptionsOut,
         uint256 lpSharesIn
     ) internal {
-        require(marketAdded[market], "Market not found");
-
         uint256 n = market.numStrikes();
         require(longOptionsOut.length == n, "Lengths don't match");
         require(shortOptionsOut.length == n, "Lengths don't match");
@@ -222,11 +220,10 @@ contract OptionVault is Ownable, ReentrancyGuard, ERC20 {
             uint256 lpShares
         )
     {
-        uint256 _totalSupply = totalSupply();
         uint256 n = market.numStrikes();
         longAmounts = new uint256[](n);
         shortAmounts = new uint256[](n);
-        for (uint256 i = 0; i < market.numStrikes(); i++) {
+        for (uint256 i = 0; i < n; i++) {
             longAmounts[i] = _calcAmountFromShares(market.longTokens(i), sharesOut, 0, roundUp);
             shortAmounts[i] = _calcAmountFromShares(market.shortTokens(i), sharesOut, 0, roundUp);
         }
@@ -326,6 +323,10 @@ contract OptionVault is Ownable, ReentrancyGuard, ERC20 {
     // used for guarded launch
     function setTotalSupplyCap(uint256 _totalSupplyCap) external onlyOwner {
         totalSupplyCap = _totalSupplyCap;
+    }
+
+    function setOptionViewsLibrary(address _optionViewsLibrary) external onlyOwner {
+        optionViewsLibrary = OptionViews(_optionViewsLibrary);
     }
 
     // emergency use only. to be removed in future versions
