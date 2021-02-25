@@ -23,7 +23,7 @@ contract OptionVault is Ownable, ReentrancyGuard, ERC20 {
 
     address public strategy;
     IERC20 public baseToken;
-    OptionViews public optionViews;
+    OptionViews public optionViewsLibrary;
 
     mapping(OptionMarket => bool) public marketAdded;
     OptionMarket[] public markets;
@@ -33,47 +33,44 @@ contract OptionVault is Ownable, ReentrancyGuard, ERC20 {
 
     constructor(
         address _baseToken,
-        address _optionViews,
+        address _optionViewsLibrary,
         string memory name,
         string memory symbol
     ) public ERC20(name, symbol) {
         strategy = msg.sender;
         baseToken = IERC20(_baseToken);
-        optionViews = OptionViews(_optionViews);
+        optionViewsLibrary = OptionViews(_optionViewsLibrary);
 
         // use same decimals as base token
         uint8 decimals = IERC20(_baseToken).isETH() ? 18 : ERC20UpgradeSafe(_baseToken).decimals();
         _setupDecimals(decimals);
     }
 
+    /**
+     * Deposit base tokens
+     *
+     * Vault uses deposit to buy options and lp tokens in proportion with pool share
+     */
     function deposit(uint256 sharesOut, uint256 maxAmountIn) external payable nonReentrant returns (uint256 amountIn) {
         require(sharesOut > 0, "Shares out must be > 0");
         require(!isPaused, "Paused");
 
-        // can't use `_calcOptionsAndLpAmounts` since need to subtract msg.value
-        uint256 _totalSupply = totalSupply();
-        if (_totalSupply == 0) {
-            amountIn = sharesOut;
-        } else {
-            uint256 balance = baseToken.uniBalanceOf(address(this));
-            if (baseToken.isETH()) {
-                balance = balance.sub(msg.value);
-            }
-            amountIn = balance.mul(sharesOut).div(_totalSupply).add(1);
-        }
-
         baseToken.uniTransferFromSenderToThis(maxAmountIn);
+        uint256 balanceBefore = baseToken.uniBalanceOf(address(this));
+        amountIn = _calcAmountFromShares(baseToken, sharesOut, maxAmountIn, true);
 
         for (uint256 i = 0; i < markets.length; i++) {
             (uint256[] memory longAmounts, uint256[] memory shortAmounts, uint256 lpShares) = _calcOptionsAndLpAmounts(
                 markets[i],
-                sharesOut
+                sharesOut,
+                true
             );
-            require(amountIn <= maxAmountIn, "Max slippage exceeded");
-            uint256 remaining = maxAmountIn.sub(amountIn);
-            uint256 spent = _buyInternal(markets[i], longAmounts, shortAmounts, lpShares, remaining);
-            amountIn = amountIn.add(spent);
+            _buyInternal(markets[i], longAmounts, shortAmounts, lpShares);
         }
+
+        uint256 balanceAfter = baseToken.uniBalanceOf(address(this));
+        amountIn = amountIn.add(balanceBefore.sub(balanceAfter));
+        require(amountIn <= maxAmountIn, "Max slippage exceeded");
 
         _mint(msg.sender, sharesOut);
         require(totalSupplyCap == 0 || totalSupply() <= totalSupplyCap, "Total supply cap exceeded");
@@ -82,121 +79,142 @@ contract OptionVault is Ownable, ReentrancyGuard, ERC20 {
         baseToken.uniTransfer(msg.sender, maxAmountIn.sub(amountIn));
     }
 
+    /**
+     * Withdraw base tokens
+     *
+     * Vault sells options and lp tokens in proportion with pool share
+     */
     function withdraw(uint256 sharesIn, uint256 minAmountOut) external nonReentrant returns (uint256 amountOut) {
         require(sharesIn > 0, "Shares in must be > 0");
         require(!isPaused, "Paused");
 
-        amountOut = _calcAmountFromShares(baseToken, sharesIn);
+        uint256 balanceBefore = baseToken.uniBalanceOf(address(this));
+        amountOut = _calcAmountFromShares(baseToken, sharesIn, 0, false);
 
         for (uint256 i = 0; i < markets.length; i++) {
             (uint256[] memory longAmounts, uint256[] memory shortAmounts, uint256 lpShares) = _calcOptionsAndLpAmounts(
                 markets[i],
-                sharesIn
+                sharesIn,
+                false
             );
-            uint256 received = _sellInternal(markets[i], longAmounts, shortAmounts, lpShares, 0);
-            amountOut = amountOut.add(received);
+            _sellInternal(markets[i], longAmounts, shortAmounts, lpShares);
         }
 
+        uint256 balanceAfter = baseToken.uniBalanceOf(address(this));
+        amountOut = amountOut.add(balanceAfter.sub(balanceBefore));
         require(amountOut >= minAmountOut, "Max slippage exceeded");
 
-        // burn after so total supply is correct in calculating amounts
         _burn(msg.sender, sharesIn);
         baseToken.uniTransfer(msg.sender, amountOut);
     }
 
+    /**
+     * Convert vault's base tokens to options and lp tokens
+     *
+     * Can only be called by strategy
+     */
     function buy(
         OptionMarket market,
         uint256[] memory longOptionsIn,
         uint256[] memory shortOptionsIn,
         uint256 lpSharesOut,
         uint256 maxAmountIn
-    ) external nonReentrant returns (uint256) {
+    ) external nonReentrant returns (uint256 amountIn) {
         require(msg.sender == strategy, "!strategy");
-        return _buyInternal(market, longOptionsIn, shortOptionsIn, lpSharesOut, maxAmountIn);
+
+        uint256 balanceBefore = baseToken.uniBalanceOf(address(this));
+        _buyInternal(market, longOptionsIn, shortOptionsIn, lpSharesOut);
+
+        uint256 balanceAfter = baseToken.uniBalanceOf(address(this));
+        amountIn = balanceBefore.sub(balanceAfter);
+        require(amountIn <= maxAmountIn, "Max slippage exceeded");
     }
 
     function _buyInternal(
         OptionMarket market,
         uint256[] memory longOptionsIn,
         uint256[] memory shortOptionsIn,
-        uint256 lpSharesOut,
-        uint256 maxAmountIn
-    ) internal returns (uint256 amountIn) {
+        uint256 lpSharesOut
+    ) internal {
         require(marketAdded[market], "Market not found");
-        require(maxAmountIn <= baseToken.uniBalanceOf(address(this)), "Not enough funds");
 
         uint256 n = market.numStrikes();
         require(longOptionsIn.length == n, "Lengths don't match");
         require(shortOptionsIn.length == n, "Lengths don't match");
 
         if (lpSharesOut > 0) {
+            uint256 maxAmountIn = baseToken.uniBalanceOf(address(this));
             uint256 value = baseToken.isETH() ? maxAmountIn : 0;
-            amountIn = market.deposit{value: value}(lpSharesOut, maxAmountIn);
+            market.deposit{value: value}(lpSharesOut, maxAmountIn);
         }
 
-        for (uint256 k = 0; k < n; k++) {
-            require(amountIn <= maxAmountIn, "Max slippage exceeded");
-            if (longOptionsIn[k] > 0) {
-                uint256 remaining = maxAmountIn.sub(amountIn);
-                uint256 value = baseToken.isETH() ? remaining : 0;
-                uint256 spent = market.buy{value: value}(true, k, longOptionsIn[k], remaining);
-                amountIn = amountIn.add(spent);
+        for (uint256 i = 0; i < n; i++) {
+            if (longOptionsIn[i] > 0) {
+                uint256 maxAmountIn = baseToken.uniBalanceOf(address(this));
+                uint256 value = baseToken.isETH() ? maxAmountIn : 0;
+                market.buy{value: value}(true, i, longOptionsIn[i], maxAmountIn);
             }
-            if (shortOptionsIn[k] > 0) {
-                uint256 remaining = maxAmountIn.sub(amountIn);
-                uint256 value = baseToken.isETH() ? remaining : 0;
-                uint256 spent = market.buy{value: value}(false, k, shortOptionsIn[k], remaining);
-                amountIn = amountIn.add(spent);
+            if (shortOptionsIn[i] > 0) {
+                uint256 maxAmountIn = baseToken.uniBalanceOf(address(this));
+                uint256 value = baseToken.isETH() ? maxAmountIn : 0;
+                market.buy{value: value}(false, i, shortOptionsIn[i], maxAmountIn);
             }
         }
-
-        require(amountIn <= maxAmountIn, "Max slippage exceeded");
     }
 
+    /**
+     * Convert vault's options and lp tokens back to base tokens
+     *
+     * Can only be called by strategy
+     */
     function sell(
         OptionMarket market,
         uint256[] memory longOptionsOut,
         uint256[] memory shortOptionsOut,
         uint256 lpSharesIn,
         uint256 minAmountOut
-    ) public nonReentrant returns (uint256) {
+    ) public nonReentrant returns (uint256 amountOut) {
         require(msg.sender == strategy, "!strategy");
-        return _sellInternal(market, longOptionsOut, shortOptionsOut, lpSharesIn, minAmountOut);
+
+        uint256 balanceBefore = baseToken.uniBalanceOf(address(this));
+        _sellInternal(market, longOptionsOut, shortOptionsOut, lpSharesIn);
+
+        uint256 balanceAfter = baseToken.uniBalanceOf(address(this));
+        amountOut = balanceAfter.sub(balanceBefore);
+        require(amountOut >= minAmountOut, "Max slippage exceeded");
     }
 
     function _sellInternal(
         OptionMarket market,
         uint256[] memory longOptionsOut,
         uint256[] memory shortOptionsOut,
-        uint256 lpSharesIn,
-        uint256 minAmountOut
-    ) internal returns (uint256 amountOut) {
+        uint256 lpSharesIn
+    ) internal {
         require(marketAdded[market], "Market not found");
 
         uint256 n = market.numStrikes();
         require(longOptionsOut.length == n, "Lengths don't match");
         require(shortOptionsOut.length == n, "Lengths don't match");
 
-        for (uint256 k = 0; k < n; k++) {
-            if (longOptionsOut[k] > 0) {
-                uint256 received = market.sell(true, k, longOptionsOut[k], 0);
-                amountOut = amountOut.add(received);
+        for (uint256 i = 0; i < n; i++) {
+            if (longOptionsOut[i] > 0) {
+                market.sell(true, i, longOptionsOut[i], 0);
             }
-            if (shortOptionsOut[k] > 0) {
-                uint256 received = market.sell(false, k, shortOptionsOut[k], 0);
-                amountOut = amountOut.add(received);
+            if (shortOptionsOut[i] > 0) {
+                market.sell(false, i, shortOptionsOut[i], 0);
             }
         }
 
         if (lpSharesIn > 0) {
-            uint256 received = market.withdraw(lpSharesIn, 0);
-            amountOut = amountOut.add(received);
+            market.withdraw(lpSharesIn, 0);
         }
-
-        require(amountOut >= minAmountOut, "Max slippage exceeded");
     }
 
-    function _calcOptionsAndLpAmounts(OptionMarket market, uint256 sharesOut)
+    function _calcOptionsAndLpAmounts(
+        OptionMarket market,
+        uint256 sharesOut,
+        bool roundUp
+    )
         internal
         returns (
             uint256[] memory longAmounts,
@@ -204,19 +222,23 @@ contract OptionVault is Ownable, ReentrancyGuard, ERC20 {
             uint256 lpShares
         )
     {
+        uint256 _totalSupply = totalSupply();
         uint256 n = market.numStrikes();
         longAmounts = new uint256[](n);
         shortAmounts = new uint256[](n);
-        for (uint256 k = 0; k < market.numStrikes(); k++) {
-            OptionToken longToken = market.longTokens(k);
-            OptionToken shortToken = market.shortTokens(k);
-            longAmounts[k] = _calcAmountFromShares(longToken, sharesOut);
-            shortAmounts[k] = _calcAmountFromShares(shortToken, sharesOut);
+        for (uint256 i = 0; i < market.numStrikes(); i++) {
+            longAmounts[i] = _calcAmountFromShares(market.longTokens(i), sharesOut, 0, roundUp);
+            shortAmounts[i] = _calcAmountFromShares(market.shortTokens(i), sharesOut, 0, roundUp);
         }
-        lpShares = _calcAmountFromShares(market, sharesOut);
+        lpShares = _calcAmountFromShares(market, sharesOut, 0, roundUp);
     }
 
-    function _calcAmountFromShares(IERC20 token, uint256 shares) public view returns (uint256) {
+    function _calcAmountFromShares(
+        IERC20 token,
+        uint256 shares,
+        uint256 balanceOffset,
+        bool roundUp
+    ) internal view returns (uint256) {
         uint256 _totalSupply = totalSupply();
         if (_totalSupply == 0) {
             return token == baseToken ? shares : 0;
@@ -225,9 +247,17 @@ contract OptionVault is Ownable, ReentrancyGuard, ERC20 {
         if (balance == 0) {
             return 0;
         }
-        return balance.mul(shares).div(_totalSupply);
+        uint256 numer = (balance.sub(balanceOffset)).mul(shares);
+        if (numer > 0 && roundUp) {
+            return numer.sub(1).div(_totalSupply).add(1);
+        }
+        return numer.div(_totalSupply);
     }
 
+    /**
+     * Get value of vault holdings if all options and lp tokens were sold back
+     * into base tokens
+     */
     function totalAssets() external view returns (uint256 assets) {
         assets = baseToken.uniBalanceOf(address(this));
         for (uint256 i = 0; i < markets.length; i++) {
@@ -235,12 +265,12 @@ contract OptionVault is Ownable, ReentrancyGuard, ERC20 {
             uint256 n = market.numStrikes();
             uint256[] memory longOptionsIn = new uint256[](n);
             uint256[] memory shortOptionsIn = new uint256[](n);
-            for (uint256 k = 0; k < n; k++) {
-                longOptionsIn[k] = market.longTokens(k).balanceOf(address(this));
-                shortOptionsIn[k] = market.shortTokens(k).balanceOf(address(this));
+            for (uint256 j = 0; j < n; j++) {
+                longOptionsIn[j] = market.longTokens(j).balanceOf(address(this));
+                shortOptionsIn[j] = market.shortTokens(j).balanceOf(address(this));
             }
             uint256 lpSharesIn = market.balanceOf(address(this));
-            assets = assets.add(optionViews.getSellCost(market, longOptionsIn, shortOptionsIn, lpSharesIn));
+            assets = assets.add(optionViewsLibrary.getSellCost(market, longOptionsIn, shortOptionsIn, lpSharesIn));
         }
     }
 

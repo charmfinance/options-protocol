@@ -62,12 +62,9 @@ contract OptionViews {
     ) public view returns (uint256 cost) {
         require(!market.isExpired(), "Already expired");
 
-        uint256 n = market.numStrikes();
         uint256 totalSupply = market.totalSupply();
         uint256[] memory longSupplies = getLongSupplies(market);
         uint256[] memory shortSupplies = getShortSupplies(market);
-        require(longSupplies.length == n, "Lengths do not match");
-        require(shortSupplies.length == n, "Lengths do not match");
 
         uint256 costBefore = _getLmsrCost(market, longSupplies, shortSupplies, totalSupply);
 
@@ -92,8 +89,6 @@ contract OptionViews {
         uint256 totalSupply = market.totalSupply();
         uint256[] memory longSupplies = getLongSupplies(market);
         uint256[] memory shortSupplies = getShortSupplies(market);
-        require(longSupplies.length == market.numStrikes(), "Lengths do not match");
-        require(shortSupplies.length == market.numStrikes(), "Lengths do not match");
 
         if (market.isExpired()) {
             cost = _getPayoff(market, longSupplies, shortSupplies);
@@ -107,7 +102,6 @@ contract OptionViews {
         }
         totalSupply = totalSupply.sub(lpSharesIn);
 
-        uint256 costAfter;
         if (market.isExpired()) {
             cost = cost.sub(_getPayoff(market, longSupplies, shortSupplies));
         } else {
@@ -188,6 +182,6 @@ contract OptionViews {
         if (totalSupply == 0) {
             return 0;
         }
-        return market.poolValue().mul(lpShares).div(market.totalSupply());
+        return market.poolValue().mul(lpShares).div(totalSupply);
     }
 }

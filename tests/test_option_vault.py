@@ -30,8 +30,11 @@ def test_option_vault(
     isEth,
     baseDecimals,
 ):
+
+    # set up accounts
     deployer, strategy, alice, bob = a[:4]
 
+    # set up contracts
     if isEth:
         scale = 1e18
         baseToken = ZERO_ADDRESS
@@ -44,6 +47,8 @@ def test_option_vault(
     vault = deployer.deploy(
         OptionVault, baseToken, optionViews, "vault name", "vault symbol"
     )
+
+    # check vault variables
     assert vault.name() == "vault name"
     assert vault.symbol() == "vault symbol"
     assert vault.decimals() == 18 if isEth else baseDecimals
@@ -51,22 +56,33 @@ def test_option_vault(
     def getBalance(wallet):
         return wallet.balance() if isEth else baseToken.balanceOf(wallet)
 
-    market1 = deployer.deploy(OptionMarket)
-    longTokens1 = [deployer.deploy(OptionToken) for _ in range(6)]
-    shortTokens1 = [deployer.deploy(OptionToken) for _ in range(6)]
-    market1.initialize(
-        baseToken,
-        deployer.deploy(MockOracle),
-        longTokens1,
-        shortTokens1,
-        [300 * SCALE, 400 * SCALE, 500 * SCALE, 600 * SCALE, 700 * SCALE, 800 * SCALE],
-        2000000000,  # expiry = 18 May 2033
-        False,
-        SCALE // 100,
-        "symbol",
-    )
-    for token in longTokens1 + shortTokens1:
-        token.initialize(market1, "name", "symbol", 18)
+    def deployMarket(baseToken):
+        market = deployer.deploy(OptionMarket)
+        longTokens = [deployer.deploy(OptionToken) for _ in range(6)]
+        shortTokens = [deployer.deploy(OptionToken) for _ in range(6)]
+        market.initialize(
+            baseToken,
+            deployer.deploy(MockOracle),
+            longTokens,
+            shortTokens,
+            [
+                300 * SCALE,
+                400 * SCALE,
+                500 * SCALE,
+                600 * SCALE,
+                700 * SCALE,
+                800 * SCALE,
+            ],
+            2000000000,  # expiry = 18 May 2033
+            False,
+            SCALE // 100,
+            "symbol",
+        )
+        for token in longTokens + shortTokens:
+            token.initialize(market, "name", "symbol", baseDecimals)
+        return market
+
+    market1 = deployMarket(baseToken)
 
     # give users base tokens
     if not isEth:
@@ -76,12 +92,14 @@ def test_option_vault(
                 baseToken.approve(contract, 100 * scale, {"from": user})
     valueDict = {"value": 50 * scale} if isEth else {}
 
+    # test set strategy
     with reverts("Ownable: caller is not the owner"):
         vault.setStrategy(strategy, {"from": strategy})
     vault.setStrategy(strategy, {"from": deployer})
 
     vault.addMarket(market1, {"from": strategy})
 
+    # test deposit
     with reverts("Max slippage exceeded"):
         tx = vault.deposit(10 * scale, 9 * scale, {"from": alice, **valueDict})
 
@@ -99,6 +117,7 @@ def test_option_vault(
     assert vault.totalSupply() == 10 * scale
     assert vault.totalAssets() == 10 * scale
 
+    # test buy
     with reverts("!strategy"):
         vault.buy(
             market1,
@@ -152,18 +171,20 @@ def test_option_vault(
     assert approx(market1.poolValue(), abs=1) == 3 * scale // 100
     assert vault.totalAssets() == 10 * scale
 
+    # test deposit
     bobBalance = getBalance(bob)
     vaultBalance = getBalance(vault)
     vault.deposit(5 * scale, 15 * scale, {"from": bob, **valueDict})
     assert approx(bobBalance - getBalance(bob)) == 5 * scale + 1.5 * scale // 100
     assert vault.balanceOf(bob) == 5 * scale
     assert vault.totalSupply() == 15 * scale
-    assert market1.balanceOf(vault) == 3 * scale
-    assert OptionToken.at(market1.longTokens(3)).balanceOf(vault) == 1.5 * scale
-    assert OptionToken.at(market1.shortTokens(0)).balanceOf(vault) == 3 * scale
+    assert approx(market1.balanceOf(vault)) == 3 * scale
+    assert approx(OptionToken.at(market1.longTokens(3)).balanceOf(vault)) == 1.5 * scale
+    assert approx(OptionToken.at(market1.shortTokens(0)).balanceOf(vault)) == 3 * scale
     assert approx(market1.poolValue(), abs=1) == 6 * scale // 100
     assert approx(vault.totalAssets()) == 15 * scale + 1.5 * scale // 100
 
+    # test sell
     with reverts("!strategy"):
         tx = vault.sell(
             market1,
@@ -211,12 +232,13 @@ def test_option_vault(
     assert approx(getBalance(vault) - balance) == cost1 - cost2
     assert approx(tx.return_value) == cost1 - cost2
     assert approx(tx.return_value) == dcost
-    assert market1.balanceOf(vault) == 2 * scale
-    assert OptionToken.at(market1.longTokens(3)).balanceOf(vault) == 0
-    assert OptionToken.at(market1.shortTokens(0)).balanceOf(vault) == 2 * scale
+    assert approx(market1.balanceOf(vault)) == 2 * scale
+    assert approx(OptionToken.at(market1.longTokens(3)).balanceOf(vault)) == 0
+    assert approx(OptionToken.at(market1.shortTokens(0)).balanceOf(vault)) == 2 * scale
     assert approx(market1.poolValue(), abs=1) == 4 * scale // 100
     assert approx(vault.totalAssets()) == 15 * scale + 1.5 * scale // 100
 
+    # test withdraw
     with reverts("Max slippage exceeded"):
         vault.withdraw(10 * scale, 20 * scale, {"from": alice})
 
@@ -229,7 +251,7 @@ def test_option_vault(
     assert approx(balance - getBalance(vault)) == balance * 2.0 / 3
     assert approx(tx.return_value) == (cost + balance) * 2.0 / 3
     assert approx(market1.balanceOf(vault), rel=1e-5, abs=1) == 2.0 / 3 * scale
-    assert OptionToken.at(market1.longTokens(3)).balanceOf(vault) == 0
+    assert approx(OptionToken.at(market1.longTokens(3)).balanceOf(vault), abs=1) == 0
     assert (
         approx(OptionToken.at(market1.shortTokens(0)).balanceOf(vault), rel=1e-5, abs=1)
         == 2.0 / 3 * scale
@@ -243,44 +265,15 @@ def test_option_vault(
     assert getBalance(vault) == 0
     assert approx(tx.return_value) == cost + balance
     assert approx(market1.balanceOf(vault)) == 0
-    assert OptionToken.at(market1.longTokens(3)).balanceOf(vault) == 0
-    assert approx(OptionToken.at(market1.shortTokens(0)).balanceOf(vault)) == 0
+    assert approx(OptionToken.at(market1.longTokens(3)).balanceOf(vault), abs=1) == 0
+    assert approx(OptionToken.at(market1.shortTokens(0)).balanceOf(vault), abs=1) == 0
     assert approx(market1.poolValue()) == 0
     assert vault.totalAssets() == 0
 
-    market2 = deployer.deploy(OptionMarket)
-    longTokens2 = [deployer.deploy(OptionToken) for _ in range(6)]
-    shortTokens2 = [deployer.deploy(OptionToken) for _ in range(6)]
-    market2.initialize(
-        baseToken,
-        deployer.deploy(MockOracle),
-        longTokens2,
-        shortTokens2,
-        [300 * SCALE, 400 * SCALE, 500 * SCALE, 600 * SCALE, 700 * SCALE, 800 * SCALE],
-        2000000000,  # expiry = 18 May 2033
-        True,
-        SCALE // 100,
-        "symbol",
-    )
-    for token in longTokens2 + shortTokens2:
-        token.initialize(market2, "name", "symbol", 18)
-
-    market3 = deployer.deploy(OptionMarket)
-    longTokens3 = [deployer.deploy(OptionToken) for _ in range(6)]
-    shortTokens3 = [deployer.deploy(OptionToken) for _ in range(6)]
-    market3.initialize(
-        baseToken,
-        deployer.deploy(MockOracle),
-        longTokens3,
-        shortTokens3,
-        [300 * SCALE, 400 * SCALE, 500 * SCALE, 600 * SCALE, 700 * SCALE, 800 * SCALE],
-        2000000000,  # expiry = 18 May 2033
-        True,
-        SCALE // 100,
-        "symbol",
-    )
-    for token in longTokens3 + shortTokens3:
-        token.initialize(market3, "name", "symbol", 18)
+    # test add new markets
+    market2 = deployMarket(baseToken)
+    market3 = deployMarket(baseToken)
+    market4 = deployMarket(deployer.deploy(MockToken))
 
     assert vault.numMarkets() == 1
     assert vault.allMarkets() == [market1]
@@ -297,12 +290,16 @@ def test_option_vault(
         vault.removeMarket(market2, {"from": alice})
 
     with reverts("Market not found"):
-        vault.removeMarket(deployer.deploy(OptionMarket), {"from": strategy})
+        vault.removeMarket(market4, {"from": strategy})
 
     vault.removeMarket(market2, {"from": strategy})
     assert vault.numMarkets() == 2
     assert vault.allMarkets() == [market1, market3]
 
+    with reverts("Base tokens don't match"):
+        vault.addMarket(market4, {"from": strategy})
+
+    # test pause and unpause
     with reverts("Ownable: caller is not the owner"):
         vault.pause({"from": strategy})
 
