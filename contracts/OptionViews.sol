@@ -68,6 +68,9 @@ contract OptionViews {
 
         uint256 costBefore = _getLmsrCost(market, longSupplies, shortSupplies, totalSupply);
 
+        // need to recalculate as mutated by calcLmsrCost
+        longSupplies = getLongSupplies(market);
+        shortSupplies = getShortSupplies(market);
         for (uint256 i = 0; i < market.numStrikes(); i++) {
             longSupplies[i] = longSupplies[i].add(longOptionsOut[i]);
             shortSupplies[i] = shortSupplies[i].add(shortOptionsOut[i]);
@@ -95,6 +98,10 @@ contract OptionViews {
         } else {
             cost = _getLmsrCost(market, longSupplies, shortSupplies, totalSupply);
         }
+
+        // need to recalculate as mutated by calcLmsrCost
+        longSupplies = getLongSupplies(market);
+        shortSupplies = getShortSupplies(market);
 
         for (uint256 i = 0; i < market.numStrikes(); i++) {
             longSupplies[i] = longSupplies[i].sub(longOptionsIn[i]);
@@ -170,12 +177,20 @@ contract OptionViews {
         uint256[] memory longOptionsOut,
         uint256[] memory shortOptionsOut
     ) internal view returns (uint256) {
+        uint256 scale = market.SCALE();
+        bool isPut = market.isPut();
         uint256 total;
         for (uint256 i = 0; i < market.numStrikes(); i++) {
-            total = total.add(longOptionsOut[i]);
-            total = total.add(shortOptionsOut[i]);
+            if (isPut) {
+                uint256 strike = market.strikePrices(i);
+                total = total.add(longOptionsOut[i].mul(strike).div(scale));
+                total = total.add(shortOptionsOut[i].mul(strike).div(scale));
+            } else {
+                total = total.add(longOptionsOut[i]);
+                total = total.add(shortOptionsOut[i]);
+            }
         }
-        return total.mul(market.tradingFee()).div(market.SCALE());
+        return total.mul(market.tradingFee()).div(scale);
     }
 
     function _getPoolValue(OptionMarket market, uint256 lpShares) internal view returns (uint256) {

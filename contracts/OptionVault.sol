@@ -115,8 +115,8 @@ contract OptionVault is Ownable, ReentrancyGuard, ERC20 {
      */
     function buy(
         OptionMarket market,
-        uint256[] memory longOptionsIn,
-        uint256[] memory shortOptionsIn,
+        uint256[] memory longOptionsOut,
+        uint256[] memory shortOptionsOut,
         uint256 lpSharesOut,
         uint256 maxAmountIn
     ) external nonReentrant returns (uint256 amountIn) {
@@ -124,7 +124,7 @@ contract OptionVault is Ownable, ReentrancyGuard, ERC20 {
         require(marketAdded[market], "Market not found");
 
         uint256 balanceBefore = baseToken.uniBalanceOf(address(this));
-        _buyInternal(market, longOptionsIn, shortOptionsIn, lpSharesOut);
+        _buyInternal(market, longOptionsOut, shortOptionsOut, lpSharesOut);
 
         uint256 balanceAfter = baseToken.uniBalanceOf(address(this));
         amountIn = balanceBefore.sub(balanceAfter);

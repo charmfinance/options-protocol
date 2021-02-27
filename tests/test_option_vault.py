@@ -19,7 +19,7 @@ def lmsr(q, b):
 
 @pytest.mark.parametrize("isEth", [False, True])
 @pytest.mark.parametrize("baseDecimals", [6, 18])
-def test_option_vault(
+def test_option_vault_calls(
     a,
     OptionVault,
     OptionMarket,
@@ -338,3 +338,252 @@ def test_option_vault(
     vault.emergencyWithdraw(market1.longTokens(3), {"from": deployer})
     assert longToken.balanceOf(deployer) == 1 * scale
     assert longToken.balanceOf(vault) == 0
+
+
+@pytest.mark.parametrize("baseDecimals", [6, 18])
+def test_option_vault_puts(
+    a,
+    OptionVault,
+    OptionMarket,
+    OptionToken,
+    OptionViews,
+    MockOracle,
+    MockToken,
+    baseDecimals,
+):
+
+    # set up accounts
+    deployer, strategy, alice, bob = a[:4]
+
+    # set up contracts
+    scale = 10 ** baseDecimals
+    baseToken = deployer.deploy(MockToken)
+    baseToken.setDecimals(baseDecimals)
+
+    optionViews = deployer.deploy(OptionViews)
+    vault = deployer.deploy(
+        OptionVault, baseToken, optionViews, "vault name", "vault symbol"
+    )
+
+    # check vault variables
+    assert vault.name() == "vault name"
+    assert vault.symbol() == "vault symbol"
+    assert vault.decimals() == baseDecimals
+
+    def getBalance(wallet):
+        return baseToken.balanceOf(wallet)
+
+    def deployMarket(baseToken):
+        market = deployer.deploy(OptionMarket)
+        longTokens = [deployer.deploy(OptionToken) for _ in range(6)]
+        shortTokens = [deployer.deploy(OptionToken) for _ in range(6)]
+        market.initialize(
+            baseToken,
+            deployer.deploy(MockOracle),
+            longTokens,
+            shortTokens,
+            [
+                300 * SCALE,
+                400 * SCALE,
+                500 * SCALE,
+                600 * SCALE,
+                700 * SCALE,
+                800 * SCALE,
+            ],
+            2000000000,  # expiry = 18 May 2033
+            True,
+            SCALE // 100,
+            "symbol",
+        )
+        for token in longTokens + shortTokens:
+            token.initialize(market, "name", "symbol", baseDecimals)
+        return market
+
+    market1 = deployMarket(baseToken)
+
+    # give users base tokens
+    for user in [deployer, alice, bob]:
+        baseToken.mint(user, 1000000 * scale, {"from": deployer})
+        for contract in [vault, market1]:
+            baseToken.approve(contract, 1000000 * scale, {"from": user})
+
+    # test set strategy
+    with reverts("Ownable: caller is not the owner"):
+        vault.setStrategy(strategy, {"from": strategy})
+    vault.setStrategy(strategy, {"from": deployer})
+
+    vault.addMarket(market1, {"from": strategy})
+
+    # test deposit
+    with reverts("Max slippage exceeded"):
+        tx = vault.deposit(10000 * scale, 9000 * scale, {"from": alice})
+
+    with reverts("Shares out must be > 0"):
+        tx = vault.deposit(0, 15000 * scale, {"from": alice})
+
+    assert vault.totalAssets() == 0
+
+    balance = getBalance(alice)
+    tx = vault.deposit(10000 * scale, 15000 * scale, {"from": alice})
+    assert tx.return_value == 10000 * scale
+    assert balance - getBalance(alice) == 10000 * scale
+    assert getBalance(vault) == 10000 * scale
+    assert vault.balanceOf(alice) == 10000 * scale
+    assert vault.totalSupply() == 10000 * scale
+    assert vault.totalAssets() == 10000 * scale
+
+    # test buy
+    with reverts("!strategy"):
+        vault.buy(
+            market1,
+            [0, 0, 1 * scale, 0, 0, 0],
+            [0, 0, 0, 0, 0, 2 * scale],
+            200 * scale,
+            1500 * scale,
+            {"from": alice},
+        )
+
+    with reverts("Market not found"):
+        vault.buy(
+            deployer.deploy(OptionMarket),
+            [0, 0, 1 * scale, 0, 0, 0],
+            [0, 0, 0, 0, 0, 2 * scale],
+            200 * scale,
+            1500 * scale,
+            {"from": strategy},
+        )
+
+    # with reverts("Max slippage exceeded"):
+    #     vault.buy(
+    #         market1,
+    #         [0, 0, 1 * scale, 0, 0, 0],
+    #         [0, 0, 0, 0, 0, 2 * scale],
+    #         200 * scale,
+    #         1500 * scale,
+    #         {"from": strategy},
+    #     )
+
+    balance = getBalance(vault)
+    dcost = optionViews.getBuyCost(
+        market1, [0, 0, 1 * scale, 0, 0, 0], [0, 0, 0, 0, 0, 2 * scale], 200 * scale
+    )
+    tx = vault.buy(
+        market1,
+        [0, 0, 1 * scale, 0, 0, 0],
+        [0, 0, 0, 0, 0, 2 * scale],
+        200 * scale,
+        2500 * scale,
+        {"from": strategy},
+    )
+    # print(tx.return_value)
+    cost1 = scale * lmsr([0, 0, 0, 0, 0, 0, 0], 0)
+    cost2 = scale * lmsr([2 * 800, 0, 0, 0, 1 * 500, 1 * 500, 1 * 500], 200) + 2100 * scale // 100
+    # assert approx(tx.return_value) == cost2 - cost1
+    # assert approx(tx.return_value) == dcost
+    assert approx(balance - getBalance(vault)) == cost2 - cost1
+    assert approx(balance - getBalance(vault)) == dcost
+    assert market1.balanceOf(vault) == 200 * scale
+    assert OptionToken.at(market1.longTokens(2)).balanceOf(vault) == 1 * scale
+    assert OptionToken.at(market1.shortTokens(5)).balanceOf(vault) == 2 * scale
+    assert approx(market1.poolValue(), abs=1) == 2100 * scale // 100
+    assert vault.totalAssets() == 10000 * scale
+
+    # test deposit
+    bobBalance = getBalance(bob)
+    vaultBalance = getBalance(vault)
+    vault.deposit(5000 * scale, 10000 * scale, {"from": bob})
+    assert approx(bobBalance - getBalance(bob)) == 5000 * scale + 1050 * scale // 100
+    assert vault.balanceOf(bob) == 5000 * scale
+    assert vault.totalSupply() == 15000 * scale
+    assert approx(market1.balanceOf(vault)) == 300 * scale
+    assert approx(OptionToken.at(market1.longTokens(2)).balanceOf(vault)) == 1.5 * scale
+    assert approx(OptionToken.at(market1.shortTokens(5)).balanceOf(vault)) == 3 * scale
+    assert approx(market1.poolValue(), abs=1) == 4200 * scale // 100
+    assert approx(vault.totalAssets()) == 15000 * scale + 1050 * scale // 100
+
+    # test sell
+    with reverts("!strategy"):
+        tx = vault.sell(
+            market1,
+            [0, 0, 1.5 * scale, 0, 0, 0],
+            [0, 0, 0, 0, 0, 1 * scale],
+            100 * scale,
+            100 * scale,
+            {"from": alice},
+        )
+
+    with reverts("Market not found"):
+        tx = vault.sell(
+            deployer.deploy(OptionMarket),
+            [0, 0, 1.5 * scale, 0, 0, 0],
+            [0, 0, 0, 0, 0, 1 * scale],
+            100 * scale,
+            100 * scale,
+            {"from": strategy},
+        )
+
+    # with reverts("Max slippage exceeded"):
+    #     tx = vault.sell(
+    #         market1,
+    #         [0, 0, 1.5 * scale, 0, 0, 0],
+    #         [0, 0, 0, 0, 0, 1 * scale],
+    #         100 * scale,
+    #         11500 * scale,
+    #         {"from": strategy},
+    #     )
+
+    balance = getBalance(vault)
+    dcost = optionViews.getSellCost(
+        market1, [0, 0, 1.5 * scale, 0, 0, 0], [0, 0, 0, 0, 0, 1 * scale], 100 * scale
+    )
+    tx = vault.sell(
+        market1,
+        [0, 0, 1.5 * scale, 0, 0, 0],
+        [0, 0, 0, 0, 0, 1 * scale],
+        100 * scale,
+        100 * scale,
+        {"from": strategy},
+    )
+    cost1 = scale * lmsr([3 * 800, 0, 0, 0, 1.5 * 500, 1.5 * 500, 1.5 * 500], 300) + 4200 * scale // 100
+    cost2 = scale * lmsr([2 * 800, 0, 0, 0, 0, 0, 0], 200) + 2800 * scale // 100
+    assert approx(getBalance(vault) - balance) == cost1 - cost2
+    assert approx(getBalance(vault) - balance) == dcost
+    # assert approx(tx.return_value) == cost1 - cost2
+    # assert approx(tx.return_value) == dcost
+    assert approx(market1.balanceOf(vault)) == 200 * scale
+    assert approx(OptionToken.at(market1.longTokens(2)).balanceOf(vault)) == 0
+    assert approx(OptionToken.at(market1.shortTokens(5)).balanceOf(vault)) == 2 * scale
+    assert approx(market1.poolValue(), abs=1) == 2800 * scale // 100
+    assert approx(vault.totalAssets()) == 15000 * scale + 1050 * scale // 100
+
+    # test withdraw
+    with reverts("Max slippage exceeded"):
+        vault.withdraw(10000 * scale, 20000 * scale, {"from": alice})
+
+    with reverts("Shares in must be > 0"):
+        vault.withdraw(0, 20000 * scale, {"from": alice})
+
+    balance = getBalance(vault)
+    tx = vault.withdraw(10000 * scale, 10000 * scale, {"from": alice})
+    cost = scale * lmsr([2 * 800, 0, 0, 0, 0, 0, 0], 200) + 2800 * scale // 100
+    assert approx(balance - getBalance(vault)) == balance * 2.0 / 3
+    assert approx(tx.return_value) == (cost + balance) * 2.0 / 3
+    assert approx(market1.balanceOf(vault)) == 200.0 / 3 * scale
+    assert approx(OptionToken.at(market1.longTokens(2)).balanceOf(vault), abs=1) == 0
+    assert (
+        approx(OptionToken.at(market1.shortTokens(5)).balanceOf(vault), rel=1e-5, abs=1)
+        == 2.0 / 3 * scale
+    )
+    assert approx(market1.poolValue(), rel=1e-5, abs=1) == 2800.0 / 3 * scale // 100
+    assert approx(vault.totalAssets()) == 15000.0 / 3 * scale + 1050.0 / 3 * scale // 100
+
+    balance = getBalance(vault)
+    tx = vault.withdraw(5000 * scale, 5000 * scale, {"from": bob})
+    cost = scale * lmsr([2.0 / 3 * 800, 0, 0, 0, 0, 0, 0], 200.0 / 3) + 2800.0 / 3 * scale // 100
+    assert getBalance(vault) == 0
+    assert approx(tx.return_value) == cost + balance
+    assert approx(market1.balanceOf(vault)) == 0
+    assert approx(OptionToken.at(market1.longTokens(3)).balanceOf(vault), abs=1) == 0
+    assert approx(OptionToken.at(market1.shortTokens(0)).balanceOf(vault), abs=1) == 0
+    assert approx(market1.poolValue()) == 0
+    assert vault.totalAssets() == 0
