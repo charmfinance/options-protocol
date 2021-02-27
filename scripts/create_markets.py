@@ -14,13 +14,40 @@ from brownie import (
 
 # deployment parameters
 ACCOUNT = "deployer"
-EXPIRY_DATE = "26 Feb 2021"
+EXPIRY_DATE = "25 Jun 2021"
 
 # BASE_TOKEN = "ETH"
-# STRIKE_PRICES = [960, 1120, 1280, 1440, 1600, 1920, 2240, 2560, 2880]
+# STRIKE_PRICES = [
+#     480,
+#     640,
+#     960,
+#     1280,
+#     1600,
+#     1920,
+#     2560,
+#     3200,
+#     4000,
+#     5000,
+#     6000,
+#     8000,
+#     10000,
+# ]
 
 BASE_TOKEN = "WBTC"
-STRIKE_PRICES = [36000, 40000, 44000, 48000, 52000, 56000, 64000]
+STRIKE_PRICES = [
+    16000,
+    20000,
+    24000,
+    32000,
+    40000,
+    50000,
+    64000,
+    80000,
+    100000,
+    120000,
+    160000,
+    200000,
+]
 
 GAS_PRICE = "auto"
 # GAS_PRICE = "310 gwei"
@@ -29,10 +56,10 @@ GAS_PRICE = "auto"
 # constants
 SCALE = 10 ** 18
 
-EXPIRY_TIME = "16:00"
+EXPIRY_TIME = "08:00"
 QUOTE_TOKEN = "USDC"
 TRADING_FEE = 0.01
-DISPUTE_PERIOD = 3600  # 1 hour
+DISPUTE_PERIOD = 6 * 3600  # 6 hours
 TVL_CAPS = {
     "ETH": 300 * SCALE,
     "USDC": 300_000 * 10 ** 6,
@@ -109,7 +136,7 @@ def create_market(deployer, is_put):
     address = factory.markets(factory.numMarkets() - 1)
 
     market = OptionMarket.at(address)
-    market.pause({"from": deployer})
+    # market.pause({"from": deployer})
     market.setBalanceCap(
         TVL_CAPS[QUOTE_TOKEN if is_put else BASE_TOKEN], {"from": deployer}
     )
