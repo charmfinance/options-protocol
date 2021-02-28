@@ -62,23 +62,26 @@ contract OptionViews {
     ) public view returns (uint256 cost) {
         require(!market.isExpired(), "Already expired");
 
-        uint256 totalSupply = market.totalSupply();
+        uint256 lpSupply = market.totalSupply();
         uint256[] memory longSupplies = getLongSupplies(market);
         uint256[] memory shortSupplies = getShortSupplies(market);
 
-        uint256 costBefore = _getLmsrCost(market, longSupplies, shortSupplies, totalSupply);
+        uint256 costBefore = _getLmsrCost(market, longSupplies, shortSupplies, lpSupply);
 
         // need to recalculate as mutated by calcLmsrCost
         longSupplies = getLongSupplies(market);
         shortSupplies = getShortSupplies(market);
-        for (uint256 i = 0; i < market.numStrikes(); i++) {
+        uint256 n = market.numStrikes();
+        for (uint256 i = 0; i < n; i++) {
             longSupplies[i] = longSupplies[i].add(longOptionsOut[i]);
             shortSupplies[i] = shortSupplies[i].add(shortOptionsOut[i]);
         }
-        totalSupply = totalSupply.add(lpSharesOut);
+        lpSupply = lpSupply.add(lpSharesOut);
 
-        cost = _getLmsrCost(market, longSupplies, shortSupplies, totalSupply);
-        cost = cost.add(_getPoolValue(market, lpSharesOut).add(1));
+        cost = _getLmsrCost(market, longSupplies, shortSupplies, lpSupply);
+        if (lpSharesOut > 0) {
+            cost = cost.add(_getPoolValue(market, lpSharesOut).add(1));
+        }
         cost = cost.add(_getFee(market, longOptionsOut, shortOptionsOut));
         cost = cost.sub(costBefore);
     }
@@ -89,30 +92,31 @@ contract OptionViews {
         uint256[] memory shortOptionsIn,
         uint256 lpSharesIn
     ) public view returns (uint256 cost) {
-        uint256 totalSupply = market.totalSupply();
+        uint256 lpSupply = market.totalSupply();
         uint256[] memory longSupplies = getLongSupplies(market);
         uint256[] memory shortSupplies = getShortSupplies(market);
 
         if (market.isExpired()) {
             cost = _getPayoff(market, longSupplies, shortSupplies);
         } else {
-            cost = _getLmsrCost(market, longSupplies, shortSupplies, totalSupply);
+            cost = _getLmsrCost(market, longSupplies, shortSupplies, lpSupply);
         }
 
         // need to recalculate as mutated by calcLmsrCost
         longSupplies = getLongSupplies(market);
         shortSupplies = getShortSupplies(market);
 
-        for (uint256 i = 0; i < market.numStrikes(); i++) {
+        uint256 n = market.numStrikes();
+        for (uint256 i = 0; i < n; i++) {
             longSupplies[i] = longSupplies[i].sub(longOptionsIn[i]);
             shortSupplies[i] = shortSupplies[i].sub(shortOptionsIn[i]);
         }
-        totalSupply = totalSupply.sub(lpSharesIn);
+        lpSupply = lpSupply.sub(lpSharesIn);
 
         if (market.isExpired()) {
             cost = cost.sub(_getPayoff(market, longSupplies, shortSupplies));
         } else {
-            cost = cost.sub(_getLmsrCost(market, longSupplies, shortSupplies, totalSupply));
+            cost = cost.sub(_getLmsrCost(market, longSupplies, shortSupplies, lpSupply));
         }
 
         cost = cost.add(_getPoolValue(market, lpSharesIn));
@@ -146,7 +150,7 @@ contract OptionViews {
         OptionMarket market,
         uint256[] memory longSupplies,
         uint256[] memory shortSupplies,
-        uint256 lpShares
+        uint256 lpSupply
     ) internal view returns (uint256) {
         uint256[] memory quantities = OptionMath.calcQuantities(
             getStrikePrices(market),
@@ -154,7 +158,7 @@ contract OptionViews {
             longSupplies,
             shortSupplies
         );
-        return OptionMath.calcLmsrCost(quantities, lpShares);
+        return OptionMath.calcLmsrCost(quantities, lpSupply);
     }
 
     function _getPayoff(
@@ -179,8 +183,10 @@ contract OptionViews {
     ) internal view returns (uint256) {
         uint256 scale = market.SCALE();
         bool isPut = market.isPut();
+
         uint256 total;
-        for (uint256 i = 0; i < market.numStrikes(); i++) {
+        uint256 n = market.numStrikes();
+        for (uint256 i = 0; i < n; i++) {
             if (isPut) {
                 uint256 strike = market.strikePrices(i);
                 total = total.add(longOptionsOut[i].mul(strike).div(scale));

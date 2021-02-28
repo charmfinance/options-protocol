@@ -477,7 +477,10 @@ def test_option_vault_puts(
     )
     # print(tx.return_value)
     cost1 = scale * lmsr([0, 0, 0, 0, 0, 0, 0], 0)
-    cost2 = scale * lmsr([2 * 800, 0, 0, 0, 1 * 500, 1 * 500, 1 * 500], 200) + 2100 * scale // 100
+    cost2 = (
+        scale * lmsr([2 * 800, 0, 0, 0, 1 * 500, 1 * 500, 1 * 500], 200)
+        + 2100 * scale // 100
+    )
     # assert approx(tx.return_value) == cost2 - cost1
     # assert approx(tx.return_value) == dcost
     assert approx(balance - getBalance(vault)) == cost2 - cost1
@@ -544,7 +547,10 @@ def test_option_vault_puts(
         100 * scale,
         {"from": strategy},
     )
-    cost1 = scale * lmsr([3 * 800, 0, 0, 0, 1.5 * 500, 1.5 * 500, 1.5 * 500], 300) + 4200 * scale // 100
+    cost1 = (
+        scale * lmsr([3 * 800, 0, 0, 0, 1.5 * 500, 1.5 * 500, 1.5 * 500], 300)
+        + 4200 * scale // 100
+    )
     cost2 = scale * lmsr([2 * 800, 0, 0, 0, 0, 0, 0], 200) + 2800 * scale // 100
     assert approx(getBalance(vault) - balance) == cost1 - cost2
     assert approx(getBalance(vault) - balance) == dcost
@@ -575,11 +581,16 @@ def test_option_vault_puts(
         == 2.0 / 3 * scale
     )
     assert approx(market1.poolValue(), rel=1e-5, abs=1) == 2800.0 / 3 * scale // 100
-    assert approx(vault.totalAssets()) == 15000.0 / 3 * scale + 1050.0 / 3 * scale // 100
+    assert (
+        approx(vault.totalAssets()) == 15000.0 / 3 * scale + 1050.0 / 3 * scale // 100
+    )
 
     balance = getBalance(vault)
     tx = vault.withdraw(5000 * scale, 5000 * scale, {"from": bob})
-    cost = scale * lmsr([2.0 / 3 * 800, 0, 0, 0, 0, 0, 0], 200.0 / 3) + 2800.0 / 3 * scale // 100
+    cost = (
+        scale * lmsr([2.0 / 3 * 800, 0, 0, 0, 0, 0, 0], 200.0 / 3)
+        + 2800.0 / 3 * scale // 100
+    )
     assert getBalance(vault) == 0
     assert approx(tx.return_value) == cost + balance
     assert approx(market1.balanceOf(vault)) == 0

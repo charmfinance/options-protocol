@@ -56,16 +56,20 @@ contract OptionVault is Ownable, ReentrancyGuard, ERC20 {
         require(!isPaused, "Paused");
 
         baseToken.uniTransferFromSenderToThis(maxAmountIn);
-        amountIn = _calcAmountFromShares(baseToken, sharesOut, maxAmountIn, true);
-        uint256 balanceBefore = baseToken.uniBalanceOf(address(this));
 
-        for (uint256 i = 0; i < markets.length; i++) {
-            (uint256[] memory longAmounts, uint256[] memory shortAmounts, uint256 lpShares) = _calcOptionsAndLpAmounts(
-                markets[i],
-                sharesOut,
-                true
-            );
-            _buyInternal(markets[i], longAmounts, shortAmounts, lpShares);
+        // calculate proportional base amount
+        amountIn = _calcAmountFromShares(baseToken, sharesOut, maxAmountIn, true);
+
+        // calculate cost of proportional options and lp shares
+        uint256 balanceBefore = baseToken.uniBalanceOf(address(this));
+        OptionMarket[] memory _markets = markets;
+        for (uint256 i = 0; i < _markets.length; i++) {
+            (
+                uint256[] memory longOptionsOut,
+                uint256[] memory shortOptionsOut,
+                uint256 lpSharesOut
+            ) = _calcOptionsAndLpAmounts(_markets[i], sharesOut, true);
+            _buyInternal(_markets[i], longOptionsOut, shortOptionsOut, lpSharesOut);
         }
 
         uint256 balanceAfter = baseToken.uniBalanceOf(address(this));
@@ -75,7 +79,7 @@ contract OptionVault is Ownable, ReentrancyGuard, ERC20 {
         _mint(msg.sender, sharesOut);
         require(totalSupplyCap == 0 || totalSupply() <= totalSupplyCap, "Total supply cap exceeded");
 
-        require(amountIn <= maxAmountIn, "Max slippage exceeded");
+        // refund unused amount back to sender
         baseToken.uniTransfer(msg.sender, maxAmountIn.sub(amountIn));
     }
 
@@ -88,16 +92,19 @@ contract OptionVault is Ownable, ReentrancyGuard, ERC20 {
         require(sharesIn > 0, "Shares in must be > 0");
         require(!isPaused, "Paused");
 
+        // calculate proportional base amount
         amountOut = _calcAmountFromShares(baseToken, sharesIn, 0, false);
         uint256 balanceBefore = baseToken.uniBalanceOf(address(this));
 
-        for (uint256 i = 0; i < markets.length; i++) {
-            (uint256[] memory longAmounts, uint256[] memory shortAmounts, uint256 lpShares) = _calcOptionsAndLpAmounts(
-                markets[i],
-                sharesIn,
-                false
-            );
-            _sellInternal(markets[i], longAmounts, shortAmounts, lpShares);
+        // calculate cost of proportional options and lp shares
+        OptionMarket[] memory _markets = markets;
+        for (uint256 i = 0; i < _markets.length; i++) {
+            (
+                uint256[] memory longOptionsIn,
+                uint256[] memory shortOptionsIn,
+                uint256 lpSharesIn
+            ) = _calcOptionsAndLpAmounts(_markets[i], sharesIn, false);
+            _sellInternal(_markets[i], longOptionsIn, shortOptionsIn, lpSharesIn);
         }
 
         uint256 balanceAfter = baseToken.uniBalanceOf(address(this));
@@ -111,7 +118,7 @@ contract OptionVault is Ownable, ReentrancyGuard, ERC20 {
     /**
      * Convert vault's base tokens to options and lp tokens
      *
-     * Can only be called by strategy
+     * The total value of assets held by vault should stay the same. Can only be called by strategy
      */
     function buy(
         OptionMarket market,
@@ -129,6 +136,41 @@ contract OptionVault is Ownable, ReentrancyGuard, ERC20 {
         uint256 balanceAfter = baseToken.uniBalanceOf(address(this));
         amountIn = balanceBefore.sub(balanceAfter);
         require(amountIn <= maxAmountIn, "Max slippage exceeded");
+    }
+
+    /**
+     * Convert vault's options and lp tokens back to base tokens
+     *
+     * The total value of assets held by vault should stay the same. Can only be called by strategy
+     */
+    function sell(
+        OptionMarket market,
+        uint256[] memory longOptionsIn,
+        uint256[] memory shortOptionsIn,
+        uint256 lpSharesIn,
+        uint256 minAmountOut
+    ) public nonReentrant returns (uint256 amountOut) {
+        require(msg.sender == strategy, "!strategy");
+        require(marketAdded[market], "Market not found");
+
+        uint256 balanceBefore = baseToken.uniBalanceOf(address(this));
+        _sellInternal(market, longOptionsIn, shortOptionsIn, lpSharesIn);
+
+        uint256 balanceAfter = baseToken.uniBalanceOf(address(this));
+        amountOut = balanceAfter.sub(balanceBefore);
+        require(amountOut >= minAmountOut, "Max slippage exceeded");
+    }
+
+    function sellAll(OptionMarket market, uint256 minAmountOut) external returns (uint256) {
+        require(msg.sender == strategy, "!strategy");
+        require(marketAdded[market], "Market not found");
+
+        (
+            uint256[] memory longOptionsIn,
+            uint256[] memory shortOptionsIn,
+            uint256 lpSharesIn
+        ) = _calcOptionsAndLpAmounts(market, totalSupply(), false);
+        return sell(market, longOptionsIn, shortOptionsIn, lpSharesIn, minAmountOut);
     }
 
     function _buyInternal(
@@ -159,41 +201,6 @@ contract OptionVault is Ownable, ReentrancyGuard, ERC20 {
                 market.buy{value: value}(false, i, shortOptionsIn[i], maxAmountIn);
             }
         }
-    }
-
-    /**
-     * Convert vault's options and lp tokens back to base tokens
-     *
-     * Can only be called by strategy
-     */
-    function sell(
-        OptionMarket market,
-        uint256[] memory longOptionsOut,
-        uint256[] memory shortOptionsOut,
-        uint256 lpSharesIn,
-        uint256 minAmountOut
-    ) public nonReentrant returns (uint256 amountOut) {
-        require(msg.sender == strategy, "!strategy");
-        require(marketAdded[market], "Market not found");
-
-        uint256 balanceBefore = baseToken.uniBalanceOf(address(this));
-        _sellInternal(market, longOptionsOut, shortOptionsOut, lpSharesIn);
-
-        uint256 balanceAfter = baseToken.uniBalanceOf(address(this));
-        amountOut = balanceAfter.sub(balanceBefore);
-        require(amountOut >= minAmountOut, "Max slippage exceeded");
-    }
-
-    function sellAll(OptionMarket market, uint256 minAmountOut) external returns (uint256) {
-        require(msg.sender == strategy, "!strategy");
-        require(marketAdded[market], "Market not found");
-
-        (uint256[] memory longAmounts, uint256[] memory shortAmounts, uint256 lpShares) = _calcOptionsAndLpAmounts(
-            market,
-            totalSupply(),
-            false
-        );
-        return sell(market, longAmounts, shortAmounts, lpShares, minAmountOut);
     }
 
     function _sellInternal(
@@ -228,17 +235,17 @@ contract OptionVault is Ownable, ReentrancyGuard, ERC20 {
         internal
         view
         returns (
-            uint256[] memory longAmounts,
-            uint256[] memory shortAmounts,
+            uint256[] memory longOptions,
+            uint256[] memory shortOptions,
             uint256 lpShares
         )
     {
         uint256 n = market.numStrikes();
-        longAmounts = new uint256[](n);
-        shortAmounts = new uint256[](n);
+        longOptions = new uint256[](n);
+        shortOptions = new uint256[](n);
         for (uint256 i = 0; i < n; i++) {
-            longAmounts[i] = _calcAmountFromShares(market.longTokens(i), sharesOut, 0, roundUp);
-            shortAmounts[i] = _calcAmountFromShares(market.shortTokens(i), sharesOut, 0, roundUp);
+            longOptions[i] = _calcAmountFromShares(market.longTokens(i), sharesOut, 0, roundUp);
+            shortOptions[i] = _calcAmountFromShares(market.shortTokens(i), sharesOut, 0, roundUp);
         }
         lpShares = _calcAmountFromShares(market, sharesOut, 0, roundUp);
     }
@@ -250,13 +257,21 @@ contract OptionVault is Ownable, ReentrancyGuard, ERC20 {
         bool roundUp
     ) internal view returns (uint256) {
         uint256 _totalSupply = totalSupply();
+
+        // first deposit is only base tokens and no options
         if (_totalSupply == 0) {
             return token == baseToken ? shares : 0;
         }
+
         uint256 balance = token.uniBalanceOf(address(this));
+
+        // balance is often 0 for options so return early
         if (balance == 0) {
             return 0;
         }
+
+        // amount = balance * shares / total supply
+        // balanceOffset is used to subtract msg.value from balance
         uint256 numer = (balance.sub(balanceOffset)).mul(shares);
         if (numer > 0 && roundUp) {
             return numer.sub(1).div(_totalSupply).add(1);
@@ -269,14 +284,16 @@ contract OptionVault is Ownable, ReentrancyGuard, ERC20 {
      * into base tokens
      */
     function totalAssets() external view returns (uint256 assets) {
+        OptionMarket[] memory _markets = markets;
+
         assets = baseToken.uniBalanceOf(address(this));
-        for (uint256 i = 0; i < markets.length; i++) {
-            (uint256[] memory longAmounts, uint256[] memory shortAmounts, uint256 lpShares) = _calcOptionsAndLpAmounts(
-                markets[i],
-                totalSupply(),
-                false
-            );
-            assets = assets.add(optionViewsLibrary.getSellCost(markets[i], longAmounts, shortAmounts, lpShares));
+        for (uint256 i = 0; i < _markets.length; i++) {
+            (
+                uint256[] memory longOptionsIn,
+                uint256[] memory shortOptionsIn,
+                uint256 lpSharesIn
+            ) = _calcOptionsAndLpAmounts(_markets[i], totalSupply(), false);
+            assets = assets.add(optionViewsLibrary.getSellCost(_markets[i], longOptionsIn, shortOptionsIn, lpSharesIn));
         }
     }
 
@@ -295,8 +312,7 @@ contract OptionVault is Ownable, ReentrancyGuard, ERC20 {
         require(msg.sender == strategy, "!strategy");
         require(marketAdded[market], "Market not found");
 
-        // preserves array order, so inefficient in terms of gas use
-        // but only called infrequently by strategy so it's ok
+        // preserve array order
         uint256 n = markets.length;
         uint256 offset;
         for (uint256 i = 0; i < n; i++) {
@@ -307,7 +323,10 @@ contract OptionVault is Ownable, ReentrancyGuard, ERC20 {
                 markets[i] = markets[i + offset];
             }
         }
+
+        // should be true because of marketAdded check
         assert(offset > 0);
+
         for (uint256 i = 0; i < offset; i++) {
             markets.pop();
         }
