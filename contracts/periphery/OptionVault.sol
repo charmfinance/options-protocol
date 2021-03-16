@@ -10,9 +10,9 @@ import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-import "./libraries/UniERC20.sol";
-import "./OptionMarket.sol";
-import "./OptionToken.sol";
+import "../libraries/UniERC20.sol";
+import "../OptionMarket.sol";
+import "../OptionToken.sol";
 import "./OptionViews.sol";
 
 contract OptionVault is Ownable, ReentrancyGuard, ERC20 {

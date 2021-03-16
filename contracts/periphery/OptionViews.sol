@@ -7,7 +7,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 
-import "./OptionMarket.sol";
+import "../OptionMarket.sol";
 
 contract OptionViews {
     using Address for address;
