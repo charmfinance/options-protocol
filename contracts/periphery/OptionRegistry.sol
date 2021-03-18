@@ -24,23 +24,32 @@ contract OptionRegistry {
         uint256 strikePrice;
     }
 
-    OptionFactory public constant factory = OptionFactory(0xCDFE169dF3D64E2e43D88794A21048A52C742F2B);
-
-    mapping(IERC20 => mapping(uint256 => mapping(bool => OptionMarket))) public markets; // baseToken => expiry => isPut => market
-    mapping(OptionMarket => mapping(uint256 => mapping(bool => OptionToken))) public options; // market => strikePrice => isLongToken
-    mapping(OptionToken => OptionDetails) public optionDetails;
-
+    OptionFactory public immutable factory;
     uint256 public lastIndex;
+
+    mapping(IERC20 => mapping(uint256 => mapping(bool => OptionMarket))) internal markets; // baseToken => expiryTime => isPut => market
+    mapping(OptionMarket => mapping(uint256 => mapping(bool => OptionToken))) internal options; // market => strikePrice => isLongToken
+    mapping(OptionToken => OptionDetails) internal optionDetails;
+
+    /**
+     * @param _factory {OptionFactory} instance from which markets are retrieved
+     * @param _lastIndex Don't add markets with this index or smaller. This saves
+     * gas when `populateMarkets()` is initially called
+     */
+    constructor(address _factory, uint256 _lastIndex) public {
+        factory = OptionFactory(_factory);
+        lastIndex = _lastIndex;
+    }
 
     /**
      * @dev Fetch option market
      * @param baseToken Address of base token. Same as underlying for calls and
      * strike currency for puts. Equal to 0x0 for ETH
-     * @param expiry Expiry time as timestamp
+     * @param expiryTime Expiry time as timestamp
      * @param isPut True if put, false if call
      */
-    function getMarket(IERC20 baseToken, uint256 expiry, bool isPut) external view returns (OptionMarket) {
-        return markets[baseToken][expiry][isPut];
+    function getMarket(IERC20 baseToken, uint256 expiryTime, bool isPut) external view returns (OptionMarket) {
+        return markets[baseToken][expiryTime][isPut];
     }
 
     /**
@@ -66,8 +75,17 @@ contract OptionRegistry {
      * since the last time this method was called
      */
     function populateMarkets() external {
-        uint256 numMarkets = factory.numMarkets();
-        while (lastIndex < numMarkets) {
+        populateMarketsUntil(factory.numMarkets());
+    }
+
+    /**
+     * @dev Same as {populateMarkets} but only adds markets up to a given index
+     */
+    function populateMarketsUntil(uint256 index) public {
+        require(index > lastIndex, "OptionRegistry: No new markets to add");
+        require(index <= factory.numMarkets(), "OptionRegistry: index out of bounds");
+
+        while (lastIndex < index) {
             OptionMarket market = OptionMarket(factory.markets(lastIndex));
             _populateMarket(market);
             lastIndex = lastIndex.add(1);
