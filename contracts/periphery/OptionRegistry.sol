@@ -10,16 +10,19 @@ import "@openzeppelin/contracts/utils/Address.sol";
 
 import "../OptionFactory.sol";
 import "../OptionMarket.sol";
+import "../OptionSymbol.sol";
 import "../OptionToken.sol";
+import "../libraries/UniERC20.sol";
 
 
-contract OptionRegistry {
+contract OptionRegistry is OptionSymbol {
     using Address for address;
     using SafeERC20 for IERC20;
+    using UniERC20 for IERC20;
     using SafeMath for uint256;
 
     struct OptionDetails {
-        bool isLongToken;
+        bool isLong;
         uint256 strikeIndex;
         uint256 strikePrice;
     }
@@ -27,8 +30,8 @@ contract OptionRegistry {
     OptionFactory public immutable factory;
     uint256 public lastIndex;
 
-    mapping(IERC20 => mapping(uint256 => mapping(bool => OptionMarket))) internal markets; // baseToken => expiryTime => isPut => market
-    mapping(OptionMarket => mapping(uint256 => mapping(bool => OptionToken))) internal options; // market => strikePrice => isLongToken
+    mapping(string => OptionMarket) internal markets;
+    mapping(string => OptionToken) internal options;
     mapping(OptionToken => OptionDetails) internal optionDetails;
 
     /**
@@ -43,23 +46,26 @@ contract OptionRegistry {
 
     /**
      * @dev Fetch option market
-     * @param baseToken Address of base token. Same as underlying for calls and
-     * strike currency for puts. Equal to 0x0 for ETH
+     * @param underlying Address of underlying token. Equal to 0x0 for ETH
      * @param expiryTime Expiry time as timestamp
      * @param isPut True if put, false if call
      */
-    function getMarket(IERC20 baseToken, uint256 expiryTime, bool isPut) external view returns (OptionMarket) {
-        return markets[baseToken][expiryTime][isPut];
+    function getMarket(IERC20 underlying, uint256 expiryTime, bool isPut) external view returns (OptionMarket) {
+        string memory symbol = getMarketSymbol(underlying.uniSymbol(), expiryTime, isPut);
+        return markets[symbol];
     }
 
     /**
      * @dev Fetch option token
-     * @param market Parent market
+     * @param underlying Address of underlying token. Equal to 0x0 for ETH
+     * @param expiryTime Expiry time as timestamp
+     * @param isPut True if put, false if call
      * @param strikePrice Strike price in USDC multiplied by 1e18
-     * @param isLongToken True if long position, false if short position
+     * @param isLong True if long position, false if short position
      */
-    function getOption(OptionMarket market, uint256 strikePrice, bool isLongToken) external view returns (OptionToken) {
-        return options[market][strikePrice][isLongToken];
+    function getOption(IERC20 underlying, uint256 expiryTime, bool isPut, uint256 strikePrice, bool isLong) external view returns (OptionToken) {
+        string memory symbol = getOptionSymbol(underlying.uniSymbol(), strikePrice, expiryTime, isPut, isLong);
+        return options[symbol];
     }
 
     /**
@@ -85,15 +91,15 @@ contract OptionRegistry {
         require(index > lastIndex, "OptionRegistry: No new markets to add");
         require(index <= factory.numMarkets(), "OptionRegistry: index out of bounds");
 
-        while (lastIndex < index) {
-            OptionMarket market = OptionMarket(factory.markets(lastIndex));
+        for (uint256 i = lastIndex; i < index; i = i.add(1)) {
+            OptionMarket market = OptionMarket(factory.markets(i));
             _populateMarket(market);
-            lastIndex = lastIndex.add(1);
         }
+        lastIndex = index;
     }
 
     function _populateMarket(OptionMarket market) internal {
-        markets[market.baseToken()][market.expiryTime()][market.isPut()] = market;
+        markets[market.symbol()] = market;
 
         uint256 numStrikes = market.numStrikes();
         for (uint256 i = 0; i < numStrikes; i = i.add(1)) {
@@ -101,8 +107,8 @@ contract OptionRegistry {
             OptionToken shortToken = market.shortTokens(i);
             uint256 strikePrice = market.strikePrices(i);
 
-            options[market][strikePrice][true] = longToken;
-            options[market][strikePrice][false] = shortToken;
+            options[longToken.symbol()] = longToken;
+            options[shortToken.symbol()] = shortToken;
             optionDetails[longToken] = OptionDetails(true, i, strikePrice);
             optionDetails[shortToken] = OptionDetails(false, i, strikePrice);
         }
