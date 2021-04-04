@@ -4,6 +4,7 @@ import pytest
 
 SCALE = 10 ** 18
 
+
 @pytest.mark.parametrize("isEth", [False, True])
 @pytest.mark.parametrize("isPut", [False, True])
 def test_option_factory(
@@ -76,14 +77,24 @@ def test_option_factory(
 
     optionRegistry = deployer.deploy(OptionRegistry, factory, 0)
     assert optionRegistry.getMarket(baseToken, 2000000000, isPut) == ZERO_ADDRESS
-    assert optionRegistry.getOption(baseToken, 2000000000, isPut, 400e18, False) == ZERO_ADDRESS
-    assert optionRegistry.getOption(baseToken, 2000000000, isPut, 400e18, True) == ZERO_ADDRESS
+    assert (
+        optionRegistry.getOption(baseToken, 2000000000, isPut, 400e18, False)
+        == ZERO_ADDRESS
+    )
+    assert (
+        optionRegistry.getOption(baseToken, 2000000000, isPut, 400e18, True)
+        == ZERO_ADDRESS
+    )
     assert optionRegistry.lastIndex() == 0
 
     optionRegistry.populateMarkets()
     assert optionRegistry.getMarket(baseToken, 2000000000, isPut) == market
-    assert optionRegistry.getOption(baseToken, 2000000000, isPut, 400e18, False) == market.shortTokens(1)
-    assert optionRegistry.getOption(baseToken, 2000000000, isPut, 400e18, True) == market.longTokens(1)
+    assert optionRegistry.getOption(
+        baseToken, 2000000000, isPut, 400e18, False
+    ) == market.shortTokens(1)
+    assert optionRegistry.getOption(
+        baseToken, 2000000000, isPut, 400e18, True
+    ) == market.longTokens(1)
     assert optionRegistry.getOptionDetails(market.longTokens(1)) == (True, 1, 400e18)
     assert optionRegistry.getOptionDetails(market.shortTokens(1)) == (False, 1, 400e18)
     assert optionRegistry.lastIndex() == 1
