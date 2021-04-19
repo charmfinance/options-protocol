@@ -19,7 +19,7 @@ import "./OptionViews.sol";
 // TODO
 // - add lockup
 
-contract OptionVault is Ownable, ReentrancyGuard, ERC20 {
+contract OptionLpVault is Ownable, ReentrancyGuard, ERC20 {
     using Address for address;
     using SafeERC20 for IERC20;
     using UniERC20 for IERC20;
@@ -240,10 +240,10 @@ contract OptionVault is Ownable, ReentrancyGuard, ERC20 {
                 found = true;
             } else if (found) {
                 markets[i.sub(1)] = markets[i];
-                delete markets[i];
             }
         }
         assert(found);
+        markets.pop();
     }
 
     function numMarkets() external view returns (uint256) {
