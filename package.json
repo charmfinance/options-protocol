@@ -1,8 +1,8 @@
 {
     "name": "charm-options",
     "devDependencies": {
-        "prettier": "^2.1.2",
-        "prettier-plugin-solidity": "^1.0.0-alpha.58",
+        "prettier": "^2.2.1",
+        "prettier-plugin-solidity": "^1.0.0-beta.8",
         "solhint-plugin-prettier": "0.0.5"
     },
     "scripts": {
