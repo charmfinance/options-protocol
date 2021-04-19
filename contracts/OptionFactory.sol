@@ -56,25 +56,15 @@ contract OptionFactory is CloneFactory, OptionSymbol, ReentrancyGuard {
 
             for (uint256 i = 0; i < strikePrices.length; i++) {
                 longTokens[i] = createClone(optionTokenLibrary);
-                string memory optionSymbol = getOptionSymbol(
-                    underlyingSymbol,
-                    strikePrices[i],
-                    expiryTime,
-                    isPut,
-                    true
-                );
+                string memory optionSymbol =
+                    getOptionSymbol(underlyingSymbol, strikePrices[i], expiryTime, isPut, true);
                 OptionToken(longTokens[i]).initialize(marketAddress, optionSymbol, optionSymbol, decimals);
             }
 
             for (uint256 i = 0; i < strikePrices.length; i++) {
                 shortTokens[i] = createClone(optionTokenLibrary);
-                string memory optionSymbol = getOptionSymbol(
-                    underlyingSymbol,
-                    strikePrices[i],
-                    expiryTime,
-                    isPut,
-                    false
-                );
+                string memory optionSymbol =
+                    getOptionSymbol(underlyingSymbol, strikePrices[i], expiryTime, isPut, false);
                 OptionToken(shortTokens[i]).initialize(marketAddress, optionSymbol, optionSymbol, decimals);
             }
         }
