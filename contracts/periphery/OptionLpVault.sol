@@ -16,9 +16,6 @@ import "../OptionToken.sol";
 import "./OptionViews.sol";
 
 
-// TODO
-// - add lockup
-
 contract OptionLpVault is Ownable, ReentrancyGuard, ERC20 {
     using Address for address;
     using SafeERC20 for IERC20;
@@ -35,6 +32,9 @@ contract OptionLpVault is Ownable, ReentrancyGuard, ERC20 {
     uint256 public totalAssets;
     uint256 public totalSupplyCap;
     uint256 public depositFee;
+    uint256 public cooldown;
+
+    mapping(address => uint256) public lastDeposit;
     bool public paused;
     bool public finalized;
 
@@ -62,6 +62,7 @@ contract OptionLpVault is Ownable, ReentrancyGuard, ERC20 {
         shares = shares.sub(shares.mul(depositFee).div(1e18));
         totalAssets = totalAssets.add(amount);
 
+        lastDeposit[msg.sender] = block.timestamp;
         baseToken.uniTransferFromSenderToThis(amount);
         _mint(recipient, shares);
 
@@ -75,6 +76,7 @@ contract OptionLpVault is Ownable, ReentrancyGuard, ERC20 {
      */
     function withdraw(uint256 shares, address recipient) external nonReentrant returns (uint256 amount) {
         require(!paused, "Paused");
+        require(block.timestamp > lastDeposit[msg.sender].add(cooldown), "Cooldown");
 
         amount = shares.mul(totalAssets).div(totalSupply());
         require(amount <= baseToken.uniBalanceOf(address(this)), "Not enough free balance in vault");
@@ -246,6 +248,11 @@ contract OptionLpVault is Ownable, ReentrancyGuard, ERC20 {
         markets.pop();
     }
 
+    function _beforeTokenTransfer(address from, address to, uint256 amount) internal virtual override {
+        super._beforeTokenTransfer(from, to, amount);
+        require(block.timestamp > lastDeposit[from].add(cooldown), "Cooldown");
+    }
+
     function numMarkets() external view returns (uint256) {
         return markets.length;
     }
@@ -256,6 +263,10 @@ contract OptionLpVault is Ownable, ReentrancyGuard, ERC20 {
 
     function setDepositFee(uint256 _depositFee) external onlyOwner {
         depositFee = _depositFee;
+    }
+
+    function setCooldown(uint256 _cooldown) external onlyOwner {
+        cooldown = _cooldown;
     }
 
     // used for guarded launch

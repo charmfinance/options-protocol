@@ -1,4 +1,4 @@
-from brownie import reverts, ZERO_ADDRESS
+from brownie import chain, reverts, ZERO_ADDRESS
 import pytest
 from pytest import approx
 
@@ -230,7 +230,7 @@ def test_governance_methods(
 ):
 
     # set up accounts
-    deployer, manager, alice = a[:3]
+    deployer, manager, alice, bob = a[:4]
 
     def deployMarket(baseToken):
         market = deployer.deploy(OptionMarket)
@@ -356,3 +356,28 @@ def test_governance_methods(
     vault.emergencyWithdraw(market1.longTokens(3), 1 * scale, {"from": deployer})
     assert longToken.balanceOf(deployer) == 1 * scale
     assert longToken.balanceOf(vault) == 0
+
+    # no cooldown, can transfer and withdraw immediately
+    vault.deposit(1 * scale, alice, {"from": alice})
+    chain.sleep(10)
+    vault.transfer(bob, 1 * scale, {"from": alice})
+    vault.withdraw(1 * scale, bob, {"from": bob})
+
+    # set cooldown
+    with reverts("Ownable: caller is not the owner"):
+        vault.setCooldown(1000, {"from": alice})
+    vault.setCooldown(1000, {"from": deployer})
+
+    # check cooldown
+    vault.deposit(2 * scale, alice, {"from": alice})
+    chain.sleep(900)
+    with reverts("Cooldown"):
+        vault.transfer(bob, 1 * scale, {"from": alice})
+    with reverts("Cooldown"):
+        vault.withdraw(1 * scale, alice, {"from": alice})
+
+    # after cooldown, can transfer and withdraw
+    chain.sleep(200)
+    vault.transfer(bob, 1 * scale, {"from": alice})
+    vault.withdraw(1 * scale, bob, {"from": bob})
+    vault.withdraw(1 * scale, alice, {"from": alice})
